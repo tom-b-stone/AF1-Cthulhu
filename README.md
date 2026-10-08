@@ -1,8 +1,8 @@
 # AF1 Cthulhu
 
 Internal tool shell for audif1.com, built alongside UTM Studio. One Next.js app, several tools
-in the sidebar, deployed to Vercel, tested against `staging.audif1.com` before anything touches
-production.
+in the sidebar, deployed to Vercel, tested against `staging.audif1team.com` (the staging CMS
+domain — note it's `audif1team.com`, not `audif1.com`) before anything touches production.
 
 ## Navigation structure
 
@@ -23,17 +23,25 @@ Each tool is its own route under `app/`, sharing one sidebar/layout (`app/compon
 Link/campaign-tagging tool. Not yet migrated into this repo — placeholder route only.
 
 ### SEO Studio
-Edits Payload CMS `meta.title` / `meta.description` (EN + DE) for `news` and `pages`, with the
-same brand rules the `audif1-seo-sync` skill already encodes: 50–60 char titles ending
-`| Audi Revolut F1® Team`, 100–150 char descriptions, no em-dash, DE≠EN fallback detection,
-draft/publish status, and the two-step publish trick (DE draft → EN `_status: published`) for
-promoting changes to live.
+Built, staging-only (`lib/payloadClient.ts`, `app/api/seo/*`, `app/seo/*`). Searchable table of
+`news` + `pages` (Status, Published Date, Title, URL, SEO Title, Count, SEO Description, Count,
+Language — same column shape as the AF1-SEO Google Sheet, for familiarity) with an EN/DE toggle,
+read live from Payload. **This trial never reads from or writes to the Google Sheet** — Payload
+stays the only source, since the sheet is also relied on by other tools and Tom asked not to
+touch it while testing. Clicking a row opens an edit drawer with EN + DE title/description,
+live validation against the same brand rules the `audif1-seo-sync` skill encodes (50–60 char
+titles ending `| Audi Revolut F1® Team`, 100–150 char descriptions, no em-dash, brand-mark typo
+checks — `lib/seoBrand.ts`), a Save as draft button, and a Publish button implementing the
+two-step publish trick (DE draft PATCH, 3s settle, then EN PATCH with `_status: 'published'`,
+preserving `publishedAt`).
 
-Writes go through a server-side API route using a **Payload service-account API key**
-(`PAYLOAD_API_KEY`), never exposed to the client. Because the service account is shared,
-**who did what is tracked at the app layer**: every write is logged against the signed-in app
-user (name/email), not against the Payload service account, so there's still a real audit trail
-even though Payload only ever sees one technical user.
+Auth: the CMS's `users` collection doesn't have Payload's API-key auth enabled (no code change
+was made to add it), so writes go through a server-side login instead — `lib/payloadClient.ts`
+logs in as the dedicated staging CMS user already saved via `/admin/credentials`
+(`tma+cthulhu@slash.digital`, same one used elsewhere in this app) against
+`/cms/api/users/login`, caches the returned JWT, and sends it as `Authorization: JWT <token>`.
+Nothing is exposed to the client. Because that login is shared, per-user activity is tracked at
+the app layer (the signed-in app user), not against the CMS account.
 
 ### Asset Uploader
 Compresses an uploaded image, lets the user pick an existing Payload media folder (or create a
@@ -50,9 +58,9 @@ baked into the exported PNG/WebP (not left to CSS) since email clients don't rel
 is a later phase.
 
 ### Admin (`/admin`)
-A small internal settings area, separate from the four tools, for things like the staging login
-this app uses when it needs to act as a real user (distinct from the Payload service-account API
-key the tools use for CMS writes). Restricted to admin accounts — see Sign-in below.
+A small internal settings area, separate from the four tools, for things like the staging CMS
+login (`tma+cthulhu@slash.digital`) that SEO Studio (and any future tool needing CMS writes) logs
+in as server-side. Restricted to admin accounts — see Sign-in below.
 
 Saved values (currently: the staging email/password) are AES-256-GCM encrypted
 (`CREDENTIALS_ENCRYPTION_KEY`) before being written to KV, and the password is write-only — the
@@ -89,8 +97,8 @@ except `/login` and `/api/auth/*`).
 ## Environment
 
 Copy `.env.example` to `.env.local`. `PAYLOAD_API_URL` should point at
-`https://staging.audif1.com/cms/api` until a tool is verified, then switch to production per tool
-— not globally, since they'll reach production readiness at different times.
+`https://staging.audif1team.com/cms/api` until a tool is verified, then switch to production per
+tool — not globally, since they'll reach production readiness at different times.
 
 Before this is usable in a real deployment, set in Vercel: `NEXTAUTH_SECRET`, `NEXTAUTH_URL`,
 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_EMAILS`, `CREDENTIALS_ENCRYPTION_KEY`, and (for
@@ -98,8 +106,9 @@ KV persistence) `KV_REST_API_URL` / `KV_REST_API_TOKEN` via the KV/Upstash integ
 
 ## Status
 
-Scaffold only — the four tool routes are placeholders behind real sign-in now; `/admin/credentials`
-is functional (store a login, encrypted, pending KV being wired up for real persistence). Next
-steps: get the Google OAuth client secret + redirect URI added, confirm Payload API key auth is
-available for a service account, confirm the existing Payload media folder schema, pull exact
-Figma specs for the CRM Images templates, then build SEO Studio first.
+Sign-in, admin/credentials (with real KV persistence), and SEO Studio are built and ready to try
+against staging. Asset Uploader and CRM Images are still placeholder routes. Next steps: try SEO
+Studio end-to-end against `staging.audif1team.com` (a real edit + publish round trip), confirm
+the `pages` collection's `meta` field shape matches `news` (assumed, not yet verified against a
+real `pages` doc), confirm the existing Payload media folder schema for Asset Uploader, pull
+exact Figma specs for the CRM Images templates.
