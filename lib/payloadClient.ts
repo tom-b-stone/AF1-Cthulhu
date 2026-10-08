@@ -77,15 +77,33 @@ export type SeoListItem = {
   slug: string;
   status: "published" | "draft";
   publishedDate: string | null;
-  publicUrl: string;
+  // Per-locale public URLs — the site is locale-prefixed (/en/app/..., /de/app/...),
+  // so EN and DE genuinely point at different paths, not just different query params.
+  urls: { en: string; de: string };
   en: SeoLocaleMeta;
   de: SeoLocaleMeta;
 };
 
-function publicUrlFor(collection: Collection, slug: string): string {
-  if (collection === "news") return `https://www.audif1.com/news/${slug}`;
-  if (!slug || slug === "home") return "https://www.audif1.com/";
-  return `https://www.audif1.com/${slug}`;
+// The public site root always matches whichever Payload instance this
+// deployment's PAYLOAD_API_URL points at (derived, not hardcoded) — staging
+// while this tool is being tried out, production later for the same reason
+// PAYLOAD_API_URL itself switches per the README. Never hardcode a domain
+// here: a hardcoded prod link is exactly the bug that was caught testing
+// this against staging.
+function siteBaseUrl(): string {
+  return baseUrl().replace(/\/cms\/api$/, "");
+}
+
+// Confirmed against staging: the public site lives at /{locale}/app/..., e.g.
+// https://staging.audif1team.com/en/app/news/{slug} and .../en/app/{slug} for
+// pages, with https://staging.audif1team.com/en/app as the homepage. A bare
+// /news/{slug} (no locale/app prefix) redirects to the default locale, but we
+// build the explicit locale path so EN/DE links are never ambiguous.
+function publicUrlFor(collection: Collection, slug: string, locale: "en" | "de"): string {
+  const root = `${siteBaseUrl()}/${locale}/app`;
+  if (collection === "news") return `${root}/news/${slug}`;
+  if (!slug || slug === "home") return root;
+  return `${root}/${slug}`;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -130,7 +148,10 @@ export async function listSeoItems(): Promise<SeoListItem[]> {
         slug: doc.slug ?? "",
         status,
         publishedDate: (status === "published" ? doc.publishedAt : doc.createdAt) ?? null,
-        publicUrl: publicUrlFor(collection, doc.slug ?? ""),
+        urls: {
+          en: publicUrlFor(collection, doc.slug ?? "", "en"),
+          de: publicUrlFor(collection, deDoc?.slug ?? doc.slug ?? "", "de"),
+        },
         en: { title: doc.meta?.title ?? "", description: doc.meta?.description ?? "" },
         de: { title: deDoc?.meta?.title ?? "", description: deDoc?.meta?.description ?? "" },
       };

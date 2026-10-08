@@ -47,9 +47,9 @@ export default function AdminCredentialsPage() {
     <div style={{ maxWidth: 420 }}>
       <h1>Staging credentials</h1>
       <p style={{ fontSize: 13, opacity: 0.7 }}>
-        The login this tool uses when it needs to act as a real user against staging.audif1.com
-        (separate from the Payload service-account API key used for CMS writes). Stored encrypted
-        — the password is never shown back, only overwritten.
+        The staging CMS login (staging.audif1team.com) SEO Studio and future tools use to log in
+        server-side and write to Payload. Stored encrypted — the password is never shown back,
+        only overwritten.
       </p>
 
       {state && !state.persistent && (

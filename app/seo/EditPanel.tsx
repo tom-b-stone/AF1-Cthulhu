@@ -157,20 +157,21 @@ export default function EditPanel({
             ×
           </button>
         </div>
-        <a
-          href={item.publicUrl}
-          target="_blank"
-          rel="noreferrer"
-          style={{ fontSize: 12, opacity: 0.6, textDecoration: "underline" }}
-        >
-          {item.publicUrl}
-        </a>
-
         {loadingDoc ? (
           <p style={{ opacity: 0.6, marginTop: 24 }}>Loading live values from the CMS…</p>
         ) : (
           <>
-            <div style={{ marginTop: 24, marginBottom: 8, fontWeight: 600, fontSize: 13 }}>English</div>
+            <div style={{ marginTop: 24, marginBottom: 8, display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>English</span>
+              <a
+                href={item.urls.en}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 11, opacity: 0.6, textDecoration: "underline" }}
+              >
+                {item.urls.en}
+              </a>
+            </div>
             <FieldBox label="SEO Title" kind="title" value={en.title} onChange={(v) => setEn({ ...en, title: v })} />
             <FieldBox
               label="SEO Description"
@@ -180,7 +181,17 @@ export default function EditPanel({
               onChange={(v) => setEn({ ...en, description: v })}
             />
 
-            <div style={{ marginTop: 16, marginBottom: 8, fontWeight: 600, fontSize: 13 }}>Deutsch</div>
+            <div style={{ marginTop: 16, marginBottom: 8, display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Deutsch</span>
+              <a
+                href={item.urls.de}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 11, opacity: 0.6, textDecoration: "underline" }}
+              >
+                {item.urls.de}
+              </a>
+            </div>
             <FieldBox label="SEO Title" kind="title" value={de.title} onChange={(v) => setDe({ ...de, title: v })} />
             <FieldBox
               label="SEO Description"

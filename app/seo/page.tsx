@@ -128,6 +128,13 @@ export default function SeoStudioPage() {
               <tbody>
                 {filtered.map((item) => {
                   const meta = item[locale];
+                  const url = item.urls[locale];
+                  let displayUrl = url;
+                  try {
+                    displayUrl = new URL(url).pathname;
+                  } catch {
+                    // keep the full URL if it doesn't parse for some reason
+                  }
                   return (
                     <tr
                       key={`${item.collection}:${item.id}`}
@@ -152,8 +159,8 @@ export default function SeoStudioPage() {
                       </td>
                       <td style={{ padding: "8px", maxWidth: 220 }}>{item.internalTitle}</td>
                       <td style={{ padding: "8px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        <a href={item.publicUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-                          {item.publicUrl.replace("https://www.audif1.com", "")}
+                        <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                          {displayUrl}
                         </a>
                       </td>
                       <td style={{ padding: "8px", maxWidth: 240 }}>{meta.title || <span style={{ opacity: 0.4 }}>—</span>}</td>

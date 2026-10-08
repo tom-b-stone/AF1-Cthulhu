@@ -7,7 +7,7 @@ export type SeoListItem = {
   slug: string;
   status: "published" | "draft";
   publishedDate: string | null;
-  publicUrl: string;
+  urls: { en: string; de: string };
   en: SeoLocaleMeta;
   de: SeoLocaleMeta;
 };

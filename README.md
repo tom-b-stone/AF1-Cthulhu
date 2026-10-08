@@ -35,6 +35,14 @@ checks — `lib/seoBrand.ts`), a Save as draft button, and a Publish button impl
 two-step publish trick (DE draft PATCH, 3s settle, then EN PATCH with `_status: 'published'`,
 preserving `publishedAt`).
 
+Every link shown (table URL column, edit drawer) is a real, per-locale public link, built from
+`PAYLOAD_API_URL` itself (never hardcoded) so it always matches whatever environment this
+deployment points at: `{site-root}/{locale}/app/news/{slug}` for news, `{site-root}/{locale}/app/{slug}`
+for pages, `{site-root}/{locale}/app` for the homepage — confirmed against staging
+(`staging.audif1team.com/en/app/news/test-news-kevin` loads the live article). A bare
+`/news/{slug}` with no locale/app prefix also works but 302s to the default locale, which is why
+the explicit locale path is built instead.
+
 Auth: the CMS's `users` collection doesn't have Payload's API-key auth enabled (no code change
 was made to add it), so writes go through a server-side login instead — `lib/payloadClient.ts`
 logs in as the dedicated staging CMS user already saved via `/admin/credentials`
@@ -47,7 +55,7 @@ the app layer (the signed-in app user), not against the CMS account.
 Compresses an uploaded image, lets the user pick an existing Payload media folder (or create a
 new one — the folder structure already exists in the CMS, this just reads/writes it) and uploads
 to the `media` collection, then writes English alt text. Build and test this against
-`staging.audif1.com` first since folder creation is a real write.
+`staging.audif1team.com` first since folder creation is a real write.
 
 ### CRM Images
 Generates cropped, rounded-corner image variants matched to the CRM template library
