@@ -52,8 +52,7 @@ is a later phase.
 ### Admin (`/admin`)
 A small internal settings area, separate from the four tools, for things like the staging login
 this app uses when it needs to act as a real user (distinct from the Payload service-account API
-key the tools use for CMS writes). Gated by a single shared password (`ADMIN_PASSWORD`) for now —
-not real per-person auth yet.
+key the tools use for CMS writes). Restricted to admin accounts — see Sign-in below.
 
 Saved values (currently: the staging email/password) are AES-256-GCM encrypted
 (`CREDENTIALS_ENCRYPTION_KEY`) before being written to KV, and the password is write-only — the
@@ -68,19 +67,39 @@ No credentials are committed to this repo, ever, including in commit history —
 should be entered once directly through `/admin/credentials` after the env vars below are set in
 Vercel, not passed through the codebase at any point.
 
+## Sign-in
+
+Google OAuth via NextAuth, restricted to `@slash.digital` — the same domain gate UTM Studio uses
+(github.com/tom-b-stone/UTM-Studio: Google Identity Services, `ALLOWED_DOMAIN = 'slash.digital'`,
+bootstrap admin `tma@slash.digital`). This app can reuse that same Google Cloud OAuth client —
+NextAuth just needs its client secret too (UTM Studio's client-side-only flow never used one, but
+the Google Cloud OAuth client still has one issued) and this app's callback URL added to its
+Authorized redirect URIs: `https://<domain>/api/auth/callback/google`.
+
+Two env vars control access (`lib/auth.ts`):
+- `ADMIN_EMAILS` — comma-separated list that can reach `/admin`. Defaults to `tma@slash.digital`.
+- `ALLOW_ALL_SLASH_DIGITAL` — while `false` (the default), **only** `ADMIN_EMAILS` can sign in at
+  all, same as Tom asked to start: him only, as admin. Flip to `true` to open the four tools to
+  every `@slash.digital` account, mirroring UTM Studio's "editor" role — `/admin` stays
+  `ADMIN_EMAILS`-only either way. No code change needed for that rollout step.
+
+Unauthenticated or domain-rejected visitors land on `/login` (`middleware.ts` gates every route
+except `/login` and `/api/auth/*`).
+
 ## Environment
 
 Copy `.env.example` to `.env.local`. `PAYLOAD_API_URL` should point at
 `https://staging.audif1.com/cms/api` until a tool is verified, then switch to production per tool
 — not globally, since they'll reach production readiness at different times.
 
-Before `/admin` is usable in a real deployment, set in Vercel: `ADMIN_PASSWORD`, `ADMIN_SECRET`,
-`CREDENTIALS_ENCRYPTION_KEY`, and (for persistence) `KV_REST_API_URL` / `KV_REST_API_TOKEN` via
-the KV/Upstash integration.
+Before this is usable in a real deployment, set in Vercel: `NEXTAUTH_SECRET`, `NEXTAUTH_URL`,
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_EMAILS`, `CREDENTIALS_ENCRYPTION_KEY`, and (for
+KV persistence) `KV_REST_API_URL` / `KV_REST_API_TOKEN` via the KV/Upstash integration.
 
 ## Status
 
-Scaffold only — the four tool routes are placeholders; `/admin/credentials` is functional (store
-a login, encrypted, pending KV being wired up for real persistence). Next steps: confirm Payload
-API key auth is available for a service account, confirm the existing Payload media folder
-schema, pull exact Figma specs for the CRM Images templates, then build SEO Studio first.
+Scaffold only — the four tool routes are placeholders behind real sign-in now; `/admin/credentials`
+is functional (store a login, encrypted, pending KV being wired up for real persistence). Next
+steps: get the Google OAuth client secret + redirect URI added, confirm Payload API key auth is
+available for a service account, confirm the existing Payload media folder schema, pull exact
+Figma specs for the CRM Images templates, then build SEO Studio first.

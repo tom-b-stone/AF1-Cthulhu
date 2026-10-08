@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/authOptions";
 import { getStagingCredentials, setStagingCredentials, kvConfigured } from "@/lib/settings";
+
+// middleware.ts already blocks non-admins from /api/admin/*, but this route
+// writes real secrets, so it re-checks here too rather than trusting that
+// alone.
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  return role === "admin";
+}
 
 // GET never returns the password — only whether one is set, the email, and
 // when it was last changed. Write-only secret field, same pattern as any
 // normal secrets manager UI.
 export async function GET() {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const creds = await getStagingCredentials();
   return NextResponse.json({
     persistent: kvConfigured(),
@@ -15,6 +29,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { email, password } = await req.json();
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are both required" }, { status: 400 });
