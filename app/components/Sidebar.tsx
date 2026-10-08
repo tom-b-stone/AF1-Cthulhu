@@ -42,6 +42,18 @@ export default function Sidebar() {
       <div style={{ marginTop: 32, fontSize: 11, opacity: 0.5 }}>
         env: {process.env.NEXT_PUBLIC_APP_ENV ?? "unset"}
       </div>
+      <Link
+        href="/admin/credentials"
+        style={{
+          display: "block",
+          marginTop: 12,
+          fontSize: 11,
+          opacity: 0.5,
+          textDecoration: "none",
+        }}
+      >
+        Admin
+      </Link>
     </nav>
   );
 }

@@ -49,14 +49,38 @@ baked into the exported PNG/WebP (not left to CSS) since email clients don't rel
 `border-radius`. Export is a download button for now; direct Salesforce Marketing Cloud upload
 is a later phase.
 
+### Admin (`/admin`)
+A small internal settings area, separate from the four tools, for things like the staging login
+this app uses when it needs to act as a real user (distinct from the Payload service-account API
+key the tools use for CMS writes). Gated by a single shared password (`ADMIN_PASSWORD`) for now —
+not real per-person auth yet.
+
+Saved values (currently: the staging email/password) are AES-256-GCM encrypted
+(`CREDENTIALS_ENCRYPTION_KEY`) before being written to KV, and the password is write-only — the
+admin page never reads it back, only shows which email is set and when it last changed.
+
+**This only persists once KV is set up.** Add the Vercel KV / Upstash Redis integration to the
+project (`KV_REST_API_URL` / `KV_REST_API_TOKEN` get injected automatically) — without it, the
+admin page works but anything saved lives only in that serverless instance's memory and is gone
+on the next redeploy or cold start. The UI shows a warning banner when this is the case.
+
+No credentials are committed to this repo, ever, including in commit history — the staging login
+should be entered once directly through `/admin/credentials` after the env vars below are set in
+Vercel, not passed through the codebase at any point.
+
 ## Environment
 
 Copy `.env.example` to `.env.local`. `PAYLOAD_API_URL` should point at
 `https://staging.audif1.com/cms/api` until a tool is verified, then switch to production per tool
 — not globally, since they'll reach production readiness at different times.
 
+Before `/admin` is usable in a real deployment, set in Vercel: `ADMIN_PASSWORD`, `ADMIN_SECRET`,
+`CREDENTIALS_ENCRYPTION_KEY`, and (for persistence) `KV_REST_API_URL` / `KV_REST_API_TOKEN` via
+the KV/Upstash integration.
+
 ## Status
 
-Scaffold only — routes are placeholders. Next steps: confirm Payload API key auth is available
-for a service account, confirm the existing Payload media folder schema, pull exact Figma specs
-for the CRM Images templates, then build SEO Studio first.
+Scaffold only — the four tool routes are placeholders; `/admin/credentials` is functional (store
+a login, encrypted, pending KV being wired up for real persistence). Next steps: confirm Payload
+API key auth is available for a service account, confirm the existing Payload media folder
+schema, pull exact Figma specs for the CRM Images templates, then build SEO Studio first.
