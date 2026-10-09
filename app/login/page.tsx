@@ -9,6 +9,33 @@ const ERROR_MESSAGES: Record<string, string> = {
     "That account isn't allowed in yet. Sign-in is restricted to slash.digital — and for now, only to the admin account while this rolls out.",
 };
 
+// Only ever bounce back to a path on this app — never to an absolute URL
+// someone could plant in the query string.
+function safeCallback(raw: string | null): string {
+  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
+}
+
+function SignInButton() {
+  const params = useSearchParams();
+  const callbackUrl = safeCallback(params.get("callbackUrl"));
+  return (
+    <button
+      onClick={() => signIn("google", { callbackUrl })}
+      style={{
+        padding: "10px 16px",
+        borderRadius: 6,
+        border: "1px solid var(--border)",
+        background: "#fff",
+        color: "#1a1a1a",
+        cursor: "pointer",
+        fontWeight: 500,
+      }}
+    >
+      Sign in with Google
+    </button>
+  );
+}
+
 function LoginError() {
   const params = useSearchParams();
   const error = params.get("error");
@@ -40,20 +67,9 @@ export default function LoginPage() {
       <Suspense fallback={null}>
         <LoginError />
       </Suspense>
-      <button
-        onClick={() => signIn("google", { callbackUrl: "/" })}
-        style={{
-          padding: "10px 16px",
-          borderRadius: 6,
-          border: "1px solid var(--border)",
-          background: "#fff",
-          color: "#1a1a1a",
-          cursor: "pointer",
-          fontWeight: 500,
-        }}
-      >
-        Sign in with Google
-      </button>
+      <Suspense fallback={null}>
+        <SignInButton />
+      </Suspense>
     </div>
   );
 }

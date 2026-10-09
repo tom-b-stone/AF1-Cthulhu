@@ -50,22 +50,32 @@ logs in as the dedicated staging CMS user already saved via `/admin/credentials`
 Nothing is exposed to the client. Because that login is shared, per-user activity is tracked at
 the app layer (the signed-in app user), not against the CMS account.
 
-**Generate / Regenerate SEO title** (`lib/seoGenerate.ts`, `app/api/seo/generate/route.ts`):
-each row has a button ("Generate SEO title" when EN or DE is empty, "Regenerate" once both are
-set), and there's a "Generate missing" button above the table that runs the same thing for every
-doc currently missing an EN or DE title/description, one doc at a time. Generation reads the
-doc's own real content (`getSeoGenerationSource` in `lib/payloadClient.ts` — teaser/summary
-fields, the hero/cover image's alt text, and a generic walk over `sections` for any block's
-title/heading/text/caption fields, explicitly excluding the existing `meta` block so regenerating
-never just echoes back what's already there), sends it to Claude with the same brand rules
-`lib/seoBrand.ts` validates against (title/description length, the `| Audi Revolut F1® Team`
-patterns by article type, no em-dash, brand-mark typos), retries up to twice server-side if the
-result fails validation, and — once it passes — **publishes immediately** using the existing
-two-step trick (`publishSeo`, DE draft then EN publish) so `publishedAt` never moves. There's no
-manual review step before the write, matching how the audif1-seo-sync skill's "publish now"
-workflow already works; Tom asked for direct publish rather than staging it in the edit drawer
-first. The Anthropic API key this calls is saved encrypted via `/admin/credentials`, same
-pattern as the staging CMS login, not a plain env var.
+**Generate / Regenerate SEO title** (`lib/seoHandoff.ts`, `app/api/seo/handoff/route.ts`,
+`app/seo/apply/page.tsx`). This app calls no LLM API and holds no AI key — the writing is
+done by the user's own Claude account, hand-off in both directions by link:
+
+1. Each row has a link ("Generate SEO title" while EN or DE is empty, "Regenerate" after).
+   It opens `/api/seo/handoff?collection=…&id=…`, which reads the doc's real content
+   (`getSeoGenerationSource` — teaser/summary fields, the hero image's alt text, and a generic
+   walk over `sections` block text, never the existing `meta`), builds a prompt with the brand
+   rules (same ones `lib/seoBrand.ts` validates) and 307-redirects to
+   `https://claude.ai/new?q=<prompt>`, so claude.ai opens with everything pre-filled. The user
+   presses send in their own account.
+2. The prompt asks Claude to answer with one markdown link per page back to
+   `/seo/apply?c=…&id=…&et=…&ed=…&dt=…&dd=…` (percent-encoded EN/DE title/description).
+3. Clicking that link lands on `/seo/apply`, which **publishes immediately** through the normal
+   `/api/seo/doc` publish path (DE draft, 3s settle, EN publish, `publishedAt` preserved) using
+   the stored staging CMS login. Hard brand-rule violations (em-dash, brand-mark typos, over the
+   length caps) stop the auto-publish and show a "Publish anyway" button instead. If the user
+   isn't signed in yet, `/login` bounces them back to the same apply link afterwards
+   (`callbackUrl`).
+
+"Generate missing" above the table does the same for the next 3 docs missing an EN or DE
+title/description in one claude.ai prompt (3 per round, because the prompt travels in a URL);
+Claude answers with 3 links.
+
+This replaced an earlier in-app Anthropic API call (removed): the key saved for it had no
+credits, and Tom wanted no API billing — the user's own Claude account does the work instead.
 
 ### Asset Uploader
 Compresses an uploaded image, lets the user pick an existing Payload media folder (or create a

@@ -16,8 +16,11 @@ export async function middleware(req: NextRequest) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
+    // Remember where they were going (e.g. the /seo/apply link Claude
+    // handed back) so sign-in returns them there instead of the dashboard.
     const url = req.nextUrl.clone();
     url.pathname = "/login";
+    url.search = `?callbackUrl=${encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search)}`;
     return NextResponse.redirect(url);
   }
 

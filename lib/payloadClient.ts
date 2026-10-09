@@ -98,7 +98,7 @@ function cmsAdminBaseUrl(): string {
 
 // https://.../cms/admin/collections/{collection}/{id}?locale={loc} — opens
 // that document's edit page in the CMS admin, already on the right locale.
-function cmsAdminUrlFor(collection: Collection, id: string, locale: "en" | "de"): string {
+export function cmsAdminUrlFor(collection: Collection, id: string, locale: "en" | "de"): string {
   return `${cmsAdminBaseUrl()}/collections/${collection}/${id}?locale=${locale}`;
 }
 

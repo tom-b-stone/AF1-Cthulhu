@@ -21,11 +21,6 @@ export default function SeoStudioPage() {
   const [locale, setLocale] = useState<Locale>("en");
   const [collectionFilter, setCollectionFilter] = useState<"all" | "news" | "pages">("all");
   const [selected, setSelected] = useState<SeoListItem | null>(null);
-  // Doc ids currently generating, so a row's button can show "Generating…"
-  // without a second click firing a duplicate publish while one is in flight.
-  const [generating, setGenerating] = useState<Set<string>>(new Set());
-  const [bulkProgress, setBulkProgress] = useState<string | null>(null);
-  const [bulkRunning, setBulkRunning] = useState(false);
 
   function load() {
     setError(null);
@@ -43,71 +38,15 @@ export default function SeoStudioPage() {
 
   useEffect(load, []);
 
-  const key = (item: SeoListItem) => `${item.collection}:${item.id}`;
+  // Refresh when the user comes back from the claude.ai tab / the apply page
+  // so a freshly published title shows up without a manual reload.
+  useEffect(() => {
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
-  async function generateOne(item: SeoListItem): Promise<{ ok: boolean; error?: string }> {
-    setGenerating((prev) => new Set(prev).add(key(item)));
-    try {
-      const res = await fetch("/api/seo/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collection: item.collection, id: item.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) return { ok: false, error: json.error ?? "Generation failed" };
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : "Generation failed" };
-    } finally {
-      setGenerating((prev) => {
-        const next = new Set(prev);
-        next.delete(key(item));
-        return next;
-      });
-    }
-  }
-
-  async function onGenerateRow(item: SeoListItem) {
-    const result = await generateOne(item);
-    if (!result.ok) {
-      alert(`Couldn't generate SEO for "${item.internalTitle}": ${result.error}`);
-    }
-    load();
-  }
-
-  // Runs doc-by-doc (never in parallel) so each publish's own 3s DE/EN
-  // settle gap doesn't stack with others and so one bad doc never aborts
-  // the rest of the batch — same "cap batches, don't fire concurrently"
-  // caution the audif1-seo-sync skill uses for bulk CMS writes.
-  async function onGenerateMissing() {
-    if (!items) return;
-    const targets = items.filter(isMissing);
-    if (targets.length === 0) {
-      alert("Nothing missing in the current data — every doc has EN and DE title/description.");
-      return;
-    }
-    if (
-      !confirm(
-        `Generate and publish SEO for ${targets.length} doc${targets.length === 1 ? "" : "s"} with missing EN or DE title/description? This writes straight to Payload (publishedAt is preserved).`
-      )
-    ) {
-      return;
-    }
-    setBulkRunning(true);
-    const failures: string[] = [];
-    for (let i = 0; i < targets.length; i++) {
-      const item = targets[i];
-      setBulkProgress(`Generating ${i + 1} of ${targets.length}: ${item.internalTitle}`);
-      const result = await generateOne(item);
-      if (!result.ok) failures.push(`${item.internalTitle}: ${result.error}`);
-    }
-    setBulkProgress(null);
-    setBulkRunning(false);
-    load();
-    if (failures.length) {
-      alert(`Done, but ${failures.length} failed:\n${failures.join("\n")}`);
-    }
-  }
+  const missingCount = useMemo(() => (items ? items.filter(isMissing).length : 0), [items]);
 
   const filtered = useMemo(() => {
     if (!items) return [];
@@ -134,24 +73,27 @@ export default function SeoStudioPage() {
       </p>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
-        <button
-          onClick={onGenerateMissing}
-          disabled={bulkRunning || !items}
+        <a
+          href="/api/seo/handoff?missing=1"
+          target="_blank"
+          rel="noreferrer"
           style={{
             padding: "8px 14px",
             borderRadius: 6,
-            border: "none",
-            background: "var(--accent)",
+            background: missingCount ? "var(--accent)" : "#333",
             color: "#fff",
-            cursor: bulkRunning ? "default" : "pointer",
-            opacity: bulkRunning ? 0.6 : 1,
             fontSize: 13,
             whiteSpace: "nowrap",
+            textDecoration: "none",
+            pointerEvents: missingCount ? "auto" : "none",
           }}
         >
-          {bulkRunning ? "Generating…" : "Generate missing"}
-        </button>
-        {bulkProgress && <span style={{ fontSize: 12, opacity: 0.6 }}>{bulkProgress}</span>}
+          Generate missing {items ? `(${missingCount} left, 3 per round)` : ""}
+        </a>
+        <span style={{ fontSize: 12, opacity: 0.6 }}>
+          Opens claude.ai with the page content pre-filled. Press send there; Claude replies with a link that publishes
+          the text here (publication date unchanged).
+        </span>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
@@ -272,30 +214,24 @@ export default function SeoStudioPage() {
                       <td style={{ padding: "8px" }}>{meta.description.length}</td>
                       <td style={{ padding: "8px" }}>{locale.toUpperCase()}</td>
                       <td style={{ padding: "8px" }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onGenerateRow(item);
-                          }}
-                          disabled={generating.has(key(item)) || bulkRunning}
+                        <a
+                          href={`/api/seo/handoff?collection=${item.collection}&id=${item.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                           style={{
+                            display: "inline-block",
                             padding: "4px 10px",
                             borderRadius: 4,
                             border: "1px solid var(--border)",
-                            background: "none",
                             color: "var(--fg)",
-                            cursor: generating.has(key(item)) || bulkRunning ? "default" : "pointer",
-                            opacity: generating.has(key(item)) || bulkRunning ? 0.6 : 1,
                             fontSize: 11,
                             whiteSpace: "nowrap",
+                            textDecoration: "none",
                           }}
                         >
-                          {generating.has(key(item))
-                            ? "Generating…"
-                            : isMissing(item)
-                              ? "Generate SEO title"
-                              : "Regenerate"}
-                        </button>
+                          {isMissing(item) ? "Generate SEO title" : "Regenerate"}
+                        </a>
                       </td>
                     </tr>
                   );
