@@ -52,3 +52,14 @@ export async function kvSet(key: string, value: string): Promise<void> {
   );
   memoryStore.set(key, value);
 }
+
+export async function kvDel(key: string): Promise<void> {
+  if (URL && TOKEN) {
+    await fetch(`${URL}/del/${encodeURIComponent(key)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    return;
+  }
+  memoryStore.delete(key);
+}

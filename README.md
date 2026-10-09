@@ -77,6 +77,22 @@ Claude answers with 3 links.
 This replaced an earlier in-app Anthropic API call (removed): the key saved for it had no
 credits, and Tom wanted no API billing — the user's own Claude account does the work instead.
 
+### Claude connector ("AF1 Tools", `/connector`, `app/api/mcp/[token]/route.ts`)
+Removes the one remaining click. A minimal MCP server (Streamable HTTP, JSON-RPC over POST,
+stateless, hand-rolled — only `initialize`, `tools/list`, `tools/call`) that claude.ai can use as a
+custom connector. Auth is a per-user token in the URL path: each user mints their own on
+`/connector` (`lib/connectorTokens.ts`, SHA-256 of the token stored in KV, mapped to their email,
+one live token per user, revocable), pastes `https://<app>/api/mcp/<token>` into claude.ai →
+Settings → Connectors → Add custom connector, done. No OAuth server to run; the URL is the secret,
+treated like a password. `middleware.ts` lets `/api/mcp` through without a session for that reason.
+
+Tools (`lib/mcpTools.ts`): `seo_list_missing`, `seo_get_page`, `seo_publish`. `seo_publish` runs the
+same `validateSeoField` checks as the UI and the same `publishSeo` two-step publish (date
+preserved); it refuses on hard errors unless `force: true`. Every call is logged with the owning
+email. The hand-off prompt tells Claude: if you have `seo_publish`, call it and confirm; if not,
+answer with the Publish link — so users without the connector lose nothing. Meant to grow: tools
+for the Asset Uploader / CRM Images go in the same file under the same connector.
+
 ### Asset Uploader
 Compresses an uploaded image, lets the user pick an existing Payload media folder (or create a
 new one — the folder structure already exists in the CMS, this just reads/writes it) and uploads

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import EditPanel from "./EditPanel";
 import type { SeoListItem } from "./types";
 
@@ -91,8 +92,9 @@ export default function SeoStudioPage() {
           Generate missing {items ? `(${missingCount} left, 3 per round)` : ""}
         </a>
         <span style={{ fontSize: 12, opacity: 0.6 }}>
-          Opens claude.ai with the page content pre-filled. Press send there; Claude replies with a link that publishes
-          the text here (publication date unchanged).
+          Opens claude.ai with the page content pre-filled. Claude writes the text and publishes it (publication date
+          unchanged) — directly if you have the <Link href="/connector">Claude connector</Link>, otherwise it replies
+          with a Publish link to click.
         </span>
       </div>
 

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const PUBLIC_PATHS = ["/login", "/api/auth"];
+// /api/mcp is the Claude connector endpoint: called by Anthropic's servers,
+// never by a browser with a session cookie. It authenticates itself with the
+// per-user token in its path (lib/connectorTokens.ts).
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/mcp"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

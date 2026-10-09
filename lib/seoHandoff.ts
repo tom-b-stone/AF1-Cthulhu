@@ -65,7 +65,9 @@ ${RULES}
 ${pages}
 
 HOW TO ANSWER
-Reply with ONLY one markdown link per page, one per line, nothing else. Clicking it publishes the text in SEO Studio. Template:
+First check your tools. If you have a tool named "seo_publish" (the AF1 Tools connector): call it once per page with collection, id and the four texts, then reply with one short line per page: EN title, DE title, "Published". If it answers "NOT published" with validation issues, fix the text and call it again; never pass force unless the user tells you to.
+
+If you do NOT have that tool, reply with ONLY one markdown link per page, one per line, nothing else. Clicking it publishes the text in SEO Studio. Template:
 [Publish: <internal title>](${appOrigin}/seo/apply?c=<collection>&id=<id>&et=<EN title>&ed=<EN description>&dt=<DE title>&dd=<DE description>)
 Percent-encode every value exactly like JavaScript encodeURIComponent: space=%20 &=%26 |=%7C #=%23 ?=%3F +=%2B ®=%C2%AE ü=%C3%BC ä=%C3%A4 ö=%C3%B6 ß=%C3%9F Ü=%C3%9C Ä=%C3%84 Ö=%C3%96 é=%C3%A9. Never leave a raw space in the link.`;
 }

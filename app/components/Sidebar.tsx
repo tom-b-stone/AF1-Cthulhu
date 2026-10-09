@@ -55,6 +55,9 @@ export default function Sidebar() {
 
       <div style={{ marginTop: "auto", paddingTop: 24, fontSize: 11, opacity: 0.6 }}>
         <div style={{ marginBottom: 6 }}>{session.user?.email}</div>
+        <Link href="/connector" style={{ display: "block", marginBottom: 6, textDecoration: "none" }}>
+          Claude connector
+        </Link>
         {isAdmin && (
           <Link href="/admin/credentials" style={{ display: "block", marginBottom: 6, textDecoration: "none" }}>
             Admin
