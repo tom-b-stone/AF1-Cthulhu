@@ -35,13 +35,12 @@ checks — `lib/seoBrand.ts`), a Save as draft button, and a Publish button impl
 two-step publish trick (DE draft PATCH, 3s settle, then EN PATCH with `_status: 'published'`,
 preserving `publishedAt`).
 
-Every link shown (table URL column, edit drawer) is a real, per-locale public link, built from
+Every link shown (table URL column, edit drawer) opens the CMS admin edit page for that doc —
+`{site-root}/cms/admin/collections/{collection}/{id}?locale={en|de}` — the same link shape the
+AF1-SEO Google Sheet's own HYPERLINK formulas use, so clicking takes Tom straight to where the
+meta title/description can be seen and edited in Payload, not the public page. Built from
 `PAYLOAD_API_URL` itself (never hardcoded) so it always matches whatever environment this
-deployment points at: `{site-root}/{locale}/app/news/{slug}` for news, `{site-root}/{locale}/app/{slug}`
-for pages, `{site-root}/{locale}/app` for the homepage — confirmed against staging
-(`staging.audif1team.com/en/app/news/test-news-kevin` loads the live article). A bare
-`/news/{slug}` with no locale/app prefix also works but 302s to the default locale, which is why
-the explicit locale path is built instead.
+deployment points at.
 
 Auth: the CMS's `users` collection doesn't have Payload's API-key auth enabled (no code change
 was made to add it), so writes go through a server-side login instead — `lib/payloadClient.ts`

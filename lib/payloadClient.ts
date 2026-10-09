@@ -77,33 +77,29 @@ export type SeoListItem = {
   slug: string;
   status: "published" | "draft";
   publishedDate: string | null;
-  // Per-locale public URLs — the site is locale-prefixed (/en/app/..., /de/app/...),
-  // so EN and DE genuinely point at different paths, not just different query params.
+  // Per-locale links straight into the Payload CMS admin edit page for this
+  // doc (not the public site) — same link shape the AF1-SEO Google Sheet's
+  // own HYPERLINK formulas use, so clicking takes Tom straight to where he
+  // can see and edit the meta title/description, not the live page.
   urls: { en: string; de: string };
   en: SeoLocaleMeta;
   de: SeoLocaleMeta;
 };
 
-// The public site root always matches whichever Payload instance this
+// The CMS admin root always matches whichever Payload instance this
 // deployment's PAYLOAD_API_URL points at (derived, not hardcoded) — staging
 // while this tool is being tried out, production later for the same reason
 // PAYLOAD_API_URL itself switches per the README. Never hardcode a domain
 // here: a hardcoded prod link is exactly the bug that was caught testing
 // this against staging.
-function siteBaseUrl(): string {
-  return baseUrl().replace(/\/cms\/api$/, "");
+function cmsAdminBaseUrl(): string {
+  return `${baseUrl().replace(/\/cms\/api$/, "")}/cms/admin`;
 }
 
-// Confirmed against staging: the public site lives at /{locale}/app/..., e.g.
-// https://staging.audif1team.com/en/app/news/{slug} and .../en/app/{slug} for
-// pages, with https://staging.audif1team.com/en/app as the homepage. A bare
-// /news/{slug} (no locale/app prefix) redirects to the default locale, but we
-// build the explicit locale path so EN/DE links are never ambiguous.
-function publicUrlFor(collection: Collection, slug: string, locale: "en" | "de"): string {
-  const root = `${siteBaseUrl()}/${locale}/app`;
-  if (collection === "news") return `${root}/news/${slug}`;
-  if (!slug || slug === "home") return root;
-  return `${root}/${slug}`;
+// https://.../cms/admin/collections/{collection}/{id}?locale={loc} — opens
+// that document's edit page in the CMS admin, already on the right locale.
+function cmsAdminUrlFor(collection: Collection, id: string, locale: "en" | "de"): string {
+  return `${cmsAdminBaseUrl()}/collections/${collection}/${id}?locale=${locale}`;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -149,8 +145,8 @@ export async function listSeoItems(): Promise<SeoListItem[]> {
         status,
         publishedDate: (status === "published" ? doc.publishedAt : doc.createdAt) ?? null,
         urls: {
-          en: publicUrlFor(collection, doc.slug ?? "", "en"),
-          de: publicUrlFor(collection, deDoc?.slug ?? doc.slug ?? "", "de"),
+          en: cmsAdminUrlFor(collection, doc.id, "en"),
+          de: cmsAdminUrlFor(collection, doc.id, "de"),
         },
         en: { title: doc.meta?.title ?? "", description: doc.meta?.description ?? "" },
         de: { title: deDoc?.meta?.title ?? "", description: deDoc?.meta?.description ?? "" },
