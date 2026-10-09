@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
-import { getStagingCredentials, setStagingCredentials, kvConfigured } from "@/lib/settings";
+import {
+  getStagingCredentials,
+  setStagingCredentials,
+  getAnthropicApiKey,
+  setAnthropicApiKey,
+  kvConfigured,
+} from "@/lib/settings";
 
 // middleware.ts already blocks non-admins from /api/admin/*, but this route
 // writes real secrets, so it re-checks here too rather than trusting that
@@ -19,12 +25,14 @@ export async function GET() {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const creds = await getStagingCredentials();
+  const [creds, anthropic] = await Promise.all([getStagingCredentials(), getAnthropicApiKey()]);
   return NextResponse.json({
     persistent: kvConfigured(),
     set: Boolean(creds),
     email: creds?.email ?? null,
     updatedAt: creds?.updatedAt ?? null,
+    anthropicSet: Boolean(anthropic),
+    anthropicUpdatedAt: anthropic?.updatedAt ?? null,
   });
 }
 
@@ -43,5 +51,25 @@ export async function POST(req: NextRequest) {
     );
   }
   await setStagingCredentials(email, password);
+  return NextResponse.json({ ok: true, persistent: kvConfigured() });
+}
+
+// Separate PUT for the Anthropic API key so saving one credential never
+// touches the other (the staging login form has no idea this field exists).
+export async function PUT(req: NextRequest) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  const { anthropicApiKey } = await req.json();
+  if (!anthropicApiKey) {
+    return NextResponse.json({ error: "anthropicApiKey is required" }, { status: 400 });
+  }
+  if (!process.env.CREDENTIALS_ENCRYPTION_KEY) {
+    return NextResponse.json(
+      { error: "CREDENTIALS_ENCRYPTION_KEY isn't set — can't store this safely yet." },
+      { status: 500 }
+    );
+  }
+  await setAnthropicApiKey(anthropicApiKey);
   return NextResponse.json({ ok: true, persistent: kvConfigured() });
 }

@@ -50,6 +50,23 @@ logs in as the dedicated staging CMS user already saved via `/admin/credentials`
 Nothing is exposed to the client. Because that login is shared, per-user activity is tracked at
 the app layer (the signed-in app user), not against the CMS account.
 
+**Generate / Regenerate SEO title** (`lib/seoGenerate.ts`, `app/api/seo/generate/route.ts`):
+each row has a button ("Generate SEO title" when EN or DE is empty, "Regenerate" once both are
+set), and there's a "Generate missing" button above the table that runs the same thing for every
+doc currently missing an EN or DE title/description, one doc at a time. Generation reads the
+doc's own real content (`getSeoGenerationSource` in `lib/payloadClient.ts` — teaser/summary
+fields, the hero/cover image's alt text, and a generic walk over `sections` for any block's
+title/heading/text/caption fields, explicitly excluding the existing `meta` block so regenerating
+never just echoes back what's already there), sends it to Claude with the same brand rules
+`lib/seoBrand.ts` validates against (title/description length, the `| Audi Revolut F1® Team`
+patterns by article type, no em-dash, brand-mark typos), retries up to twice server-side if the
+result fails validation, and — once it passes — **publishes immediately** using the existing
+two-step trick (`publishSeo`, DE draft then EN publish) so `publishedAt` never moves. There's no
+manual review step before the write, matching how the audif1-seo-sync skill's "publish now"
+workflow already works; Tom asked for direct publish rather than staging it in the edit drawer
+first. The Anthropic API key this calls is saved encrypted via `/admin/credentials`, same
+pattern as the staging CMS login, not a plain env var.
+
 ### Asset Uploader
 Compresses an uploaded image, lets the user pick an existing Payload media folder (or create a
 new one — the folder structure already exists in the CMS, this just reads/writes it) and uploads

@@ -165,6 +165,87 @@ export async function getSeoDoc(collection: Collection, id: string) {
   return { en, de };
 }
 
+// Text fields worth pulling out of a doc/section when building generation
+// source content — keys that reliably hold human-written copy rather than
+// ids, urls, dates, or media technical metadata. Deliberately generic since
+// `sections` is a blocks array whose shape varies per blockType and there's
+// no single shared schema to rely on.
+const CONTENT_TEXT_KEYS = new Set([
+  "title",
+  "teaserTitle",
+  "shortSummary",
+  "longSummary",
+  "heading",
+  "subheading",
+  "headline",
+  "text",
+  "body",
+  "description",
+  "caption",
+  "label",
+  "quote",
+  "name",
+]);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function collectContentText(value: any, out: string[], depth = 0): void {
+  if (depth > 8 || out.length > 60) return; // cheap guards against pathological docs
+  if (typeof value !== "object" || value === null) return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectContentText(item, out, depth + 1);
+    return;
+  }
+  for (const [key, val] of Object.entries(value)) {
+    // Never pull from the existing meta block itself — regenerating from
+    // the current SEO title/description would just echo it back instead of
+    // drafting fresh copy from the article's real content.
+    if (key === "meta") continue;
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      // Keep alt text (hero/media captions) even though "alt" isn't in the
+      // generic key list, since Tom specifically wants the hero image's
+      // description considered as context.
+      if ((CONTENT_TEXT_KEYS.has(key) || key === "alt") && trimmed && trimmed.length < 2000) {
+        out.push(trimmed);
+      }
+    } else if (typeof val === "object") {
+      collectContentText(val, out, depth + 1);
+    }
+  }
+}
+
+export type SeoGenerationSource = {
+  internalTitle: string;
+  slug: string;
+  contentText: { en: string; de: string };
+};
+
+// Fetches the doc's real content (depth=1 so cover/media resolve) in both
+// locales and extracts whatever human-written copy it holds — never invent
+// facts the generator doesn't have, same rule the audif1-seo-sync skill
+// follows when drafting SEO by hand.
+export async function getSeoGenerationSource(
+  collection: Collection,
+  id: string
+): Promise<SeoGenerationSource> {
+  const [en, de] = await Promise.all([
+    payloadFetch(`/${collection}/${id}?locale=en&depth=1&draft=true`).then((r) => r.json()),
+    payloadFetch(`/${collection}/${id}?locale=de&depth=1&draft=true`).then((r) => r.json()),
+  ]);
+  const enText: string[] = [];
+  const deText: string[] = [];
+  collectContentText(en, enText);
+  collectContentText(de, deText);
+  return {
+    internalTitle: en.title ?? "(untitled)",
+    slug: en.slug ?? "",
+    contentText: {
+      en: Array.from(new Set(enText)).join("\n").slice(0, 6000),
+      de: Array.from(new Set(deText)).join("\n").slice(0, 6000),
+    },
+  };
+}
+
 const LOCALE_WRITE_GAP_MS = 3000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

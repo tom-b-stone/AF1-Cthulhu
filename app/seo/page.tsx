@@ -6,6 +6,14 @@ import type { SeoListItem } from "./types";
 
 type Locale = "en" | "de";
 
+// A doc counts as "missing" (for both the row button label and the bulk
+// Generate missing button) when either language's SEO title or description
+// is blank — Tom's call, so partial gaps (DE written but EN empty, etc.)
+// still get picked up.
+function isMissing(item: SeoListItem): boolean {
+  return !item.en.title || !item.en.description || !item.de.title || !item.de.description;
+}
+
 export default function SeoStudioPage() {
   const [items, setItems] = useState<SeoListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -13,6 +21,11 @@ export default function SeoStudioPage() {
   const [locale, setLocale] = useState<Locale>("en");
   const [collectionFilter, setCollectionFilter] = useState<"all" | "news" | "pages">("all");
   const [selected, setSelected] = useState<SeoListItem | null>(null);
+  // Doc ids currently generating, so a row's button can show "Generating…"
+  // without a second click firing a duplicate publish while one is in flight.
+  const [generating, setGenerating] = useState<Set<string>>(new Set());
+  const [bulkProgress, setBulkProgress] = useState<string | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   function load() {
     setError(null);
@@ -29,6 +42,72 @@ export default function SeoStudioPage() {
   }
 
   useEffect(load, []);
+
+  const key = (item: SeoListItem) => `${item.collection}:${item.id}`;
+
+  async function generateOne(item: SeoListItem): Promise<{ ok: boolean; error?: string }> {
+    setGenerating((prev) => new Set(prev).add(key(item)));
+    try {
+      const res = await fetch("/api/seo/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collection: item.collection, id: item.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) return { ok: false, error: json.error ?? "Generation failed" };
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Generation failed" };
+    } finally {
+      setGenerating((prev) => {
+        const next = new Set(prev);
+        next.delete(key(item));
+        return next;
+      });
+    }
+  }
+
+  async function onGenerateRow(item: SeoListItem) {
+    const result = await generateOne(item);
+    if (!result.ok) {
+      alert(`Couldn't generate SEO for "${item.internalTitle}": ${result.error}`);
+    }
+    load();
+  }
+
+  // Runs doc-by-doc (never in parallel) so each publish's own 3s DE/EN
+  // settle gap doesn't stack with others and so one bad doc never aborts
+  // the rest of the batch — same "cap batches, don't fire concurrently"
+  // caution the audif1-seo-sync skill uses for bulk CMS writes.
+  async function onGenerateMissing() {
+    if (!items) return;
+    const targets = items.filter(isMissing);
+    if (targets.length === 0) {
+      alert("Nothing missing in the current data — every doc has EN and DE title/description.");
+      return;
+    }
+    if (
+      !confirm(
+        `Generate and publish SEO for ${targets.length} doc${targets.length === 1 ? "" : "s"} with missing EN or DE title/description? This writes straight to Payload (publishedAt is preserved).`
+      )
+    ) {
+      return;
+    }
+    setBulkRunning(true);
+    const failures: string[] = [];
+    for (let i = 0; i < targets.length; i++) {
+      const item = targets[i];
+      setBulkProgress(`Generating ${i + 1} of ${targets.length}: ${item.internalTitle}`);
+      const result = await generateOne(item);
+      if (!result.ok) failures.push(`${item.internalTitle}: ${result.error}`);
+    }
+    setBulkProgress(null);
+    setBulkRunning(false);
+    load();
+    if (failures.length) {
+      alert(`Done, but ${failures.length} failed:\n${failures.join("\n")}`);
+    }
+  }
 
   const filtered = useMemo(() => {
     if (!items) return [];
@@ -53,6 +132,27 @@ export default function SeoStudioPage() {
         Staging only (staging.audif1team.com). Reads and writes go straight to Payload — this trial doesn&apos;t
         touch the AF1-SEO Google Sheet.
       </p>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
+        <button
+          onClick={onGenerateMissing}
+          disabled={bulkRunning || !items}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 6,
+            border: "none",
+            background: "var(--accent)",
+            color: "#fff",
+            cursor: bulkRunning ? "default" : "pointer",
+            opacity: bulkRunning ? 0.6 : 1,
+            fontSize: 13,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {bulkRunning ? "Generating…" : "Generate missing"}
+        </button>
+        {bulkProgress && <span style={{ fontSize: 12, opacity: 0.6 }}>{bulkProgress}</span>}
+      </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
         <input
@@ -123,6 +223,7 @@ export default function SeoStudioPage() {
                   <th style={{ padding: "6px 8px" }}>SEO Description</th>
                   <th style={{ padding: "6px 8px" }}>Count</th>
                   <th style={{ padding: "6px 8px" }}>Language</th>
+                  <th style={{ padding: "6px 8px" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -170,6 +271,32 @@ export default function SeoStudioPage() {
                       </td>
                       <td style={{ padding: "8px" }}>{meta.description.length}</td>
                       <td style={{ padding: "8px" }}>{locale.toUpperCase()}</td>
+                      <td style={{ padding: "8px" }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onGenerateRow(item);
+                          }}
+                          disabled={generating.has(key(item)) || bulkRunning}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 4,
+                            border: "1px solid var(--border)",
+                            background: "none",
+                            color: "var(--fg)",
+                            cursor: generating.has(key(item)) || bulkRunning ? "default" : "pointer",
+                            opacity: generating.has(key(item)) || bulkRunning ? 0.6 : 1,
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {generating.has(key(item))
+                            ? "Generating…"
+                            : isMissing(item)
+                              ? "Generate SEO title"
+                              : "Regenerate"}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
