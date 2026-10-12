@@ -15,7 +15,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
 
-  if (pathname === "/login" || !session) return null;
+  // The home page is a full-width, centred launcher — no sidebar there.
+  if (pathname === "/login" || pathname === "/" || !session) return null;
 
   const isAdmin = (session.user as { role?: string } | undefined)?.role === "admin";
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import KtuluLogo from "./components/KtuluLogo";
+import HomeFooter from "./components/HomeFooter";
 
 type Status = "working" | "staging" | "planned";
 
@@ -45,10 +46,12 @@ const TILES: { title: string; href: string; external?: boolean; status: Status; 
 
 export default function Home() {
   return (
-    <div style={{ maxWidth: 880 }}>
-      <KtuluLogo height={320} />
+    <div style={{ maxWidth: 880, margin: "0 auto", paddingTop: 16 }}>
+      <KtuluLogo height={360} />
+      <h1 style={{ textAlign: "center", margin: "20px 0 4px", letterSpacing: 2 }}>AF1 Ktulu</h1>
+      <p style={{ textAlign: "center", margin: 0, opacity: 0.6, fontSize: 13 }}>Internal tools for audif1.com</p>
 
-      <p style={{ fontSize: 13, opacity: 0.65, lineHeight: 1.65, marginTop: 16, maxWidth: 720 }}>
+      <p style={{ fontSize: 13, opacity: 0.65, lineHeight: 1.65, margin: "20px auto 0", maxWidth: 680, textAlign: "center" }}>
         <strong style={{ opacity: 1 }}>Ktulu</strong> <span style={{ opacity: 0.7 }}>(n.)</span> — short, simplified
         spelling of <em>Cthulhu</em>: an ancient, god-like cosmic entity that sleeps in the sunken city of
         R&apos;lyeh. It reaches into the dreams of humans and is worshipped by a cult spread across the world. Its
@@ -92,6 +95,7 @@ export default function Home() {
           );
         })}
       </div>
+      <HomeFooter />
     </div>
   );
 }

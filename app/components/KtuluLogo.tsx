@@ -14,7 +14,7 @@ import { useEffect, useRef } from "react";
 
 // 70-step density ramp (the classic one), light → dark.
 const GLYPHS = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
-const CELL = 7; // px per character cell
+const CELL = 6; // px per character cell
 
 const VERT = `
 attribute vec2 p;
@@ -61,113 +61,105 @@ float sdTri(vec2 p, vec2 a, vec2 b, vec2 c){
 float smin(float a, float b, float k){ float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0); return mix(b, a, h) - k*h*(1.0-h); }
 
 // Tentacle: a chain of segments hanging from (x0,y0), swaying with two
-// frequencies, tapering, with a sucker channel returned via suck.
-float tentacle(vec2 p, float x0, float y0, float len, float phase, float t, out float suck){
+// frequencies, tapering and curling at the tip; sucker channel via suck.
+float tentacle(vec2 p, float x0, float y0, float len, float w0, float phase, float t, out float suck){
   float d = 1e9; suck = 1e9;
   vec2 a = vec2(x0, y0);
-  float w = 0.07;
-  for (int i = 0; i < 8; i++) {
+  float w = w0;
+  float dir = sign(x0 + 0.001);
+  for (int i = 0; i < 10; i++) {
     float fi = float(i);
-    float k = (fi+1.0) / 8.0;
-    float sway = (sin(t*1.1 + phase + fi*0.7) * 0.06 + sin(t*2.3 + phase*1.7 + fi*1.3) * 0.02) * k * k * 9.0 * len;
-    vec2 b = vec2(x0 + sway, y0 - len * k);
+    float k = (fi+1.0) / 10.0;
+    float sway = (sin(t*0.9 + phase + fi*0.6) * 0.05 + sin(t*2.1 + phase*1.7 + fi*1.1) * 0.015) * k * k * 8.0 * len;
+    float curl = dir * k*k*k * 0.35 * len;
+    vec2 b = vec2(x0 + sway + curl, y0 - len * k);
     d = min(d, sdSeg(p, a, b, w));
-    // suckers: small discs along the inner side
     vec2 m = mix(a, b, 0.5);
-    suck = min(suck, sdCircle(p - m - vec2(w*0.55, 0.0), w*0.3));
-    a = b; w *= 0.84;
+    suck = min(suck, sdCircle(p - m - vec2(-dir*w*0.5, 0.0), w*0.28));
+    a = b; w *= 0.86;
   }
   return d;
 }
 
 vec3 scene(vec2 p, float t){
-  p.y -= sin(t*0.8) * 0.012; // breathing
-
-  // --- wings: membrane + finger bones ---
+  p.y -= sin(t*0.8) * 0.01; // breathing
   vec2 q = vec2(abs(p.x), p.y);
-  float mem = sdTri(q, vec2(0.08, 0.1), vec2(1.15, 0.72), vec2(0.78, -0.3));
+
+  // --- wings: tall, folded up behind the head, with finger bones ---
+  vec2 root = vec2(0.25, -0.1);
+  float mem = sdTri(q, root, vec2(0.95, 1.25), vec2(1.05, 0.15));
+  mem = min(mem, sdTri(q, root, vec2(1.05, 0.15), vec2(0.85, -0.55)));
   float bone = 1e9;
-  for (int i = 0; i < 4; i++) {
-    float fi = float(i);
-    vec2 tip = mix(vec2(1.15, 0.72), vec2(0.78, -0.3), fi / 3.0);
-    bone = min(bone, sdSeg(q, vec2(0.08, 0.1), tip, 0.012));
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i) / 4.0;
+    vec2 tip = fi < 0.5 ? mix(vec2(0.95, 1.25), vec2(1.05, 0.15), fi*2.0) : mix(vec2(1.05, 0.15), vec2(0.85, -0.55), (fi-0.5)*2.0);
+    bone = min(bone, sdSeg(q, root, tip, 0.014));
   }
-  float veins = 0.5 + 0.5*sin(atan(q.y-0.1, q.x-0.08)*26.0 + fbm(q*6.0)*4.0);
-  float memA = 1.0 - smoothstep(-0.005, 0.02, mem);
-  float wingTex = 0.22 + 0.25*veins + 0.2*fbm(q*5.0 + t*0.05);
-  float boneA = 1.0 - smoothstep(-0.005, 0.01, bone);
-  float wings = max(memA * wingTex, boneA * 0.9);
+  float veins = 0.5 + 0.5*sin(atan(q.y-root.y, q.x-root.x)*22.0 + fbm(q*7.0)*5.0);
+  float memA = 1.0 - smoothstep(-0.005, 0.015, mem);
+  float wingTex = 0.18 + 0.2*veins + 0.22*fbm(q*6.0 + t*0.05) - 0.15*smoothstep(0.3, 1.1, length(q - root));
+  float boneA = 1.0 - smoothstep(-0.004, 0.008, bone);
+  float wings = max(memA * wingTex, boneA * 0.85);
 
-  // --- head: dome with ridges, brow, cheeks ---
-  float ridge = fbm(vec2(p.x*7.0, p.y*3.0 + t*0.03)) * 0.05;
-  float head = sdEllipse(p - vec2(0.0, 0.27), vec2(0.38, 0.36)) + ridge;
-  head = smin(head, sdEllipse(p - vec2(0.0, 0.05), vec2(0.46, 0.2)), 0.12);
-  float brow = sdSeg(p, vec2(-0.28, 0.36), vec2(0.28, 0.36), 0.035);
-  head = smin(head, brow, 0.06);
+  // --- head: big lumpy dome, brow ridge, sunken sockets ---
+  float lump = fbm(vec2(p.x*5.0, p.y*4.0 + t*0.02)) * 0.09 + noise(p*18.0) * 0.015;
+  float head = sdEllipse(p - vec2(0.0, 0.42), vec2(0.5, 0.46)) + lump;
+  head = smin(head, sdEllipse(p - vec2(0.0, 0.12), vec2(0.56, 0.3)), 0.15);
+  float brow = sdSeg(p, vec2(-0.36, 0.46), vec2(0.36, 0.46), 0.05);
+  head = smin(head, brow, 0.08);
 
-  // --- body, shoulders, arms with claws ---
-  float body = sdEllipse(p - vec2(0.0, -0.55), vec2(0.3, 0.28));
-  float shoulders = sdEllipse(p - vec2(0.0, -0.25), vec2(0.55, 0.12));
-  float arms = 1e9;
-  for (int s = 0; s < 2; s++) {
-    float sx = s == 0 ? -1.0 : 1.0;
-    vec2 sh = vec2(sx*0.5, -0.25);
-    vec2 el = vec2(sx*0.72, -0.55 + 0.02*sin(t*1.5 + sx));
-    vec2 ha = vec2(sx*0.62, -0.85 + 0.02*sin(t*1.2));
-    arms = min(arms, sdSeg(p, sh, el, 0.07));
-    arms = min(arms, sdSeg(p, el, ha, 0.055));
-    for (int c = 0; c < 3; c++) {
-      float fc = float(c) - 1.0;
-      vec2 tip = ha + vec2(sx*(0.1 + 0.06*fc), -0.14 + 0.04*abs(fc));
-      arms = min(arms, sdSeg(p, ha, tip, 0.016));
-    }
-  }
-  float fig = smin(head, shoulders, 0.15);
-  fig = smin(fig, body, 0.2);
-  fig = min(fig, arms);
+  // --- shoulders / chest ---
+  float chest = sdEllipse(p - vec2(0.0, -0.75), vec2(0.72, 0.45));
+  float fig = smin(head, chest, 0.25);
 
-  // --- nine tentacles from the lower face ---
+  // --- tentacle beard: thick, overlapping, from the whole lower face ---
   float ten = 1e9, suckAll = 1e9;
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 13; i++) {
     float fi = float(i);
-    float x0 = -0.32 + fi * 0.08;
+    float u = fi / 12.0;
+    float x0 = mix(-0.5, 0.5, u);
+    float y0 = 0.08 - abs(x0) * 0.55 - 0.03*sin(fi*3.0);
+    float len = 0.95 - abs(x0)*0.5 + 0.08*sin(fi*2.3);
+    float w0 = 0.075 - abs(x0)*0.04;
     float s;
-    ten = min(ten, tentacle(p, x0, 0.0 - abs(x0)*0.4, 0.62 + 0.12*sin(fi*2.1), fi*1.7, t, s));
+    ten = min(ten, tentacle(p, x0, y0, len, w0, fi*1.9, t, s));
     suckAll = min(suckAll, s);
   }
-  fig = smin(fig, ten, 0.04);
+  fig = smin(fig, ten, 0.03);
 
-  // --- eyes: lid shape, iris glow, dark pupil ---
-  vec2 pe = vec2(abs(p.x) - 0.15, p.y - 0.28);
-  float eye = sdEllipse(pe, vec2(0.075, 0.05));
-  float pupil = sdEllipse(pe - vec2(0.0, -0.005), vec2(0.018, 0.04));
+  // --- eyes: dark sockets, small bright eye, pupil ---
+  vec2 pe = vec2(abs(p.x) - 0.2, p.y - 0.36);
+  float socket = sdEllipse(pe, vec2(0.13, 0.085));
+  float eye = sdEllipse(pe - vec2(0.0, -0.01), vec2(0.055, 0.035));
+  float pupil = sdEllipse(pe - vec2(0.0, -0.01), vec2(0.014, 0.03));
 
   // --- shading ---
-  float skin = fbm(p*14.0 + vec2(0.0, -t*0.2)) * 0.45 + noise(p*40.0) * 0.12;
-  float figA = 1.0 - smoothstep(-0.015, 0.015, fig);
-  float lightDir = clamp(0.95 + 0.25*(p.y + 0.2) - 0.25*p.x - skin*0.9, 0.18, 1.0);
-  // rim light along the silhouette
-  float rim = (1.0 - smoothstep(0.0, 0.05, abs(fig))) * 0.35;
-  float suckA = 1.0 - smoothstep(-0.002, 0.006, suckAll);
-  float b = figA * lightDir + rim;
-  b = mix(b, b*0.35, suckA * figA);
+  float skin = fbm(p*12.0 + vec2(0.0, -t*0.15)) * 0.5 + noise(p*45.0) * 0.1;
+  float figA = 1.0 - smoothstep(-0.012, 0.012, fig);
+  float light = clamp(1.05 + 0.3*(p.y + 0.1) - 0.35*p.x - skin*0.95, 0.12, 1.0);
+  float rim = (1.0 - smoothstep(0.0, 0.04, abs(fig))) * 0.3;
+  float suckA = 1.0 - smoothstep(-0.002, 0.005, suckAll);
+  float sockA = 1.0 - smoothstep(-0.01, 0.03, socket);
+  float b = figA * light + rim;
+  b = mix(b, b*0.3, suckA * figA);
+  b = mix(b, b*0.25, sockA * figA);
   b = max(b, wings * (1.0 - figA));
 
-  // faint fog behind everything
-  float fog = fbm(p*2.5 + vec2(t*0.04, 0.0)) * 0.035 * (1.0 - figA) * (1.0 - memA);
-  b = max(b, fog);
+  // vignette keeps the background black like a print
+  float vig = smoothstep(1.6, 0.6, length(p * vec2(0.75, 1.0)));
+  b *= 0.35 + 0.65*vig;
 
   vec3 col = u_fg * b;
-  float glow = exp(-max(eye, 0.0) * 40.0) * (0.85 + 0.15*sin(t*2.2));
-  col = mix(col, u_eye * 1.35, clamp(glow, 0.0, 1.0));
-  col *= 1.0 - 0.85 * (1.0 - smoothstep(-0.002, 0.006, pupil));
+  float glow = exp(-max(eye, 0.0) * 55.0) * (0.85 + 0.15*sin(t*2.2));
+  col = mix(col, u_eye * 1.2, clamp(glow, 0.0, 1.0));
+  col *= 1.0 - 0.9 * (1.0 - smoothstep(-0.002, 0.005, pupil));
   return col;
 }
 
 void main(){
   vec2 cell = floor(gl_FragCoord.xy / u_cell);
   vec2 cellCentre = (cell + 0.5) * u_cell;
-  vec2 p = (cellCentre - 0.5*u_res) / min(u_res.x, u_res.y) * 2.15 + vec2(0.0, 0.12);
+  vec2 p = (cellCentre - 0.5*u_res) / min(u_res.x, u_res.y) * 2.6 + vec2(0.0, 0.05);
 
   vec3 col = scene(p, u_t);
   float lum = max(dot(col, vec3(0.299, 0.587, 0.114)), col.r * 0.9);
@@ -243,8 +235,8 @@ export default function KtuluLogo({ height = 300 }: { height?: number }) {
     gl.uniform1i(u("u_atlas"), 0);
     gl.uniform1f(u("u_glyphs"), GLYPHS.length);
     gl.uniform1f(u("u_cell"), CELL);
-    gl.uniform3f(u("u_fg"), 0.8, 0.82, 0.78);
-    gl.uniform3f(u("u_eye"), 1.0, 0.27, 0.1);
+    gl.uniform3f(u("u_fg"), 0.82, 0.83, 0.78);
+    gl.uniform3f(u("u_eye"), 0.95, 0.3, 0.12);
 
     const resize = () => {
       const w = canvas.clientWidth;
