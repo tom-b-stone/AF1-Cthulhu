@@ -55,6 +55,15 @@ logs in as the dedicated staging CMS user already saved via `/admin/credentials`
 Nothing is exposed to the client. Because that login is shared, per-user activity is tracked at
 the app layer (the signed-in app user), not against the CMS account.
 
+**Table** (`components/ui/table-editable.tsx` + `table-editable-utils/`, from beui.dev's
+editable table, pulled via its shadcn registry): virtualised, sortable, resizable, reorderable
+columns, row selection, inline-editable cells. The project got Tailwind + a shadcn layout for
+it (`tailwind.config.ts` maps shadcn token names onto the app's existing dark palette in
+`app/globals.css`; preflight is off so the inline-styled pages don't change; `components.json`,
+`lib/utils.ts`). SEO Title / Description are editable inline per locale; edits stay local until
+"Save N drafts" writes them (draft only, hard brand-rule violations are reported, not forced).
+Selecting rows enables "Generate selected" (`/api/seo/handoff?items=collection:id,…`).
+
 **Generate / Regenerate SEO title** (`lib/seoHandoff.ts`, `app/api/seo/handoff/route.ts`,
 `app/seo/apply/page.tsx`). This app calls no LLM API and holds no AI key — the writing is
 done by the user's own Claude account, hand-off in both directions by link:

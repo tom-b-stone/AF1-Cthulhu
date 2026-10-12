@@ -7,7 +7,7 @@ import {
   listSeoItems,
   type Collection,
 } from "@/lib/payloadClient";
-import { buildConnectorBulkPrompt, buildHandoffPrompt, claudeUrlFor, type HandoffItem } from "@/lib/seoHandoff";
+import { buildConnectorBulkPrompt, buildConnectorSelectedPrompt, buildHandoffPrompt, claudeUrlFor, type HandoffItem } from "@/lib/seoHandoff";
 import { connectorStatus } from "@/lib/connectorTokens";
 
 function isCollection(v: string | null): v is Collection {
@@ -48,10 +48,26 @@ export async function GET(req: NextRequest) {
   const collection = searchParams.get("collection");
   const id = searchParams.get("id");
   const missing = searchParams.get("missing");
+  // "Generate selected": comma-separated collection:id pairs from the table.
+  const itemsParam = searchParams.get("items");
 
   try {
     let items: HandoffItem[];
-    if (missing) {
+    if (itemsParam) {
+      const pairs = itemsParam
+        .split(",")
+        .map((p) => p.split(":"))
+        .filter((p): p is [string, string] => p.length === 2 && isCollection(p[0]) && Boolean(p[1]));
+      if (pairs.length === 0) {
+        return NextResponse.json({ error: "items must be collection:id pairs" }, { status: 400 });
+      }
+      const email = session.user?.email ?? "";
+      const { active } = email ? await connectorStatus(email) : { active: false };
+      if (active) {
+        return NextResponse.redirect(claudeUrlFor(buildConnectorSelectedPrompt(pairs as [Collection, string][], appOrigin(req))), 307);
+      }
+      items = await Promise.all(pairs.slice(0, MISSING_BATCH_NO_CONNECTOR).map(([c, id]) => toHandoffItem(c as Collection, id)));
+    } else if (missing) {
       const all = await listSeoItems();
       const allMissing = all.filter((i) => !i.en.title || !i.en.description || !i.de.title || !i.de.description);
       if (allMissing.length === 0) {

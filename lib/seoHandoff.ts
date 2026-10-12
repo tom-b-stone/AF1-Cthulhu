@@ -88,6 +88,24 @@ HOW TO WORK
 4. Reply with a short table as you go: internal title, EN title, DE title, result. Don't ask me to confirm each page; just work through them. If a page fails to publish for a reason you can't fix (e.g. "One or more children are invalid"), skip it, note it in the table, and continue.`;
 }
 
+// Bulk prompt for a hand-picked set of docs (the table's "Generate
+// selected"), connector users only: Claude reads and publishes each via
+// the tools, no content in the URL.
+export function buildConnectorSelectedPrompt(pairs: [Collection, string][], appOrigin: string): string {
+  const list = pairs.map(([c, id], i) => `${i + 1}. collection: ${c}, id: ${id}`).join("\n");
+  return `Write SEO meta titles and descriptions (English and German) for these ${pairs.length} audif1.com docs and publish them with the AF1 Tools connector.
+
+${RULES}
+
+DOCS
+${list}
+
+HOW TO WORK
+0. First check your tools. If you do NOT have a tool named seo_publish, stop and tell the user in 3 short lines: the AF1 Tools connector isn't active in their Claude yet; add it once (about a minute) by opening ${appOrigin}/connector, clicking "Make my URL", then in claude.ai Settings → Connectors → Add custom connector, name "AF1 Tools", paste the URL, Add; then click "Generate selected" again. Say you can't add it for them. Do nothing else.
+1. For each doc: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
+2. Reply with a short table: internal title, EN title, DE title, result. Don't ask me to confirm each page. If a page fails for a reason you can't fix, note it and continue.`;
+}
+
 export function claudeUrlFor(prompt: string): string {
   return `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 }
