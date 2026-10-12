@@ -58,3 +58,10 @@ a { color: inherit; }
 }
 .home-tile { transition: border-color 0.15s, box-shadow 0.15s; }
 .home-tile:hover { border-color: var(--vapor-purple) !important; box-shadow: 0 0 0 1px var(--vapor-purple), 0 8px 30px rgba(69, 64, 134, 0.25); }
+
+/* Compact variant for dense data tables: tighter cell padding, column
+   drag grips only on hover (they cost 24px per header otherwise). */
+.beui-compact th .px-4, .beui-compact td .px-4 { padding-left: 8px; padding-right: 8px; }
+.beui-compact th { position: sticky; }
+.beui-compact th button[aria-label^="Reorder"] { position: absolute; left: 0; top: 0; width: 14px; opacity: 0; }
+.beui-compact th:hover button[aria-label^="Reorder"] { opacity: 1; }

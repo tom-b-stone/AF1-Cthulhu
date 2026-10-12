@@ -367,7 +367,7 @@ export default function SeoStudioPage() {
         </p>
       )}
 
-      <div className="beui">
+      <div className="beui beui-compact">
       <Table<Row>
         data={rows}
         columns={columns}
