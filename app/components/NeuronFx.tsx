@@ -42,8 +42,8 @@ export default function NeuronFx() {
   }, []);
 
   useEffect(() => {
-    const els = Array.from(document.querySelectorAll<HTMLElement>(".reveal:not(.in)"));
-    if (els.length === 0) return;
+    // Reveal anything with .reveal when it scrolls in; a MutationObserver
+    // picks up sections that mount later (data loads, Suspense).
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -53,10 +53,19 @@ export default function NeuronFx() {
           }
         }
       },
-      { threshold: 0.12 }
+      { threshold: 0.08 }
     );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    const scan = () => document.querySelectorAll<HTMLElement>(".reveal:not(.in):not([data-rv])").forEach((el) => {
+      el.dataset.rv = "1";
+      io.observe(el);
+    });
+    scan();
+    const mo = new MutationObserver(() => scan());
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      io.disconnect();
+      mo.disconnect();
+    };
   }, [pathname]);
 
   return null;
