@@ -53,6 +53,10 @@ export default function Home() {
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", paddingTop: 8, position: "relative", zIndex: 1 }}>
       <HomeBackground choice={bg} />
+      {/* Everything after the background sits in its own layer: the fixed
+          canvas is a positioned z-0 element inside this container, so
+          unpositioned text would otherwise paint underneath it. */}
+      <div style={{ position: "relative", zIndex: 2 }}>
 
       <div style={{ textAlign: "center", marginTop: 24 }}>
         <div
@@ -170,6 +174,7 @@ export default function Home() {
         understanding, and those who witness it are often driven to madness.
       </p>
       <HomeFooter bg={bg} onBg={setBg} />
+      </div>
     </div>
   );
 }
