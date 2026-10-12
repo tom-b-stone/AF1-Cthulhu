@@ -4,6 +4,7 @@ import Link from "next/link";
 import HomeBackground, { useBackgroundChoice } from "./components/HomeBackground";
 import HomeFooter from "./components/HomeFooter";
 import MorphIcon, { MORPH_PRESETS } from "./components/MorphIcon";
+import SuggestionTile from "./components/SuggestionTile";
 
 type Status = "working" | "staging" | "planned";
 
@@ -51,13 +52,6 @@ const TILES: { title: string; href: string; key: string; external?: boolean; sta
     key: "/connector",
     status: "working",
     text: "Let your own Claude use these tools directly. One-minute setup, once.",
-  },
-  {
-    title: "Suggestion box",
-    href: "/suggest",
-    key: "/suggest",
-    status: "working",
-    text: "A feature, a bug, a tool that should exist. Lands on the admin message board.",
   },
 ];
 
@@ -169,6 +163,7 @@ export default function Home() {
             </Link>
           );
         })}
+        <SuggestionTile />
       </div>
 
       <p

@@ -9,8 +9,11 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
+export type Shape = "sphere" | "torus" | "box" | "knot" | "capsule" | "octa";
+
 export type MorphProps = {
   size?: number;
+  shape?: Shape;
   seed?: number;
   freq?: number;
   amp?: number;
@@ -63,21 +66,23 @@ float field(vec3 p){
   return n;
 }
 
-vec3 displace(vec3 p){
-  return p * (1.0 + uAmp * field(normalize(p)));
+// Displace along the surface normal so any base shape (torus, box, knot)
+// keeps its silhouette and only breathes.
+vec3 displace(vec3 p, vec3 n){
+  return p + n * uAmp * field(p);
 }
 
 void main(){
-  vec3 p = displace(position);
+  vec3 n0 = normalize(normal);
+  vec3 p = displace(position, n0);
   // normal by neighbours along the tangent frame
-  vec3 n0 = normalize(position);
   vec3 t = normalize(cross(n0, abs(n0.y) < 0.99 ? vec3(0.0,1.0,0.0) : vec3(1.0,0.0,0.0)));
   vec3 b = cross(n0, t);
-  float e = 0.02;
-  vec3 pt = displace(normalize(position + t * e));
-  vec3 pb = displace(normalize(position + b * e));
+  float e = 0.03;
+  vec3 pt = displace(position + t * e, n0);
+  vec3 pb = displace(position + b * e, n0);
   vec3 nrm = normalize(cross(pt - p, pb - p));
-  vNoise = field(n0);
+  vNoise = field(position);
   vNormalW = normalize(normalMatrix * nrm);
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vViewDir = normalize(-mv.xyz);
@@ -131,7 +136,25 @@ void main(){
 }
 `;
 
-export default function MorphIcon({ size = 48, seed = 0, freq = 1.6, amp = 0.22, hue = 0, speed = 1, className, style, paused }: MorphProps) {
+function makeGeometry(shape: Shape, hi: boolean): THREE.BufferGeometry {
+  const d = hi ? 2 : 1;
+  switch (shape) {
+    case "torus":
+      return new THREE.TorusGeometry(0.78, 0.36, 48 * d, 96 * d);
+    case "box":
+      return new THREE.BoxGeometry(1.5, 1.5, 1.5, 24 * d, 24 * d, 24 * d);
+    case "knot":
+      return new THREE.TorusKnotGeometry(0.62, 0.26, 160 * d, 24 * d, 2, 3);
+    case "capsule":
+      return new THREE.CapsuleGeometry(0.55, 1.1, 16 * d, 32 * d);
+    case "octa":
+      return new THREE.OctahedronGeometry(1.15, 5 + d);
+    default:
+      return new THREE.IcosahedronGeometry(1, hi ? 48 : 24);
+  }
+}
+
+export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq = 1.6, amp = 0.22, hue = 0, speed = 1, className, style, paused }: MorphProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -153,7 +176,11 @@ export default function MorphIcon({ size = 48, seed = 0, freq = 1.6, amp = 0.22,
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 10);
     camera.position.set(0, 0, 4.2);
 
-    const geo = new THREE.IcosahedronGeometry(1, size > 64 ? 48 : 24);
+    const geo = makeGeometry(shape, size > 64);
+    // the box ships flat normals per face; smooth them so the displacement
+    // reads as one surface instead of six plates
+    if (shape === "box") geo.deleteAttribute("normal");
+    if (shape === "box") geo.computeVertexNormals();
     const mat = new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -194,17 +221,19 @@ export default function MorphIcon({ size = 48, seed = 0, freq = 1.6, amp = 0.22,
       mat.dispose();
       renderer.dispose();
     };
-  }, [size, seed, freq, amp, hue, speed, paused]);
+  }, [size, shape, seed, freq, amp, hue, speed, paused]);
 
   return <canvas ref={ref} width={size} height={size} className={className} style={{ width: size, height: size, display: "block", ...style }} aria-hidden />;
 }
 
 // One shape per tool. Same component, different field.
+// One shape per tool: SEO = torus (a ring of text), Assets = box (a crate of
+// files), CRM Images = octahedron (a gem / picture), UTM = capsule (a pill,
+// the link), Connector = torus knot (the loop between Claude and the tools).
 export const MORPH_PRESETS: Record<string, Omit<MorphProps, "size">> = {
-  "/seo": { seed: 1.3, freq: 0.9, amp: 0.28, hue: 0.02 }, // lava, soft lumps
-  "/assets": { seed: 4.1, freq: 1.3, amp: 0.32, hue: 0.22 }, // pink → lilac
-  "/images": { seed: 7.7, freq: 0.8, amp: 0.38, hue: 0.42 }, // lilac → blue, big slow waves
-  "/utm": { seed: 2.6, freq: 1.5, amp: 0.22, hue: 0.62 }, // blue → teal, finer
-  "/connector": { seed: 9.2, freq: 1.1, amp: 0.3, hue: 0.8 }, // teal → lava
-  "/suggest": { seed: 5.5, freq: 1.0, amp: 0.26, hue: 0.12 }, // pink
+  "/seo": { shape: "torus", seed: 1.3, freq: 1.2, amp: 0.12, hue: 0.02 },
+  "/assets": { shape: "box", seed: 4.1, freq: 1.0, amp: 0.14, hue: 0.22 },
+  "/images": { shape: "octa", seed: 7.7, freq: 0.9, amp: 0.16, hue: 0.42 },
+  "/utm": { shape: "capsule", seed: 2.6, freq: 1.4, amp: 0.1, hue: 0.62 },
+  "/connector": { shape: "knot", seed: 9.2, freq: 1.6, amp: 0.08, hue: 0.8 },
 };

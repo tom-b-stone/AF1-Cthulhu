@@ -16,7 +16,6 @@ export const TOOLS: { href: string; key: string; name: string; status: "working"
   { href: "/images", key: "/images", name: "CRM Images", status: "planned", text: "Email template image variants" },
   { href: "https://af1-utm-studio.vercel.app/", key: "/utm", name: "UTM Studio", status: "external", external: true, text: "Campaign links (own app)" },
   { href: "/connector", key: "/connector", name: "Claude connector", status: "working", text: "Let your Claude use the tools" },
-  { href: "/suggest", key: "/suggest", name: "Suggestion box", status: "working", text: "Send an idea to the admin board" },
 ];
 
 export const STATUS_STYLE: Record<string, { fg: string; border: string; bg: string }> = {
