@@ -189,6 +189,15 @@ and a scene (`on-track & garage` / `team` / `off-track`); wallpapers `2026 | <ci
 Check column and before upload (year, GP, day/session, scene-or-person, no "do not use"). New tags
 are created on staging from the picker ("Create … on staging").
 
+**Learning** (`lib/referenceStore.ts`, `lib/feedbackStore.ts`, `/api/assets/references`, `/api/assets/feedback`):
+reference photos per person (KV `assets:refs:index` + `assets:ref:<id>`, max 8 per person) that Claude
+must look at (`knowledge_reference_image`) before naming anyone; saved from a batch photo (row dialog →
+Teach Claude, 1024px WebP) or by Claude from the library during a learning session
+(`knowledge_add_reference`). Corrections: at upload, rows where the final people/scene differ from
+Claude's proposal (`row.ai`) are logged (`assets:feedback:v1`, cap 100) and the last 25 appear in the
+rulebook. Both are visible on `/assets/learn`. The batch table is the SEO table: inline alt/descriptor,
+inline tag picker per row, row selection with a bulk bar (add tag, set scene, clear tags).
+
 Still to do: production toggle (second CMS login in /admin), SlashLens intake (`/assets/intake`,
 Drive file ids, link-sharing is on).
 

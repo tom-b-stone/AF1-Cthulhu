@@ -1,17 +1,30 @@
+import type { RefMeta } from "./referenceStore";
+import { correctionLine, type Correction } from "./feedbackStore";
 import type { KnowledgeEntry } from "./teamKnowledge";
 import type { AltExample } from "./examplesStore";
 
 // The alt-text rulebook as Claude sees it: internal rules + patterns from
 // the seed, people and terms from the editable knowledge store.
-export function rulebook(entries: KnowledgeEntry[], examples: AltExample[] = []): string {
+export function rulebook(entries: KnowledgeEntry[], examples: AltExample[] = [], refs: RefMeta[] = [], corrections: Correction[] = []): string {
   const active = entries.filter((e) => e.active);
   const people = active.filter((e) => e.kind === "person").map((e) => `- ${e.name}${e.de && e.de !== e.name ? ` (DE: ${e.de})` : ""}${e.role ? `, ${e.role}` : ""}${e.aliases?.length ? `; also written: ${e.aliases.join(", ")} → always use "${e.name}"` : ""}${e.cue ? `; cue: ${e.cue}` : ""}`);
   const terms = active.filter((e) => e.kind === "term").map((e) => `- ${e.name}${e.aliases?.length ? ` (never: ${e.aliases.join(", ")})` : ""}${e.note ? ` — ${e.note}` : ""}`);
   const rules = active.filter((e) => e.kind === "rule").map((e) => `- ${e.name}${e.note ? `: ${e.note}` : ""}`);
   const patterns = active.filter((e) => e.kind === "pattern").map((e) => `- ${e.name}${e.note ? ` (${e.note})` : ""}`);
+  const byPerson = new Map<string, RefMeta[]>();
+  for (const r of refs) byPerson.set(r.person, [...(byPerson.get(r.person) ?? []), r]);
+  const refLines = [...byPerson.entries()].map(([person, list]) => `- ${person}: ${list.map((r) => `${r.id}${r.note ? ` (${r.note})` : ""}`).join(", ")}`);
   return `PEOPLE (name them only when you are sure from the picture)
 ${people.join("\n")}
-
+${refLines.length ? `
+REFERENCE PHOTOS (look at them with knowledge_reference_image BEFORE naming anyone; compare face, helmet, suit, build)
+${refLines.join("\n")}
+` : `
+REFERENCE PHOTOS: none saved yet. Name a driver only from the car number or the name on the suit/helmet.
+`}${corrections.length ? `
+RECENT CORRECTIONS BY THE TEAM (Claude was wrong here; learn from these)
+${corrections.slice(0, 25).map(correctionLine).join("\n")}
+` : ""}
 NAMES & TERMS (exact spellings)
 ${terms.join("\n")}
 
@@ -38,7 +51,7 @@ HOW TO WORK
    - If you have no AF1 tools at all: tell the user in 3 short lines that the AF1 Tools connector isn't active in their Claude yet; set it up once on ${appOrigin} (the home page shows the steps), then click "Generate alt text" again. Say you can't add it for them. Do nothing else.
 1. Call asset_rulebook once and follow it exactly.
 2. Call asset_list_batch with batchId "${batchId}". It lists every photo with its id and what is already known (round, session, date, original file name, people if any).
-3. For each photo: call asset_get_image (batchId, rowId) to see it, then call asset_set_meta (batchId, rowId, descriptor, alt, people, scene). Write from what is in the picture plus the batch facts (Grand Prix, session). "people": official names of team people you can identify with evidence (car number, helmet, suit, clear face), else []. "scene": "on-track & garage" for car / track / pit lane / garage, "team" when team members or management are the subject, "off-track" for paddock, fans, city, events. The tool turns these into the CMS content tags. Skip nothing; a photo you cannot read gets a short factual alt from the batch facts and scene "on-track & garage".
+3. If the rulebook lists reference photos, look at every reference photo once (knowledge_reference_image) before the first photo, so you can tell the people apart by face, helmet and suit. Then for each photo: call asset_get_image (batchId, rowId) to see it, then call asset_set_meta (batchId, rowId, descriptor, alt, people, scene). Write from what is in the picture plus the batch facts (Grand Prix, session). "people": official names of team people you can identify with evidence (car number, helmet, suit, clear face), else []. "scene": "on-track & garage" for car / track / pit lane / garage, "team" when team members or management are the subject, "off-track" for paddock, fans, city, events. The tool turns these into the CMS content tags. Skip nothing; a photo you cannot read gets a short factual alt from the batch facts and scene "on-track & garage".
 4. Do not ask the user to confirm each photo. When all are done, reply with one summary, one fact per line:
 Done.
 Alt texts written: <n> of ${count}
@@ -59,10 +72,12 @@ HOW TO WORK
 1. Call asset_rulebook to see what is known already.
 2. For each of these subjects, call library_search with the query and look at 6 to 8 photos with library_get_image: "Nico Hulkenberg", "Gabriel Bortoleto", "Mattia Binotto", "Allan McNish", "James Key", "Paul Aron", "R26", "garage", "pit wall", "fans".
 3. From what you SEE (not from the alt text alone), write cues with knowledge_update for each person: car number and where it is visible, helmet colours and markings, race suit details, face and build, typical places. Keep each cue under 400 characters, concrete, in English. Only write what you saw in at least two photos.
-4. Pick the alt texts that follow the rules best (under 125 characters, full team name with ®, one sentence, only what is visible) and save 2 or 3 per subject with knowledge_add_example (subject = driver name, car, garage, pit wall, fans, portrait, partner).
-5. Do not ask the user to confirm each step. When done, reply with one summary, one fact per line:
+4. For each driver and for Mattia Binotto and Allan McNish, save 3 reference photos with knowledge_add_reference (libraryId, person, note): one clear face, one with the helmet on (note the helmet colours and markings), one in the race suit or team kit. Only photos where you are sure who it is (car number, name on suit or helmet, caption).
+5. Pick the alt texts that follow the rules best (under 125 characters, full team name with ®, one sentence, only what is visible) and save 2 or 3 per subject with knowledge_add_example (subject = driver name, car, garage, pit wall, fans, portrait, partner).
+6. Do not ask the user to confirm each step. When done, reply with one summary, one fact per line:
 Done.
 Cues updated: <names>
+Reference photos saved: <n>
 Examples saved: <n>
 Then one line per cue you wrote.`;
 }

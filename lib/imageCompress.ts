@@ -30,7 +30,7 @@ export type Compressed = {
   mime: "image/webp" | "image/jpeg";
 };
 
-export async function compressImage(file: File, longestEdge: EdgePreset, quality = DEFAULT_QUALITY): Promise<Compressed> {
+export async function compressImage(file: File, longestEdge: EdgePreset | number, quality = DEFAULT_QUALITY): Promise<Compressed> {
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" } as ImageBitmapOptions);
   const srcWidth = bitmap.width;
   const srcHeight = bitmap.height;

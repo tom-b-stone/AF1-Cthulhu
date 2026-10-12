@@ -17,6 +17,8 @@ import { readKnowledge, KNOWLEDGE_KEY } from "./knowledgeStore";
 import { kvSet } from "./kv";
 import { searchLibrary, fetchLibraryImage } from "./library";
 import { addExample, readExamples } from "./examplesStore";
+import { addReference, listReferences, readReferenceImage } from "./referenceStore";
+import { readCorrections } from "./feedbackStore";
 import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 
@@ -161,7 +163,7 @@ export const TOOLS: ToolDef[] = [
     description: "The rules for audif1.com image alt texts and file-name descriptors: people (official spellings), terms, rules, patterns. Call once before writing alt texts.",
     inputSchema: { type: "object", properties: {} },
     async run() {
-      return text(rulebook(await readKnowledge(), await readExamples()));
+      return text(rulebook(await readKnowledge(), await readExamples(), await listReferences(), await readCorrections()));
     },
   },
   {
@@ -279,6 +281,49 @@ export const TOOLS: ToolDef[] = [
       const all = await addExample({ subject: String(args.subject ?? "general").slice(0, 40), alt, source: typeof args.source === "string" ? args.source : undefined });
       console.log(`[connector] ${actor} saved example (${all.length} total)`);
       return text(`Saved. ${all.length} examples in the rulebook.`);
+    },
+  },
+  {
+    name: "knowledge_references",
+    annotations: { title: "List reference photos", readOnlyHint: true, openWorldHint: false },
+    description: "List the saved reference photos per person (id, person, note). Look at them with knowledge_reference_image to learn faces, helmets and suits before naming people.",
+    inputSchema: { type: "object", properties: { person: { type: "string", description: "optional filter" } } },
+    async run(args) {
+      const refs = await listReferences();
+      const f = typeof args.person === "string" ? args.person.toLowerCase() : "";
+      const list = f ? refs.filter((r) => r.person.toLowerCase().includes(f)) : refs;
+      if (!list.length) return text("No reference photos saved yet.");
+      return text(list.map((r) => `${r.id} · ${r.person}${r.note ? ` · ${r.note}` : ""}`).join("\n"));
+    },
+  },
+  {
+    name: "knowledge_reference_image",
+    annotations: { title: "Show a reference photo", readOnlyHint: true, openWorldHint: false },
+    description: "Returns one saved reference photo of a person (id from knowledge_references or asset_rulebook).",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    async run(args) {
+      const refs = await listReferences();
+      const meta = refs.find((r) => r.id === String(args.id));
+      const img = meta ? await readReferenceImage(meta.id) : null;
+      if (!meta || !img) return text("No reference photo with that id.", true);
+      return { content: [{ type: "image", data: img.data, mimeType: img.mime }, { type: "text", text: `${meta.person}${meta.note ? ` — ${meta.note}` : ""}` }] };
+    },
+  },
+  {
+    name: "knowledge_add_reference",
+    annotations: { title: "Save a reference photo", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    description: "Save a production library photo (id from library_search) as a reference photo of a person, with a short note on what identifies them in it (helmet colours, suit, face). Max 8 per person; oldest is dropped.",
+    inputSchema: { type: "object", required: ["libraryId", "person"], properties: { libraryId: { type: "string" }, person: { type: "string", description: "official name as in asset_rulebook" }, note: { type: "string" } } },
+    async run(args, actor) {
+      const img = await fetchLibraryImage(String(args.libraryId ?? ""));
+      if (!img) return text("Library photo not found.", true);
+      const known = (await readKnowledge()).filter((e) => e.kind === "person" && e.active).map((e) => e.name);
+      const person = String(args.person ?? "").trim();
+      const match = known.find((n) => n.toLowerCase() === person.toLowerCase());
+      if (!match) return text(`Unknown person "${person}". Known: ${known.join(", ")}`, true);
+      const refs = await addReference({ person: match, note: typeof args.note === "string" ? args.note.slice(0, 200) : undefined, source: `library:${args.libraryId}`, mime: img.mime, data: img.data });
+      console.log(`[connector] ${actor} saved a reference for ${match}`);
+      return text(`Saved. ${refs.filter((r) => r.person === match).length} reference photos for ${match}.`);
     },
   },
 ];

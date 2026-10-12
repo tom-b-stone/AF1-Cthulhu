@@ -13,7 +13,8 @@ import Modal from "@/app/components/Modal";
 import { SideButton, SideSection, useSidebarContent } from "@/app/components/SidebarSlot";
 import Steps from "@/app/components/Steps";
 import TagPicker from "@/app/components/TagPicker";
-import { proposeBatchTags, proposeRowTags, tagIssues, uniqueTags, type ContentTag } from "@/lib/contentTags";
+import { SCENE_TAGS, isPersonTag, proposeBatchTags, proposeRowTags, tagIssues, uniqueTags, type ContentTag } from "@/lib/contentTags";
+import { compressImage } from "@/lib/imageCompress";
 
 type Row = AssetRow & { key: string; thumb?: string; issues: string[]; nn: number };
 
@@ -28,6 +29,10 @@ export default function BatchPage() {
   const [confirmUpload, setConfirmUpload] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [dialogRow, setDialogRow] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [teachPerson, setTeachPerson] = useState("");
+  const [teachNote, setTeachNote] = useState("");
+  const [teaching, setTeaching] = useState(false);
   // Claude hand-off: previews + meta go to the server, claude.ai opens with
   // the prompt, and this page polls the server copy until every alt text
   // is back (or 15 minutes pass).
@@ -189,25 +194,16 @@ export default function BatchPage() {
       { key: "alt", header: "Alt text (EN)", width: "1.6fr", editable: true },
       {
         key: "tags",
-        header: "Tags",
-        width: "150px",
-        cell: (r) => {
-          const own = r.tags ?? [];
-          const batchN = batch?.tags?.length ?? 0;
-          return (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setDialogRow(r.id);
-              }}
-              title={[...(batch?.tags ?? []), ...own].join(", ") || "No tags"}
-              className="block truncate"
-              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: own.length ? "var(--fg)" : "var(--muted)", textAlign: "left", maxWidth: "100%" }}
-            >
-              {own.length ? own.join(", ") : batchN ? `${batchN} batch tag${batchN === 1 ? "" : "s"}` : "—"}
-            </button>
-          );
-        },
+        header: "Tags (this image)",
+        width: "260px",
+        cell: (r) =>
+          tags ? (
+            <div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: "100%" }}>
+              <TagPicker value={r.tags ?? []} available={tags} onChange={(next) => setRowTags(r.id, next)} onCreate={createTag} compact placeholder={`+ tag (${batch?.tags?.length ?? 0} from batch)`} />
+            </div>
+          ) : (
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>…</span>
+          ),
       },
       {
         key: "status",
@@ -245,8 +241,48 @@ export default function BatchPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [batch?.id, batch?.tags]
+    [batch?.id, batch?.tags, tags]
   );
+
+  // Per-image tags; the scene tag inside them is mirrored to row.scene so
+  // the correction log can compare it with what Claude said.
+  function setRowTags(id: string, next: string[]) {
+    const scene = next.find((t) => (SCENE_TAGS as readonly string[]).includes(t));
+    updateRow(id, { tags: next, scene });
+  }
+  function bulkTags(fn: (cur: string[]) => string[]) {
+    if (!batch) return;
+    const rows = batch.rows.map((r) => {
+      if (!selectedIds.includes(r.id)) return r;
+      const next = fn(r.tags ?? []);
+      return { ...r, tags: next, scene: next.find((t) => (SCENE_TAGS as readonly string[]).includes(t)) };
+    });
+    void save({ ...batch, rows });
+  }
+  async function teach(r: Row) {
+    if (!batch || !teachPerson) return;
+    setTeaching(true);
+    try {
+      const blob = await batchStore.getBlob(batch.id, r.id);
+      if (!blob) throw new Error("image data missing in this browser");
+      const small = await compressImage(new File([blob], r.fileName, { type: blob.type }), 1024, 0.8);
+      const buf = await small.blob.arrayBuffer();
+      let bin = "";
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      const j = await fetch("/api/assets/references", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ person: teachPerson, note: teachNote.trim() || undefined, source: `batch:${batch.id}/${r.originalName}`, mime: small.blob.type || "image/webp", data: btoa(bin) }),
+      }).then((x) => x.json());
+      if (!j.ok) throw new Error(j.error ?? "failed");
+      setNotice(`Saved as a reference photo for ${teachPerson}. Claude looks at it before naming people in the next batch.`);
+      setTeachNote("");
+    } catch (e) {
+      setNotice(`Couldn't save the reference: ${e instanceof Error ? e.message : "failed"}`);
+    }
+    setTeaching(false);
+  }
 
   function onCellEdit(id: string, columnKey: string, value: string) {
     if (columnKey === "descriptor") updateRow(id, { descriptor: cleanDescriptor(value) });
@@ -327,6 +363,23 @@ export default function BatchPage() {
       }
       await save({ ...batch, rows });
     }
+    // learning: where the team changed Claude's people / scene, log it
+    const corrections = todo
+      .filter((r) => r.ai)
+      .map((r) => {
+        const final = rows.find((x) => x.id === r.id) ?? r;
+        const finalTags = final.tags ?? [];
+        return {
+          batchId: batch.id,
+          rowId: r.id,
+          originalName: r.originalName,
+          alt: final.alt,
+          ai: { people: r.ai!.tags.filter(isPersonTag), scene: r.ai!.scene },
+          final: { people: finalTags.filter(isPersonTag), scene: final.scene, tags: uniqueTags(batch.tags, finalTags) },
+        };
+      })
+      .filter((c) => c.ai.scene !== c.final.scene || c.ai.people.length !== c.final.people.length || !c.ai.people.every((p) => c.final.people.includes(p)));
+    if (corrections.length) void fetch("/api/assets/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: corrections }) });
     setProgress(null);
     setBusy(null);
     setNotice(`Done. ${ok} of ${todo.length} uploaded to ${batch.targetFolderPath}${failures.length ? `\nNot uploaded: ${failures.length}\n${failures.join("\n")}` : "."}`);
@@ -400,7 +453,7 @@ export default function BatchPage() {
             if (sr.alt) got++;
             if (sr.alt && (!r.alt.trim() || r.alt !== sr.alt) && r.alt.trim() === "") {
               const proposed = proposeRowTags({ people: sr.people, scene: sr.scene }, tagTitles);
-              return { ...r, alt: sr.alt, descriptor: sr.descriptor || r.descriptor, people: sr.people ?? r.people, scene: sr.scene ?? r.scene, tags: uniqueTags(r.tags, proposed) };
+              return { ...r, alt: sr.alt, descriptor: sr.descriptor || r.descriptor, people: sr.people ?? r.people, scene: sr.scene ?? r.scene, tags: uniqueTags(r.tags, proposed), ai: { people: sr.people ?? [], scene: sr.scene, tags: proposed } };
             }
             return r;
           });
@@ -642,6 +695,26 @@ export default function BatchPage() {
                     />
                   )}
                 </label>
+                <div className="card" style={{ padding: "10px 12px", display: "grid", gap: 8, background: "var(--surface)" }}>
+                  <div className="section-label">Teach Claude</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
+                    Wrong or missing person? Fix the tags above, then save this photo as a reference so Claude can compare faces, helmets and suits next time.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <select className="input" value={teachPerson} onChange={(e) => setTeachPerson(e.target.value)} style={{ padding: "5px 8px", fontSize: 12 }}>
+                      <option value="">— person in this photo —</option>
+                      {knowledge.filter((k) => k.kind === "person" && k.active).map((k) => (
+                        <option key={k.id} value={k.name}>
+                          {k.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input className="input" value={teachNote} onChange={(e) => setTeachNote(e.target.value)} placeholder="what identifies them here (helmet, suit, face…)" style={{ flex: 1, minWidth: 180, padding: "5px 8px", fontSize: 12 }} />
+                    <button className="btn btn-primary" style={{ padding: "5px 10px", fontSize: 12 }} disabled={!teachPerson || teaching} onClick={() => teach(r)}>
+                      {teaching ? "Saving…" : "Save as reference"}
+                    </button>
+                  </div>
+                </div>
                 <div>
                   <div className="section-label" style={{ marginBottom: 6 }}>Checks</div>
                   {r.issues.length === 0 ? (
@@ -681,11 +754,34 @@ export default function BatchPage() {
         </div>
       )}
 
+      {selectedIds.length > 0 && tags && (
+        <div className="card" style={{ padding: "10px 14px", marginBottom: 10, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", fontSize: 13, borderColor: "var(--accent)" }}>
+          <strong>{selectedIds.length} selected</strong>
+          <div style={{ minWidth: 260, flex: 1 }}>
+            <TagPicker value={[]} available={tags} onChange={(next) => next.length && bulkTags((cur) => uniqueTags(cur, next))} onCreate={createTag} compact placeholder="Add a tag to all selected…" />
+          </div>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>Scene:</span>
+          {SCENE_TAGS.map((sc) => (
+            <button key={sc} className="btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => bulkTags((cur) => [...cur.filter((t) => !(SCENE_TAGS as readonly string[]).includes(t)), sc])}>
+              {sc}
+            </button>
+          ))}
+          <button className="btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => bulkTags(() => [])} title="Remove every per-image tag on the selected rows (batch tags stay)">
+            Clear tags
+          </button>
+          <button className="btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => setSelectedIds([])}>
+            Deselect
+          </button>
+        </div>
+      )}
       <div className="beui beui-compact">
         <Table<Row>
           data={rows}
           columns={columns}
           getRowId={(r) => r.key}
+          selectable
+          selectedRowIds={selectedIds}
+          onSelectionChange={setSelectedIds}
           resizable
           onCellEdit={onCellEdit}
           height={Math.max(360, typeof window !== "undefined" ? window.innerHeight - 300 : 600)}

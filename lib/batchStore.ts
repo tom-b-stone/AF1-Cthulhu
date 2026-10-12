@@ -34,6 +34,7 @@ export type AssetRow = {
   people?: string[];
   scene?: string; // on-track & garage | team | off-track (from Claude)
   tags?: string[]; // per-image content tags (titles), on top of the batch tags
+  ai?: { people: string[]; scene?: string; tags: string[] }; // what Claude proposed, for the correction log
 };
 
 export type Batch = {
