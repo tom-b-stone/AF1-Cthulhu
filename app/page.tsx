@@ -63,26 +63,42 @@ export default function Home() {
         />
       </div>
 
-      <div
-        aria-label="Ktulu"
+      {/* Typographic logo */}
+      <h1
+        aria-label="AF1 Ktulu"
         style={{
           textAlign: "center",
           fontFamily: "ui-monospace, Menlo, Consolas, monospace",
-          fontSize: "clamp(56px, 10vw, 112px)",
-          fontWeight: 200,
+          fontSize: "clamp(40px, 7.5vw, 84px)",
+          fontWeight: 300,
           color: "var(--fg)",
           lineHeight: 1,
-          letterSpacing: "0.04em",
+          letterSpacing: "0.18em",
           margin: "28px 0 10px",
-          textShadow: "0 0 28px rgba(239,162,214,0.35)",
+          textShadow: "0 2px 24px rgba(0,0,0,0.8), 0 0 40px rgba(239,162,214,0.25)",
+        }}
+      >
+        AF1<span style={{ color: "var(--accent)", fontWeight: 200 }}>-</span>KTULU
+        <sup style={{ fontSize: "0.35em", color: "var(--vapor-rose)", marginLeft: 4, letterSpacing: 0 }}>*</sup>
+      </h1>
+      <div
+        aria-hidden
+        style={{
+          textAlign: "center",
+          fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+          fontSize: 20,
+          fontWeight: 300,
+          color: "var(--vapor-rose)",
+          letterSpacing: "0.1em",
+          opacity: 0.9,
+          margin: "0 0 6px",
         }}
       >
         ^(;,;)^
       </div>
-      <h1 style={{ textAlign: "center", margin: "12px 0 4px", letterSpacing: 2, fontWeight: 500 }}>
-        AF1 Ktulu<sup style={{ fontSize: "0.5em", color: "var(--vapor-pink)", marginLeft: 2 }}>*</sup>
-      </h1>
-      <p style={{ textAlign: "center", margin: 0, opacity: 0.6, fontSize: 13 }}>Internal tools for audif1.com</p>
+      <p style={{ textAlign: "center", margin: 0, opacity: 0.85, fontSize: 14, textShadow: "0 1px 12px rgba(0,0,0,0.9)" }}>
+        Internal tools for audif1.com
+      </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12, marginTop: 36 }}>
         {TILES.map((t) => {
@@ -133,10 +149,25 @@ export default function Home() {
         })}
       </div>
 
-      <p style={{ fontSize: 12, opacity: 0.55, lineHeight: 1.6, margin: "28px auto 0", maxWidth: 560, textAlign: "center" }}>
-        <span style={{ color: "var(--vapor-pink)" }}>*</span> <strong>Ktulu</strong> (n.), short for <em>Cthulhu</em>: an
-        ancient, god-like being from H. P. Lovecraft&apos;s stories that sleeps beneath the sea and reaches into people&apos;s
-        dreams.
+      <p
+        style={{
+          fontSize: 13,
+          color: "rgba(245,245,245,0.8)",
+          lineHeight: 1.7,
+          margin: "28px auto 0",
+          maxWidth: 640,
+          textAlign: "center",
+          background: "rgba(4,6,14,0.7)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          padding: "12px 16px",
+          backdropFilter: "blur(2px)",
+        }}
+      >
+        <span style={{ color: "var(--vapor-rose)" }}>*</span> <strong>Ktulu</strong> (n.), short, simplified spelling of{" "}
+        <em>Cthulhu</em>: an ancient, god-like cosmic entity that sleeps in the sunken city of R&apos;lyeh. It reaches into
+        the dreams of humans and is worshipped by a cult spread across the world. Its existence exceeds human
+        understanding, and those who witness it are often driven to madness.
       </p>
       <HomeFooter bg={bg} onBg={setBg} />
     </div>

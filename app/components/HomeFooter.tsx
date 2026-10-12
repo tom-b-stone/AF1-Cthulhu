@@ -10,7 +10,7 @@ export default function HomeFooter({ bg, onBg }: { bg: string; onBg: (k: string)
   if (!session) return null;
   const isAdmin = (session.user as { role?: string } | undefined)?.role === "admin";
   return (
-    <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 32, fontSize: 11, opacity: 0.55 }}>
+    <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 24, fontSize: 11, opacity: 0.75 }}>
       <BackgroundPicker choice={bg} onChange={onBg} />
       <span>{session.user?.email}</span>
       {isAdmin && (

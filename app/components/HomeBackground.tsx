@@ -7,7 +7,7 @@ import KtuluLogo, { type AsciiSource } from "./KtuluLogo";
 // ASCII/halftone grid. The choice is a per-browser convenience kept in
 // localStorage; the default is the Vapor image.
 export const BACKGROUNDS: Record<string, { label: string; source: AsciiSource; opacity: number }> = {
-  vapor: { label: "Vapor", source: { src: "/bg/vapor.jpg", gamma: 1.5, gain: 1.15, fit: "cover" }, opacity: 0.7 },
+  vapor: { label: "Vapor", source: { src: "/bg/vapor.jpg", gamma: 1.5, gain: 1.15, fit: "cover" }, opacity: 0.55 },
   ktulu: { label: "Ktulu", source: { src: "/bg/ktulu.jpg", gamma: 1.5, gain: 1.0, fit: "contain" }, opacity: 0.6 },
 };
 
@@ -36,7 +36,24 @@ export function useBackgroundChoice(): [string, (k: string) => void] {
 
 export default function HomeBackground({ choice }: { choice: string }) {
   const bg = BACKGROUNDS[choice] ?? BACKGROUNDS.vapor;
-  return <KtuluLogo background source={bg.source} opacity={bg.opacity} />;
+  return (
+    <>
+      <KtuluLogo background source={bg.source} opacity={bg.opacity} />
+      {/* Vignette over the ASCII field so the copy stays readable: darkest
+          behind the centre column, the image still shows at the edges. */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          background:
+            "radial-gradient(ellipse 60% 70% at 50% 45%, rgba(4,6,14,0.82) 0%, rgba(4,6,14,0.55) 55%, rgba(4,6,14,0.15) 100%)",
+        }}
+      />
+    </>
+  );
 }
 
 export function BackgroundPicker({ choice, onChange }: { choice: string; onChange: (k: string) => void }) {
