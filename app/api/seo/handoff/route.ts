@@ -7,15 +7,17 @@ import {
   listSeoItems,
   type Collection,
 } from "@/lib/payloadClient";
-import { buildHandoffPrompt, claudeUrlFor, type HandoffItem } from "@/lib/seoHandoff";
+import { buildConnectorBulkPrompt, buildHandoffPrompt, claudeUrlFor, type HandoffItem } from "@/lib/seoHandoff";
+import { connectorStatus } from "@/lib/connectorTokens";
 
 function isCollection(v: string | null): v is Collection {
   return v === "news" || v === "pages";
 }
 
-// How many missing docs ride in one "Generate missing" prompt. The prompt
-// travels in a URL, so this stays small on purpose.
-const MISSING_BATCH = 3;
+// "Generate missing" without the connector: the page content has to travel
+// in the URL, so it goes in rounds. With the connector there is no limit —
+// Claude fetches each page itself (buildConnectorBulkPrompt).
+const MISSING_BATCH_NO_CONNECTOR = 5;
 
 function appOrigin(req: NextRequest): string {
   const proto = req.headers.get("x-forwarded-proto") ?? "https";
@@ -51,12 +53,20 @@ export async function GET(req: NextRequest) {
     let items: HandoffItem[];
     if (missing) {
       const all = await listSeoItems();
-      const targets = all
-        .filter((i) => !i.en.title || !i.en.description || !i.de.title || !i.de.description)
-        .slice(0, MISSING_BATCH);
-      if (targets.length === 0) {
+      const allMissing = all.filter((i) => !i.en.title || !i.en.description || !i.de.title || !i.de.description);
+      if (allMissing.length === 0) {
         return NextResponse.json({ error: "Nothing is missing — every doc has EN and DE title/description." }, { status: 404 });
       }
+      // A user with a connector token gets the no-limit prompt; Claude pulls
+      // the pages itself. (If they minted a token but never added it in
+      // claude.ai, Claude will have no tools and say so — the page tells them
+      // where to finish the setup.)
+      const email = session.user?.email ?? "";
+      const { active } = email ? await connectorStatus(email) : { active: false };
+      if (active) {
+        return NextResponse.redirect(claudeUrlFor(buildConnectorBulkPrompt(allMissing.length)), 307);
+      }
+      const targets = allMissing.slice(0, MISSING_BATCH_NO_CONNECTOR);
       items = await Promise.all(targets.map((t) => toHandoffItem(t.collection, t.id)));
     } else {
       if (!isCollection(collection) || !id) {

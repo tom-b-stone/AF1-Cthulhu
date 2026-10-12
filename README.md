@@ -70,9 +70,11 @@ done by the user's own Claude account, hand-off in both directions by link:
    isn't signed in yet, `/login` bounces them back to the same apply link afterwards
    (`callbackUrl`).
 
-"Generate missing" above the table does the same for the next 3 docs missing an EN or DE
-title/description in one claude.ai prompt (3 per round, because the prompt travels in a URL);
-Claude answers with 3 links.
+"Generate missing" above the table: with a connector token (see below) it opens one claude.ai
+prompt with no page content at all — Claude lists the missing docs itself (`seo_list_missing`),
+reads each (`seo_get_page`), publishes (`seo_publish`) and loops until nothing is missing, no
+limit. Without the connector the content has to travel in the URL, so it goes 5 docs per round
+and Claude answers with 5 links.
 
 This replaced an earlier in-app Anthropic API call (removed): the key saved for it had no
 credits, and Tom wanted no API billing — the user's own Claude account does the work instead.

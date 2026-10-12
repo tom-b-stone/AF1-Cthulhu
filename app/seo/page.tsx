@@ -49,6 +49,16 @@ export default function SeoStudioPage() {
 
   const missingCount = useMemo(() => (items ? items.filter(isMissing).length : 0), [items]);
 
+  // Whether this user has a connector token: decides the wording of the
+  // bulk button (no limit with the connector, rounds of 5 without).
+  const [hasConnector, setHasConnector] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch("/api/connector")
+      .then((r) => r.json())
+      .then((j) => setHasConnector(Boolean(j.active)))
+      .catch(() => setHasConnector(false));
+  }, []);
+
   const filtered = useMemo(() => {
     if (!items) return [];
     const q = query.trim().toLowerCase();
@@ -89,12 +99,17 @@ export default function SeoStudioPage() {
             pointerEvents: missingCount ? "auto" : "none",
           }}
         >
-          Generate missing {items ? `(${missingCount} left, 3 per round)` : ""}
+          Generate missing {items ? `(${missingCount} left${hasConnector ? ", all at once" : hasConnector === false ? ", 5 per round" : ""})` : ""}
         </a>
         <span style={{ fontSize: 12, opacity: 0.6 }}>
-          Opens claude.ai with the page content pre-filled. Claude writes the text and publishes it (publication date
-          unchanged) — directly if you have the <Link href="/connector">Claude connector</Link>, otherwise it replies
-          with a Publish link to click.
+          {hasConnector
+            ? "Opens claude.ai. Claude works through every missing page itself and publishes (publication date unchanged)."
+            : "Opens claude.ai with the page content pre-filled. Claude writes the text and replies with a Publish link to click. "}
+          {!hasConnector && (
+            <>
+              With the <Link href="/connector">Claude connector</Link> it publishes directly and does all missing pages in one go.
+            </>
+          )}
         </span>
       </div>
 

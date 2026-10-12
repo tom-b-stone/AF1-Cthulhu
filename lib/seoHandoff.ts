@@ -55,7 +55,7 @@ ${de}`;
 export function buildHandoffPrompt(items: HandoffItem[], appOrigin: string): string {
   // Keep the whole thing comfortably inside a URL: fewer chars per page
   // when several pages ride in one prompt.
-  const maxChars = items.length > 1 ? 900 : 1600;
+  const maxChars = items.length > 1 ? 700 : 1600;
   const pages = items.map((it, i) => section(it, i, items.length, maxChars)).join("\n\n");
 
   return `Write SEO meta titles and descriptions (English and German) for audif1.com, the Audi Revolut F1® Team website.
@@ -70,6 +70,21 @@ First check your tools. If you have a tool named "seo_publish" (the AF1 Tools co
 If you do NOT have that tool, reply with ONLY one markdown link per page, one per line, nothing else. Clicking it publishes the text in SEO Studio. Template:
 [Publish: <internal title>](${appOrigin}/seo/apply?c=<collection>&id=<id>&et=<EN title>&ed=<EN description>&dt=<DE title>&dd=<DE description>)
 Percent-encode every value exactly like JavaScript encodeURIComponent: space=%20 &=%26 |=%7C #=%23 ?=%3F +=%2B ®=%C2%AE ü=%C3%BC ä=%C3%A4 ö=%C3%B6 ß=%C3%9F Ü=%C3%9C Ä=%C3%84 Ö=%C3%96 é=%C3%A9. Never leave a raw space in the link.`;
+}
+
+// Bulk prompt for users who have the AF1 Tools connector: no page content
+// in the URL at all — Claude pulls each page itself via the tools, so there
+// is no batch limit. Runs until nothing is missing.
+export function buildConnectorBulkPrompt(missingCount: number): string {
+  return `Write SEO meta titles and descriptions (English and German) for every audif1.com news article and page that is still missing one, using the AF1 Tools connector. ${missingCount} docs are missing EN or DE SEO right now.
+
+${RULES}
+
+HOW TO WORK
+1. Call seo_list_missing with limit 20.
+2. For each doc listed: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
+3. When the list is done, call seo_list_missing again and continue until it reports 0 missing.
+4. Reply with a short table as you go: internal title, EN title, DE title, result. Don't ask me to confirm each page; just work through them. If a page fails to publish for a reason you can't fix (e.g. "One or more children are invalid"), skip it, note it in the table, and continue.`;
 }
 
 export function claudeUrlFor(prompt: string): string {
