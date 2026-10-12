@@ -126,3 +126,19 @@ main { animation: pageIn 0.5s cubic-bezier(.2,.8,.2,1) both; }
 .link-line::after { content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: right; transition: transform 0.3s cubic-bezier(.2,.8,.2,1); }
 .link-line:hover::after { transform: scaleX(1); transform-origin: left; }
 @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } main { animation: none; } .mc-dot, .mc-ring { display: none; } }
+
+.side-btn:not([disabled]):not([aria-disabled="true"]):hover { background: var(--surface) !important; border-color: var(--border-2) !important; }
+/* tabs (Neuron pill-tabs) */
+.tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--border); }
+.tab { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-family: var(--font-body); color: var(--muted); background: transparent; border: 0; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; transition: color 0.15s, background 0.15s; }
+.tab:hover { color: var(--fg); }
+.tab.is-active { color: #fff; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-2); }
+.tab .count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tab.is-active .count { color: var(--vapor-rose); }
+/* stat modules */
+.stat { padding: 14px 16px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--border); display: grid; gap: 4px; }
+.stat .n { font-family: var(--font-heading); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.stat .l { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; font-family: var(--font-label); }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+.page-head h1 { font-size: 30px; margin: 0; }
+.page-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; max-width: 640px; line-height: 1.6; }

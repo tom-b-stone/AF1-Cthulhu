@@ -15,7 +15,6 @@ export const TOOLS: { href: string; key: string; name: string; status: "working"
   { href: "/assets", key: "/assets", name: "Asset Uploader", status: "working", text: "Compress, name, alt text, upload" },
   { href: "/images", key: "/images", name: "CRM Images", status: "planned", text: "Email template image variants" },
   { href: "https://af1-utm-studio.vercel.app/", key: "/utm", name: "UTM Studio", status: "external", external: true, text: "Campaign links (own app)" },
-  { href: "/connector", key: "/connector", name: "Claude connector", status: "working", text: "Let your Claude use the tools" },
 ];
 
 export const STATUS_STYLE: Record<string, { fg: string; border: string; bg: string }> = {
@@ -27,6 +26,7 @@ export const STATUS_STYLE: Record<string, { fg: string; border: string; bg: stri
 
 export function currentTool(pathname: string) {
   if (pathname.startsWith("/admin")) return { href: "/admin", key: "/admin", name: "Admin", status: "working" as const, text: "" };
+  if (pathname.startsWith("/connector")) return { href: "/connector", key: "/connector", name: "Claude connector", status: "working" as const, text: "" };
   return TOOLS.find((t) => !t.external && (pathname === t.key || pathname.startsWith(t.key + "/"))) ?? null;
 }
 
@@ -123,8 +123,11 @@ export default function ToolHeader() {
           <span style={{ color: "var(--muted)", fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontSize: 11 }}>
             CMS: staging.audif1team.com
           </span>
+          <Link href="/connector" className="link-line" style={{ color: "var(--muted)" }}>
+            Connector
+          </Link>
           {isAdmin && (
-            <Link href="/admin/credentials" style={{ color: "var(--muted)", textDecoration: "none" }}>
+            <Link href="/admin/credentials" className="link-line" style={{ color: "var(--muted)" }}>
               Admin
             </Link>
           )}

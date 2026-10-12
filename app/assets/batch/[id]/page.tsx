@@ -203,15 +203,25 @@ export default function BatchPage() {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
-        <h1 style={{ margin: 0 }}>Batch</h1>
-        <code style={{ fontSize: 13, color: "var(--muted)" }}>10_Media-Galleries/{batch.folderPath}</code>
-      </div>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>
-        {batch.rows.length} images · {fmtBytes(batch.rows.reduce((n, r) => n + r.bytes, 0))} compressed from{" "}
-        {fmtBytes(batch.rows.reduce((n, r) => n + r.originalBytes, 0))} · {withAlt} with alt text · {issues} check{issues === 1 ? "" : "s"} open · created{" "}
-        {new Date(batch.createdAt).toLocaleString("en-GB")}
-      </p>
+      <section className="page-head reveal">
+        <div>
+          <div className="section-label" style={{ marginBottom: 8 }}>Batch · created {new Date(batch.createdAt).toLocaleString("en-GB")}</div>
+          <h1 style={{ fontSize: 24 }}>10_Media-Galleries/{batch.folderPath}</h1>
+        </div>
+      </section>
+      <section className="reveal reveal-d1" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 22 }}>
+        {[
+          { n: batch.rows.length, l: "Images" },
+          { n: fmtBytes(batch.rows.reduce((n, r) => n + r.bytes, 0)), l: `from ${fmtBytes(batch.rows.reduce((n, r) => n + r.originalBytes, 0))}` },
+          { n: withAlt, l: "With alt text" },
+          { n: issues, l: "Checks open" },
+        ].map((st) => (
+          <div key={st.l} className="stat">
+            <span className="n">{st.n}</span>
+            <span className="l">{st.l}</span>
+          </div>
+        ))}
+      </section>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         <button className="btn btn-primary" disabled title="Next step: Claude writes descriptor + alt text per image through the AF1 Tools connector">

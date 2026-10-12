@@ -3,6 +3,7 @@ import Sidebar from "./components/Sidebar";
 import ToolHeader from "./components/ToolHeader";
 import NeuronFx from "./components/NeuronFx";
 import ConnectorOnboarding from "./components/ConnectorOnboarding";
+import { SidebarProvider } from "./components/SidebarSlot";
 import SessionProviderWrapper from "./components/SessionProviderWrapper";
 import "./globals.css";
 import { wordmarkFontsHref } from "@/lib/wordmarkFonts";
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <SessionProviderWrapper>
+          <SidebarProvider>
           {/* Header spans the full width; the sidebar is in-tool navigation
               under it, the main column takes the rest. */}
           <NeuronFx />
@@ -39,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Sidebar />
             <main style={{ flex: 1, minWidth: 0, padding: "28px 36px" }}>{children}</main>
           </div>
+          </SidebarProvider>
         </SessionProviderWrapper>
       </body>
     </html>

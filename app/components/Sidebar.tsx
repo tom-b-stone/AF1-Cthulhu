@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { currentTool } from "./ToolHeader";
+import { useSidebarSlot } from "./SidebarSlot";
 
 // In-tool navigation. Switching between tools happens in the header's Tools
 // menu; this column only knows about the tool you're in: its views, its
@@ -14,25 +15,8 @@ type Section = { title: string; entries: Entry[] };
 const SIDEBARS: Record<string, Section[]> = {
   "/seo": [
     {
-      title: "SEO Studio",
-      entries: [
-        { href: "/seo", label: "Table", note: "news + pages", exact: true },
-        { href: "/seo?missing=1", label: "Missing SEO", note: "filter" },
-      ],
-    },
-    {
-      title: "Generate",
-      entries: [
-        { href: "/api/seo/handoff?missing=1", label: "Generate missing", note: "claude.ai" },
-        { href: "/connector", label: "Claude connector", note: "setup" },
-      ],
-    },
-    {
       title: "Help",
-      entries: [
-        { href: "https://staging.audif1team.com/cms/admin/collections/news", label: "CMS: News", note: "↗" },
-        { href: "https://staging.audif1team.com/cms/admin/collections/pages", label: "CMS: Pages", note: "↗" },
-      ],
+      entries: [{ href: "https://staging.audif1team.com/cms/admin", label: "Open the CMS", note: "↗" }],
     },
   ],
   "/assets": [
@@ -67,11 +51,12 @@ const SIDEBARS: Record<string, Section[]> = {
 export default function Sidebar() {
   const pathname = usePathname() ?? "/";
   const { data: session } = useSession();
+  const slot = useSidebarSlot();
   if (pathname === "/login" || pathname === "/" || !session) return null;
 
   const tool = currentTool(pathname);
   const sections = (tool && SIDEBARS[tool.key]) ?? [];
-  if (sections.length === 0) return null;
+  if (sections.length === 0 && !slot) return null;
 
   return (
     <nav
@@ -86,6 +71,7 @@ export default function Sidebar() {
         gap: 22,
       }}
     >
+      {slot}
       {sections.map((sec) => (
         <div key={sec.title}>
           <div

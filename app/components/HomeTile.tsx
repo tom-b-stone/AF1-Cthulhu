@@ -45,10 +45,10 @@ export default function HomeTile({
     flexDirection: "column",
     flex: 1,
     width: "100%",
-    minHeight: 196,
+    minHeight: 150,
     border: `1px solid ${tilt.hover ? "var(--vapor-purple)" : "var(--border)"}`,
     borderRadius: 12,
-    padding: "22px 20px 18px 20px",
+    padding: "18px 20px 16px 20px",
     background: "rgba(8,8,14,0.82)",
     backdropFilter: "blur(2px)",
     textDecoration: "none",
@@ -82,7 +82,7 @@ export default function HomeTile({
           lineHeight: 1.15,
           fontFamily: "var(--font-heading)",
           letterSpacing: "-0.01em",
-          marginTop: 22,
+          marginTop: 14,
           minHeight: "2.3em",
           display: "flex",
           alignItems: "flex-end",
@@ -93,7 +93,7 @@ export default function HomeTile({
           {external && <span style={{ opacity: 0.5, fontSize: 13, marginLeft: 6 }}>↗</span>}
         </span>
       </div>
-      {text && <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.55, marginTop: "auto", paddingTop: 14 }}>{text}</div>}
+      {text && <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.55, marginTop: "auto", paddingTop: 10, paddingRight: 40 }}>{text}</div>}
       {children}
     </>
   );

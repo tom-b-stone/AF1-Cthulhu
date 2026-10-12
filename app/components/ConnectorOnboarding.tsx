@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 import Modal from "./Modal";
 
 // First-run overlay for the Claude connector: micro-steps you tick off
-// once. Shows on tool pages that use the connector (SEO Studio, Asset
-// Uploader) until the last step is confirmed; "Later" snoozes it a week.
+// once. Shows on the home page until the last step is confirmed; "Later"
+// snoozes it a week. Not a tool, not a tile: an onboarding.
 // State lives per user in KV (/api/onboarding), so it follows the person.
 const FLOW = "connector";
-const PAGES = ["/seo", "/assets"];
+const PAGES = ["/"];
 
 type Status = { active: boolean; persistent: boolean };
 
@@ -25,7 +25,7 @@ export default function ConnectorOnboarding({ force, onClose }: { force?: boolea
 
   useEffect(() => {
     if (force) return;
-    if (!PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
+    if (!PAGES.includes(pathname)) return;
     let cancelled = false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const safe = (u: string): Promise<any> => fetch(u).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));

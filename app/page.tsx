@@ -47,13 +47,6 @@ const TILES: { title: string; href: string; key: string; external?: boolean; sta
     status: "working",
     text: "Campaign links with UTM tags. Opens in its own tab for now.",
   },
-  {
-    title: "Claude connector",
-    href: "/connector",
-    key: "/connector",
-    status: "working",
-    text: "Let your own Claude use these tools directly. One-minute setup, once.",
-  },
 ];
 
 export default function Home() {
@@ -95,19 +88,19 @@ export default function Home() {
         Internal tools for audif1.com
       </p>
 
-      <div className="section-label reveal" style={{ marginTop: 52, marginBottom: 14, display: "flex", justifyContent: "space-between" }}>
+      <div className="section-label reveal" style={{ marginTop: 48, marginBottom: 14, display: "flex", justifyContent: "space-between" }}>
         <span>Tools</span>
-        <span>{TILES.length} + suggestion box</span>
+        <span>{TILES.length}</span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "1fr", gap: 26, rowGap: 34 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 26, rowGap: 34 }}>
         {TILES.map((t, i) => (
           <div key={t.key} className={`reveal reveal-d${(i % 6) + 1}`} style={{ display: "flex" }}>
             <HomeTile title={t.title} href={t.href} tileKey={t.key} external={t.external} status={STATUS[t.status]} text={t.text} />
           </div>
         ))}
-        <div className="reveal reveal-d6" style={{ display: "flex" }}>
-          <SuggestionTile />
-        </div>
+      </div>
+      <div className="reveal reveal-d5" style={{ marginTop: 34 }}>
+        <SuggestionTile />
       </div>
 
       <p

@@ -7,6 +7,7 @@ import { Table, type TableColumn } from "@/components/ui/table-editable";
 import { validateSeoField } from "@/lib/seoBrand";
 import EditPanel from "./EditPanel";
 import Modal from "@/app/components/Modal";
+import { SideButton, SideSection, useSidebarContent } from "@/app/components/SidebarSlot";
 import type { SeoListItem, SeoLocaleMeta } from "./types";
 
 type Locale = "en" | "de";
@@ -53,8 +54,11 @@ function SeoStudio() {
   const [collectionFilter, setCollectionFilter] = useState<"all" | "news" | "pages">("all");
   const searchParams = useSearchParams();
   const [onlyMissing, setOnlyMissing] = useState(false);
+  const [tab, setTab] = useState<"all" | "missing" | "drafts" | "published">("all");
   useEffect(() => {
-    setOnlyMissing(searchParams?.get("missing") === "1");
+    const m = searchParams?.get("missing") === "1";
+    setOnlyMissing(m);
+    if (m) setTab("missing");
   }, [searchParams]);
   const [selected, setSelected] = useState<SeoListItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -108,6 +112,9 @@ function SeoStudio() {
       .filter((item) => {
         if (collectionFilter !== "all" && item.collection !== collectionFilter) return false;
         if (onlyMissing && !isMissing(item)) return false;
+        if (tab === "missing" && !isMissing(item)) return false;
+        if (tab === "drafts" && item.status !== "draft") return false;
+        if (tab === "published" && item.status !== "published") return false;
         if (!q) return true;
         const meta = merged(item, locale);
         return (
@@ -136,7 +143,7 @@ function SeoStudio() {
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, query, locale, collectionFilter, onlyMissing, edits]);
+  }, [items, query, locale, collectionFilter, onlyMissing, tab, edits]);
 
   const dirtyKeys = useMemo(() => Object.keys(edits), [edits]);
 
@@ -388,6 +395,77 @@ function SeoStudio() {
   );
   const columns = useMemo(() => allColumns.filter((c) => !hiddenCols.includes(c.key)), [allColumns, hiddenCols]);
 
+  // Everything the tool can do lives on the left: generate (one smart
+  // button), publish, search & replace, columns, language. The header above
+  // the table only filters (tabs) and searches.
+  const selectedDirty = selectedIds.filter((k) => dirtyKeys.includes(k));
+  useSidebarContent(
+    <>
+      <SideSection title="Generate">
+        {selectedDirty.length > 0 ? (
+          <SideButton
+            primary
+            onClick={() => {
+              setPublishKeys(selectedDirty);
+              setConfirmPublish(true);
+            }}
+            disabled={saving}
+            note={selectedDirty.length}
+          >
+            Publish selected
+          </SideButton>
+        ) : selectedIds.length > 0 ? (
+          <SideButton primary href={`/api/seo/handoff?items=${encodeURIComponent(selectedParam)}`} note={selectedIds.length}>
+            Generate selected
+          </SideButton>
+        ) : (
+          <SideButton primary href="/api/seo/handoff?missing=1" disabled={!missingCount} note={items ? missingCount : ""}>
+            Generate missing
+          </SideButton>
+        )}
+        <div style={{ fontSize: 11, color: "var(--muted)", padding: "2px 10px 4px", lineHeight: 1.5 }}>
+          {hasConnector ? "Opens claude.ai; Claude writes and publishes, all at once." : hasConnector === false ? "Opens claude.ai; Claude replies with Publish links, 5 per round." : ""}
+        </div>
+      </SideSection>
+      <SideSection title="Edits">
+        <SideButton
+          onClick={() => {
+            setPublishKeys(null);
+            setConfirmPublish(true);
+          }}
+          disabled={dirtyKeys.length === 0 || saving}
+          note={dirtyKeys.length || ""}
+        >
+          Publish edited
+        </SideButton>
+        <SideButton onClick={saveDrafts} disabled={dirtyKeys.length === 0 || saving} note={dirtyKeys.length || ""}>
+          Save as drafts
+        </SideButton>
+        <SideButton onClick={() => setSrOpen(true)} active={srOpen}>
+          Search &amp; replace
+        </SideButton>
+      </SideSection>
+      <SideSection title="View">
+        <div style={{ display: "flex", gap: 4, padding: "0 4px" }}>
+          {(["en", "de"] as Locale[]).map((loc) => (
+            <button
+              key={loc}
+              className={`tab${locale === loc ? " is-active" : ""}`}
+              onClick={() => setLocale(loc)}
+              style={{ flex: 1, justifyContent: "center", border: "1px solid var(--border)" }}
+            >
+              {loc.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <SideButton onClick={() => setColsOpen(true)} note={`${allColumns.length - hiddenCols.length}/${allColumns.length}`}>
+          Columns
+        </SideButton>
+      </SideSection>
+    </>,
+    [selectedIds, dirtyKeys, saving, missingCount, items?.length, hasConnector, locale, hiddenCols, srOpen, selectedParam, allColumns]
+  );
+
   const input = {
     background: "#161617",
     color: "var(--fg)",
@@ -399,91 +477,56 @@ function SeoStudio() {
 
   return (
     <div>
-      <h1 style={{ marginBottom: 4 }}>SEO Studio</h1>
-      <p style={{ opacity: 0.6, fontSize: 13, marginTop: 0, marginBottom: 16 }}>
-        Staging only. Reads and writes go straight to Payload, never to the Google Sheet. Click a title to open it in
-        the CMS, type into SEO Title / Description to edit inline (or use Search &amp; replace), then Save drafts or
-        Publish edited. Claude is only needed to write new text; publishing never needs it.
-      </p>
+      <section className="page-head reveal">
+        <div>
+          <div className="section-label" style={{ marginBottom: 8 }}>Tool · staging</div>
+          <h1>SEO Studio</h1>
+          <p>
+            Meta titles and descriptions for news and pages, EN and DE. Click a title to open it in the CMS, edit inline, publish from the
+            row. Claude writes new text; the tool publishes, publication dates stay untouched.
+          </p>
+        </div>
+      </section>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-        {/* Smart primary button: follows the journey.
-            nothing selected → Generate missing;
-            rows selected, none edited → Generate selected;
-            rows selected with edits → Publish selected (the edited ones). */}
-        {(() => {
-          const selectedDirty = selectedIds.filter((k) => dirtyKeys.includes(k));
-          const primary = { padding: "8px 14px", borderRadius: 6, background: "var(--accent)", color: "#fff", fontSize: 13, whiteSpace: "nowrap", textDecoration: "none", border: "none", cursor: "pointer" } as const;
-          if (selectedDirty.length > 0) {
-            return (
-              <button
-                onClick={() => {
-                  setPublishKeys(selectedDirty);
-                  setConfirmPublish(true);
-                }}
-                disabled={saving}
-                style={primary}
-              >
-                Publish selected ({selectedDirty.length} edited)
-              </button>
-            );
-          }
-          if (selectedIds.length > 0) {
-            return (
-              <a href={`/api/seo/handoff?items=${encodeURIComponent(selectedParam)}`} target="_blank" rel="noreferrer" style={primary}>
-                Generate selected ({selectedIds.length})
-              </a>
-            );
-          }
-          return (
-            <a
-              href="/api/seo/handoff?missing=1"
-              target="_blank"
-              rel="noreferrer"
-              style={{ ...primary, background: missingCount ? "var(--accent)" : "#333", pointerEvents: missingCount ? "auto" : "none" }}
-            >
-              Generate missing {items ? `(${missingCount} left${hasConnector ? ", all at once" : hasConnector === false ? ", 5 per round" : ""})` : ""}
-            </a>
-          );
-        })()}
-        {dirtyKeys.length > 0 && (
-          <>
-            <button
-              onClick={saveDrafts}
-              disabled={saving}
-              style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "var(--fg)", fontSize: 13, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
-            >
-              {saving ? "Saving…" : `Save ${dirtyKeys.length} draft${dirtyKeys.length === 1 ? "" : "s"}`}
+      <section className="reveal reveal-d1" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 26 }}>
+        {[
+          { n: items?.length ?? "–", l: "Docs" },
+          { n: items ? missingCount : "–", l: "Missing SEO" },
+          { n: items ? items.filter((i) => i.status === "draft").length : "–", l: "Drafts" },
+          { n: dirtyKeys.length, l: "Edited here" },
+        ].map((st) => (
+          <div key={st.l} className="stat">
+            <span className="n">{st.n}</span>
+            <span className="l">{st.l}</span>
+          </div>
+        ))}
+      </section>
+
+      <section className="reveal reveal-d2" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+        <div className="tabs" role="tablist">
+          {(
+            [
+              ["all", "All", items?.length ?? 0],
+              ["missing", "Missing SEO", items ? missingCount : 0],
+              ["drafts", "Drafts", items ? items.filter((i) => i.status === "draft").length : 0],
+              ["published", "Published", items ? items.filter((i) => i.status === "published").length : 0],
+            ] as const
+          ).map(([k, label, n]) => (
+            <button key={k} role="tab" aria-selected={tab === k} className={`tab${tab === k ? " is-active" : ""}`} onClick={() => setTab(k)}>
+              {label}
+              <span className="count">{n}</span>
             </button>
-            <button
-              onClick={() => {
-                setPublishKeys(null);
-                setConfirmPublish(true);
-              }}
-              disabled={saving}
-              style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--accent)", background: "none", color: "var(--fg)", fontSize: 13, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
-            >
-              Publish edited ({dirtyKeys.length})
+          ))}
+        </div>
+        <div className="tabs">
+          {(["all", "news", "pages"] as const).map((c) => (
+            <button key={c} className={`tab${collectionFilter === c ? " is-active" : ""}`} onClick={() => setCollectionFilter(c)}>
+              {c === "all" ? "News + Pages" : c[0].toUpperCase() + c.slice(1)}
             </button>
-          </>
-        )}
-        <button
-          onClick={() => setSrOpen((o) => !o)}
-          style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--border)", background: srOpen ? "#1b1b1d" : "none", color: "var(--fg)", fontSize: 13, cursor: "pointer" }}
-        >
-          Search &amp; replace
-        </button>
-        <span style={{ fontSize: 12, opacity: 0.6 }}>
-          {hasConnector
-            ? "Generate opens claude.ai; Claude writes and publishes (publication date unchanged)."
-            : "Generate opens claude.ai; Claude replies with a Publish link. "}
-          {!hasConnector && (
-            <>
-              With the <Link href="/connector">Claude connector</Link> it publishes directly.
-            </>
-          )}
-        </span>
-      </div>
+          ))}
+        </div>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, slug, SEO text…" className="input" style={{ flex: 1, minWidth: 220 }} />
+      </section>
 
       {confirmPublish && (
         <Modal title={`Publish ${(publishKeys ?? dirtyKeys).length} edited doc${(publishKeys ?? dirtyKeys).length === 1 ? "" : "s"}?`} onClose={() => setConfirmPublish(false)} width={520}>
@@ -565,30 +608,6 @@ function SeoStudio() {
           </div>
         </Modal>
       )}
-      <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, slug, SEO title/description…" style={{ ...input, flex: 1 }} />
-        <select value={collectionFilter} onChange={(e) => setCollectionFilter(e.target.value as typeof collectionFilter)} style={{ ...input, padding: "8px 10px" }}>
-          <option value="all">All</option>
-          <option value="news">News</option>
-          <option value="pages">Pages</option>
-        </select>
-        <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center", opacity: 0.8 }}>
-          <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} />
-          only missing
-        </label>
-        <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
-          {(["en", "de"] as Locale[]).map((loc) => (
-            <button
-              key={loc}
-              onClick={() => setLocale(loc)}
-              style={{ padding: "8px 14px", background: locale === loc ? "var(--accent)" : "none", color: locale === loc ? "#fff" : "var(--fg)", border: "none", cursor: "pointer", fontSize: 13 }}
-            >
-              {loc.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {error && <div style={{ color: "#e06c5b", marginBottom: 16, fontSize: 13 }}>Couldn&apos;t load the list: {error}</div>}
       {progress && (
         <div
@@ -625,51 +644,33 @@ function SeoStudio() {
       )}
 
       {items && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, fontSize: 12 }}>
-          <span style={{ opacity: 0.5 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, fontSize: 12, color: "var(--muted)" }}>
+          <span>
             {rows.length} of {items.length}
             {selectedIds.length ? ` · ${selectedIds.length} selected` : ""}
           </span>
-          <span style={{ position: "relative" }}>
-            <button
-              onClick={() => setColsOpen((o) => !o)}
-              style={{ background: "none", border: "1px solid var(--border)", color: "inherit", borderRadius: 6, padding: "3px 10px", fontSize: 12, cursor: "pointer", opacity: 0.8 }}
-            >
-              Columns{hiddenCols.length ? ` (${allColumns.length - hiddenCols.length}/${allColumns.length})` : ""}
-            </button>
-            {colsOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "calc(100% + 6px)",
-                  zIndex: 20,
-                  background: "#141416",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  padding: "8px 10px",
-                  minWidth: 220,
-                  boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
-                }}
-              >
-                {allColumns.map((c) => (
-                  <label key={c.key} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0", cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <input type="checkbox" checked={!hiddenCols.includes(c.key)} onChange={() => toggleCol(c.key)} />
-                    {COLUMN_LABELS[c.key] ?? c.key}
-                  </label>
-                ))}
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, opacity: 0.6 }}>
-                  <button onClick={() => { setHiddenCols([]); try { localStorage.setItem("seo:hiddenCols", "[]"); } catch {} }} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0 }}>
-                    Show all
-                  </button>
-                  <button onClick={() => setColsOpen(false)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0 }}>
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
-          </span>
+          <span>{locale.toUpperCase()}</span>
         </div>
+      )}
+      {colsOpen && (
+        <Modal title="Columns" onClose={() => setColsOpen(false)} width={380}>
+          <div style={{ display: "grid", gap: 6, fontSize: 13 }}>
+            {allColumns.map((c) => (
+              <label key={c.key} style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
+                <input type="checkbox" checked={!hiddenCols.includes(c.key)} onChange={() => toggleCol(c.key)} style={{ accentColor: "#ff2d00" }} />
+                {COLUMN_LABELS[c.key] ?? c.key}
+              </label>
+            ))}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+              <button className="btn" onClick={() => { setHiddenCols([]); try { localStorage.setItem("seo:hiddenCols", "[]"); } catch {} }}>
+                Show all
+              </button>
+              <button className="btn btn-primary" onClick={() => setColsOpen(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       <div className="beui beui-compact">

@@ -9,8 +9,13 @@ Dark surfaces and type after alithemes' Neuron template (#0C0D0E / #171819 / #1E
 DM Sans body, Fahkwang headings, loaded as a Google Fonts stylesheet so builds never fetch fonts),
 AF1 lava red as the accent. `app/components/ToolHeader.tsx` is the sticky header: wordmark on the
 ASCII strip, a **Tools** menu that switches tools (Neuron's blurred rounded sub-menu), environment +
-account on the right. `app/components/Sidebar.tsx` is in-tool navigation only (views, generate,
-help per tool; entries registered in `SIDEBARS`). `app/components/MorphIcon.tsx`: the tool icons are
+account on the right. `app/components/Sidebar.tsx` is in-tool navigation only: a page pushes its
+live functions into it through `SidebarSlot.tsx` (`useSidebarContent`, `SideSection`, `SideButton`),
+static links per tool stay in `SIDEBARS`. Filters live above the table as pill tabs (`.tabs/.tab`),
+page heads and stat modules (`.page-head`, `.stat`) and reveal-on-scroll sections are the shared
+page pattern (SEO Studio, Asset Uploader). The Claude connector is not a tool: it is a first-run
+onboarding overlay on the home page (`ConnectorOnboarding.tsx`, per-user state via
+`/api/onboarding`), replayable from `/connector` (header link). `app/components/MorphIcon.tsx`: the tool icons are
 small three.js canvases — a sphere displaced by animated simplex noise with an iridescent
 thin-film shader (after the "Rainbow Blend Glass" look of Tom's reference .blend), one preset per
 tool (seed, frequency, amplitude, palette offset; `MORPH_PRESETS`). The header shows them as a row

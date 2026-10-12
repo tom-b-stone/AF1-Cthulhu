@@ -111,11 +111,16 @@ export default function NewBatchPage() {
 
   return (
     <div style={{ maxWidth: 960 }}>
-      <h1>Asset Uploader</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0, marginBottom: 20 }}>
-        Drop photos. They are compressed here in the browser (WebP, {edge || "original"} px longest edge), named after the CMS
-        convention, and collected in a batch. Alt text, folder and upload happen on the batch page.
-      </p>
+      <section className="page-head reveal">
+        <div>
+          <div className="section-label" style={{ marginBottom: 8 }}>Tool · staging</div>
+          <h1>Asset Uploader</h1>
+          <p>
+            Drop photos. They are compressed here in the browser (WebP, {edge || "original"} px longest edge), named after the CMS
+            convention, and collected in a batch. Alt text, folder and upload happen on the batch page.
+          </p>
+        </div>
+      </section>
 
       <div
         onDragOver={(e) => {
@@ -129,7 +134,7 @@ export default function NewBatchPage() {
           addFiles(e.dataTransfer.files);
         }}
         onClick={() => inputRef.current?.click()}
-        className="card"
+        className="card reveal reveal-d1"
         style={{
           padding: "44px 24px",
           textAlign: "center",
