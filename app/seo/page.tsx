@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Table, type TableColumn } from "@/components/ui/table-editable";
 import { validateSeoField } from "@/lib/seoBrand";
 import EditPanel from "./EditPanel";
+import Modal from "@/app/components/Modal";
 import type { SeoListItem, SeoLocaleMeta } from "./types";
 
 type Locale = "en" | "de";
@@ -436,42 +437,83 @@ function SeoStudio() {
       </div>
 
       {confirmPublish && (
-        <div style={{ background: "#141416", border: "1px solid var(--accent)", borderRadius: 8, padding: "12px 14px", margin: "0 0 12px", fontSize: 13 }}>
-          <div style={{ marginBottom: 8 }}>
-            Publish {dirtyKeys.length} edited doc{dirtyKeys.length === 1 ? "" : "s"} to the CMS now? Publication dates stay untouched. Texts that
-            break a hard brand rule are skipped and listed.
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => writeEdits("publish")} style={{ padding: "6px 12px", borderRadius: 6, background: "var(--accent)", border: "none", color: "#fff", fontSize: 12, cursor: "pointer" }}>
-              Publish all edited
-            </button>
-            <button onClick={() => setConfirmPublish(false)} style={{ padding: "6px 12px", borderRadius: 6, background: "none", border: "1px solid var(--border)", color: "var(--fg)", fontSize: 12, cursor: "pointer" }}>
+        <Modal title={`Publish ${dirtyKeys.length} edited doc${dirtyKeys.length === 1 ? "" : "s"}?`} onClose={() => setConfirmPublish(false)} width={520}>
+          <p style={{ fontSize: 13, margin: "0 0 14px", lineHeight: 1.6 }}>
+            Writes the edited texts to the CMS and publishes them. Publication dates stay untouched. Texts that break a hard brand rule are skipped
+            and listed afterwards.
+          </p>
+          <ul style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 12, color: "var(--muted)", maxHeight: 160, overflow: "auto" }}>
+            {dirtyKeys.map((k) => {
+              const it = items?.find((i) => rowKey(i) === k);
+              return <li key={k}>{it?.internalTitle ?? k}</li>;
+            })}
+          </ul>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button className="btn" onClick={() => setConfirmPublish(false)}>
               Keep editing
             </button>
+            <button className="btn" onClick={() => writeEdits("draft")}>
+              Save as drafts
+            </button>
+            <button className="btn btn-primary" onClick={() => writeEdits("publish")}>
+              Publish all edited
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
       {srOpen && (
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", background: "#141416", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", margin: "0 0 12px", fontSize: 13 }}>
-          <input value={srFind} onChange={(e) => setSrFind(e.target.value)} placeholder="Find" style={{ ...input, padding: "6px 10px", width: 220 }} />
-          <span style={{ opacity: 0.5 }}>→</span>
-          <input value={srReplace} onChange={(e) => setSrReplace(e.target.value)} placeholder="Replace with" style={{ ...input, padding: "6px 10px", width: 220 }} />
-          <select value={srScope} onChange={(e) => setSrScope(e.target.value as typeof srScope)} style={{ ...input, padding: "6px 10px" }}>
-            <option value="both">Title + Description</option>
-            <option value="title">SEO Title only</option>
-            <option value="description">SEO Description only</option>
-          </select>
-          <span style={{ opacity: 0.6, fontSize: 12 }}>
-            {srFind ? `${srMatches} of ${rows.length} visible rows match (${locale.toUpperCase()})` : "Matches the visible rows in the current language"}
-          </span>
-          <button
-            onClick={applyReplace}
-            disabled={!srFind || srMatches === 0}
-            style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--accent)", background: "none", color: "var(--fg)", fontSize: 12, cursor: srMatches ? "pointer" : "default", opacity: srMatches ? 1 : 0.5 }}
-          >
-            Replace in {srMatches} row{srMatches === 1 ? "" : "s"}
-          </button>
-        </div>
+        <Modal title="Search & replace" onClose={() => setSrOpen(false)} width={640}>
+          <div style={{ display: "grid", gap: 10, fontSize: 13 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center" }}>
+              <input className="input" value={srFind} onChange={(e) => setSrFind(e.target.value)} placeholder="Find" autoFocus />
+              <span style={{ color: "var(--muted)" }}>→</span>
+              <input className="input" value={srReplace} onChange={(e) => setSrReplace(e.target.value)} placeholder="Replace with" />
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <select className="input" value={srScope} onChange={(e) => setSrScope(e.target.value as typeof srScope)}>
+                <option value="both">Title + Description</option>
+                <option value="title">SEO Title only</option>
+                <option value="description">SEO Description only</option>
+              </select>
+              <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                {srFind ? `${srMatches} of ${rows.length} visible rows match (${locale.toUpperCase()})` : `Matches the ${rows.length} visible rows, ${locale.toUpperCase()}, case-sensitive`}
+              </span>
+            </div>
+            {srFind && srMatches > 0 && (
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--muted)", maxHeight: 140, overflow: "auto" }}>
+                {rows
+                  .filter((r) => (srScope !== "description" && r.seoTitle.includes(srFind)) || (srScope !== "title" && r.seoDescription.includes(srFind)))
+                  .slice(0, 30)
+                  .map((r) => (
+                    <li key={r.key}>{r.internalTitle}</li>
+                  ))}
+              </ul>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", marginTop: 4 }}>
+              {dirtyKeys.length > 0 && (
+                <span style={{ fontSize: 12, color: "var(--muted)", marginRight: "auto" }}>
+                  {dirtyKeys.length} doc{dirtyKeys.length === 1 ? "" : "s"} edited, not in the CMS yet
+                </span>
+              )}
+              <button className="btn" onClick={() => setSrOpen(false)}>
+                Close
+              </button>
+              <button className="btn" onClick={applyReplace} disabled={!srFind || srMatches === 0}>
+                Replace in {srMatches} row{srMatches === 1 ? "" : "s"}
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={dirtyKeys.length === 0}
+                onClick={() => {
+                  setSrOpen(false);
+                  setConfirmPublish(true);
+                }}
+              >
+                Publish edited ({dirtyKeys.length})
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
       <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, slug, SEO title/description…" style={{ ...input, flex: 1 }} />
