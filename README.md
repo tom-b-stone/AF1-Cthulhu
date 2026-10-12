@@ -160,54 +160,11 @@ and `T02_MONZ_ARF1T04_17_26_…`, US date order in the second). Taken from the l
 
 Built: `/assets` (new batch), `/assets/batch/[id]` (editable table: context, descriptor, alt, checks;
 ZIP export with alt-texts.csv + .md), `/assets/batches`, `/assets/rules`, `/assets/knowledge`.
-Journey (`app/components/Steps.tsx`): 1 Images → 2 Grand Prix & folder (calendar from the
-production `race-weekend` collection, `lib/races.ts`; round pre-selected from camera names or photo
-date; existing round/session folder used or created, `FolderPicker.tsx` for anything else) → 3 Alt
-text → 4 Upload (`/api/assets/upload`, numbering per folder via `/api/assets/next-number`).
-
-**Alt text by Claude** (step 3): the batch page sends 1024px previews + meta to the server
-(`/api/assets/batch/[id]` + `/preview`, KV, 7-day TTL, `lib/assetBatchStore.ts`) and opens claude.ai
-with the prompt (`lib/assetPrompt.ts`, `/api/assets/handoff`). Claude works through the connector:
-`asset_rulebook` (people + terms from the editable knowledge store, rules + patterns from the seed),
-`asset_list_batch`, `asset_get_image` (image content), `asset_set_meta` (validated: length, team
-name, spellings, em-dash). The page polls the server copy every 5s and fills the rows. No connector
-→ the button explains the setup; there is no URL fallback because images can't travel in a link.
-
-Team knowledge (`/assets/knowledge`, `lib/teamKnowledge.ts` seed, KV `assets:knowledge:v1`): only
-people and terms are user-editable; alt-text rules and patterns are the tool's rulebook. Team name
-is exactly "Audi Revolut F1® Team", nothing else; "Revolut Apex Card"; Hulkenberg EN / Hülkenberg DE.
-
-**Content tags** (step 4, `lib/contentTags.ts`, `/api/assets/tags`, `app/components/TagPicker.tsx`):
-the production vocabulary (105 `content-tags` titles, Oct 2026) is in `PROD_TAG_TITLES`; a one-time
-`POST /api/assets/tags {seed:true}` copied it to staging. Tags live on a batch/row by *title* and
-are resolved to staging ids at upload (`uploadMedia(..., contentTagIds)` → `_payload.contentTags`).
-Production pattern, learned from 3,000 media: every GP photo carries `2026` + `gp | <gp> | <circuit>`
-+ weekday + session (`fp1`…`race`), per photo a person tag (`nico hulkenberg`, `mattia binotto`, …)
-and a scene (`on-track & garage` / `team` / `off-track`); wallpapers `2026 | <city> | wallpaper`.
-`proposeBatchTags` fills the batch tags from year/race/session; `asset_set_meta` now takes `people`
-+ `scene` and the page turns them into per-image tags (`proposeRowTags`). `tagIssues` runs in the
-Check column and before upload (year, GP, day/session, scene-or-person, no "do not use"). New tags
-are created on staging from the picker ("Create … on staging").
-
-**Learning** (`lib/referenceStore.ts`, `lib/feedbackStore.ts`, `/api/assets/references`, `/api/assets/feedback`):
-reference photos per person (KV `assets:refs:index` + `assets:ref:<id>`, max 8 per person) that Claude
-must look at (`knowledge_reference_image`) before naming anyone; saved from a batch photo (row dialog →
-Teach Claude, 1024px WebP) or by Claude from the library during a learning session
-(`knowledge_add_reference`). Corrections: at upload, rows where the final people/scene differ from
-Claude's proposal (`row.ai`) are logged (`assets:feedback:v1`, cap 100) and the last 25 appear in the
-rulebook. Both are visible on `/assets/learn`. The batch table is the SEO table: inline alt/descriptor,
-inline tag picker per row, row selection with a bulk bar (add tag, set scene, clear tags).
-
-**In-tool generation** (`lib/claudeDescribe.ts`, `/api/assets/generate`, `lib/learnRun.ts`,
-`/api/assets/learn/run`, Admin → Claude API `/admin/anthropic`, KV `settings:anthropic` encrypted):
-with an Anthropic API key the batch page describes each photo itself (two in parallel, one Messages
-call per photo, rulebook + reference photos as a cached prefix, same validation as `asset_set_meta`,
-one retry on rule violations) and the learn page builds the reference library per person
-(`learn_person`, also a connector tool). Without a key everything falls back to the claude.ai
-hand-off. claude.ai cannot be iframed (`frame-ancestors 'none'`), hence the API path.
-
-Still to do: production toggle (second CMS login in /admin), SlashLens intake (`/assets/intake`,
-Drive file ids, link-sharing is on).
+Next: server-side batch store (Vercel Blob) so the connector can read previews; connector tools
+`asset_list_batch` / `asset_get_image` / `asset_set_meta` + claude.ai hand-off for descriptor + alt;
+folder picker + create; upload to staging (`POST /media` multipart with alt + folder, numbering per
+folder); production toggle (second CMS login in /admin); SlashLens intake (`/assets/intake`, Drive
+file ids, link-sharing is on).
 
 ### CRM Images
 Generates cropped, rounded-corner image variants matched to the CRM template library

@@ -88,9 +88,6 @@ a { color: inherit; }
    drag grips only on hover (they cost 24px per header otherwise). */
 .beui-compact th .px-4, .beui-compact td .px-4, .beui-compact td.px-4 { padding-left: 8px; padding-right: 8px; }
 .beui-compact th { position: sticky; border-right: 1px solid rgba(255, 255, 255, 0.14); }
-.beui-compact th .px-4 { padding-left: 22px !important; } /* room for the drag grip on hover */
-.beui-compact td input, .beui-compact td textarea { border-radius: 0 !important; margin: 0 !important; width: 100% !important; box-shadow: none !important; }
-.beui-compact td input:focus { background: var(--surface) !important; outline: 1px solid var(--accent) !important; outline-offset: -1px; }
 .beui-compact th:last-child { border-right: 0; }
 .beui-compact td { border-right: 1px solid rgba(255, 255, 255, 0.05); }
 .beui-compact th button[aria-label^="Reorder"] { position: absolute; left: 0; top: 0; width: 14px; opacity: 0; }

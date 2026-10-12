@@ -29,10 +29,9 @@ type Row = {
   publishedDate: string;
   internalTitle: string;
   url: string;
-  seoTitle: string; // EN
-  seoDescription: string; // EN
-  seoTitleDe: string;
-  seoDescriptionDe: string;
+  seoTitle: string;
+  seoDescription: string;
+  language: string;
   missing: boolean;
   dirty: boolean;
 };
@@ -117,20 +116,16 @@ function SeoStudio() {
         if (tab === "drafts" && item.status !== "draft") return false;
         if (tab === "published" && item.status !== "published") return false;
         if (!q) return true;
-        const en = merged(item, "en");
-        const de = merged(item, "de");
+        const meta = merged(item, locale);
         return (
           item.internalTitle.toLowerCase().includes(q) ||
           item.slug.toLowerCase().includes(q) ||
-          en.title.toLowerCase().includes(q) ||
-          en.description.toLowerCase().includes(q) ||
-          de.title.toLowerCase().includes(q) ||
-          de.description.toLowerCase().includes(q)
+          meta.title.toLowerCase().includes(q) ||
+          meta.description.toLowerCase().includes(q)
         );
       })
       .map((item) => {
-        const meta = merged(item, "en");
-        const metaDe = merged(item, "de");
+        const meta = merged(item, locale);
         const key = rowKey(item);
         const e = edits[key];
         return {
@@ -139,11 +134,10 @@ function SeoStudio() {
           status: item.status,
           publishedDate: item.publishedDate ? item.publishedDate.slice(0, 10) : "",
           internalTitle: item.internalTitle,
-          url: item.urls.en,
+          url: item.urls[locale],
           seoTitle: meta.title,
           seoDescription: meta.description,
-          seoTitleDe: metaDe.title,
-          seoDescriptionDe: metaDe.description,
+          language: locale.toUpperCase(),
           missing: isMissing(item),
           dirty: Boolean(e?.en?.title !== undefined || e?.en?.description !== undefined || e?.de?.title !== undefined || e?.de?.description !== undefined),
         };
@@ -153,20 +147,12 @@ function SeoStudio() {
 
   const dirtyKeys = useMemo(() => Object.keys(edits), [edits]);
 
-  // EN and DE are both in the table (one view, so a missing language is
-  // visible by scrolling); the column key says which locale an edit is for.
-  const CELL_FIELDS: Record<string, { loc: Locale; field: "title" | "description" }> = {
-    seoTitle: { loc: "en", field: "title" },
-    seoDescription: { loc: "en", field: "description" },
-    seoTitleDe: { loc: "de", field: "title" },
-    seoDescriptionDe: { loc: "de", field: "description" },
-  };
   function onCellEdit(id: string, columnKey: string, value: string) {
-    const f = CELL_FIELDS[columnKey];
-    if (!f) return;
+    if (columnKey !== "seoTitle" && columnKey !== "seoDescription") return;
+    const field = columnKey === "seoTitle" ? "title" : "description";
     setEdits((prev) => ({
       ...prev,
-      [id]: { ...prev[id], [f.loc]: { ...prev[id]?.[f.loc], [f.field]: value } },
+      [id]: { ...prev[id], [locale]: { ...prev[id]?.[locale], [field]: value } },
     }));
   }
 
@@ -188,7 +174,7 @@ function SeoStudio() {
   itemsRef.current = items;
   const dirtyRef = useRef(dirtyKeys);
   dirtyRef.current = dirtyKeys;
-  async function writeEdits(action: "draft" | "publish", onlyKeys?: string[], _allowClean = false) {
+  async function writeEdits(action: "draft" | "publish", onlyKeys?: string[]) {
     const items = itemsRef.current;
     const keys = onlyKeys ?? dirtyRef.current;
     if (!items || keys.length === 0) return;
@@ -247,38 +233,27 @@ function SeoStudio() {
   const [srFind, setSrFind] = useState("");
   const [srReplace, setSrReplace] = useState("");
   const [srScope, setSrScope] = useState<"both" | "title" | "description">("both");
-  const [srLang, setSrLang] = useState<"en" | "de" | "both">("both");
-  const srHit = (r: Row) => {
-    if (!srFind) return false;
-    const fields: string[] = [];
-    if (srLang !== "de") {
-      if (srScope !== "description") fields.push(r.seoTitle);
-      if (srScope !== "title") fields.push(r.seoDescription);
-    }
-    if (srLang !== "en") {
-      if (srScope !== "description") fields.push(r.seoTitleDe);
-      if (srScope !== "title") fields.push(r.seoDescriptionDe);
-    }
-    return fields.some((f) => f.includes(srFind));
-  };
-  const srMatches = useMemo(() => rows.filter(srHit).length, [rows, srFind, srScope, srLang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const srMatches = useMemo(() => {
+    if (!srFind) return 0;
+    return rows.reduce((n, r) => {
+      const t = srScope !== "description" && r.seoTitle.includes(srFind) ? 1 : 0;
+      const d = srScope !== "title" && r.seoDescription.includes(srFind) ? 1 : 0;
+      return n + (t || d ? 1 : 0);
+    }, 0);
+  }, [rows, srFind, srScope]);
   function applyReplace() {
     if (!srFind) return;
     setEdits((prev) => {
       const next = { ...prev };
       for (const r of rows) {
-        const apply = (loc: Locale, title: string, description: string) => {
-          const patch: Partial<SeoLocaleMeta> = {};
-          if (srScope !== "description" && title.includes(srFind)) patch.title = title.split(srFind).join(srReplace);
-          if (srScope !== "title" && description.includes(srFind)) patch.description = description.split(srFind).join(srReplace);
-          if (Object.keys(patch).length) next[r.key] = { ...next[r.key], [loc]: { ...next[r.key]?.[loc], ...patch } };
-        };
-        if (srLang !== "de") apply("en", r.seoTitle, r.seoDescription);
-        if (srLang !== "en") apply("de", r.seoTitleDe, r.seoDescriptionDe);
+        const patch: Partial<SeoLocaleMeta> = {};
+        if (srScope !== "description" && r.seoTitle.includes(srFind)) patch.title = r.seoTitle.split(srFind).join(srReplace);
+        if (srScope !== "title" && r.seoDescription.includes(srFind)) patch.description = r.seoDescription.split(srFind).join(srReplace);
+        if (Object.keys(patch).length) next[r.key] = { ...next[r.key], [locale]: { ...next[r.key]?.[locale], ...patch } };
       }
       return next;
     });
-    setNotice(`Replaced in ${srMatches} row${srMatches === 1 ? "" : "s"}. Not in the CMS yet: Save drafts or Publish edited.`);
+    setNotice(`Replaced in ${srMatches} row${srMatches === 1 ? "" : "s"} (${locale.toUpperCase()}). Not in the CMS yet: Save drafts or Publish edited.`);
   }
 
   const selectedParam = selectedIds.join(",");
@@ -290,17 +265,13 @@ function SeoStudio() {
     status: "Status",
     publishedDate: "Published",
     internalTitle: "Title",
-    seoTitle: "SEO Title (EN)",
+    seoTitle: "SEO Title",
     seoTitleCount: "SEO Title length",
-    seoDescription: "SEO Description (EN)",
-    seoTitleDe: "SEO Title (DE)",
-    seoTitleDeCount: "SEO Title (DE) length",
-    seoDescriptionDe: "SEO Description (DE)",
-    seoDescriptionDeCount: "SEO Description (DE) length",
+    seoDescription: "SEO Description",
     seoDescriptionCount: "SEO Description length",
     actions: "Actions",
   };
-  const DEFAULT_HIDDEN = ["seoTitleCount", "seoDescriptionCount", "seoTitleDeCount", "seoDescriptionDeCount"];
+  const DEFAULT_HIDDEN = ["seoTitleCount", "seoDescriptionCount"];
   const [hiddenCols, setHiddenCols] = useState<string[]>(DEFAULT_HIDDEN);
   const [colsOpen, setColsOpen] = useState(false);
   useEffect(() => {
@@ -359,7 +330,7 @@ function SeoStudio() {
           </a>
         ),
       },
-      { key: "seoTitle", header: "SEO Title · EN", width: "1fr", editable: true },
+      { key: "seoTitle", header: "SEO Title", width: "1fr", editable: true },
       {
         key: "seoTitleCount",
         header: "#",
@@ -369,27 +340,7 @@ function SeoStudio() {
         sortValue: (r) => r.seoTitle.length,
         cell: (r) => <Count n={r.seoTitle.length} kind="title" />,
       },
-      { key: "seoDescription", header: "SEO Description · EN", width: "1.4fr", editable: true },
-      { key: "seoTitleDe", header: "SEO Title · DE", width: "1fr", editable: true },
-      {
-        key: "seoTitleDeCount",
-        header: "#",
-        width: "48px",
-        align: "right",
-        sortable: true,
-        sortValue: (r) => r.seoTitleDe.length,
-        cell: (r) => <Count n={r.seoTitleDe.length} kind="title" />,
-      },
-      { key: "seoDescriptionDe", header: "SEO Description · DE", width: "1.4fr", editable: true },
-      {
-        key: "seoDescriptionDeCount",
-        header: "#",
-        width: "48px",
-        align: "right",
-        sortable: true,
-        sortValue: (r) => r.seoDescriptionDe.length,
-        cell: (r) => <Count n={r.seoDescriptionDe.length} kind="description" />,
-      },
+      { key: "seoDescription", header: "SEO Description", width: "1.6fr", editable: true },
       {
         key: "seoDescriptionCount",
         header: "#",
@@ -414,15 +365,15 @@ function SeoStudio() {
             >
               Edit
             </button>
-            {r.dirty || r.status === "draft" ? (
+            {r.dirty ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  void writeEdits("publish", [r.key], !r.dirty);
+                  void writeEdits("publish", [r.key]);
                 }}
                 className="rounded border px-2 py-1 text-[11px]"
                 style={{ borderColor: "var(--accent)", background: "rgba(255,45,0,0.12)", color: "#fff" }}
-                title={r.dirty ? "Publish this row's edit now (publication date untouched)" : "Publish this draft's current SEO text"}
+                title="Publish this row's edit now (publication date untouched)"
               >
                 Publish
               </button>
@@ -495,6 +446,18 @@ function SeoStudio() {
         </SideButton>
       </SideSection>
       <SideSection title="View">
+        <div style={{ display: "flex", gap: 4, padding: "0 4px" }}>
+          {(["en", "de"] as Locale[]).map((loc) => (
+            <button
+              key={loc}
+              className={`tab${locale === loc ? " is-active" : ""}`}
+              onClick={() => setLocale(loc)}
+              style={{ flex: 1, justifyContent: "center", border: "1px solid var(--border)" }}
+            >
+              {loc.toUpperCase()}
+            </button>
+          ))}
+        </div>
         <SideButton onClick={() => setColsOpen(true)} note={`${allColumns.length - hiddenCols.length}/${allColumns.length}`}>
           Columns
         </SideButton>
@@ -562,26 +525,7 @@ function SeoStudio() {
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 0, flex: 1, minWidth: 300 }}>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title, slug, SEO text (EN + DE)…"
-            className="input"
-            style={{ flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
-          />
-          <button
-            className="btn"
-            onClick={() => {
-              if (query && !srFind) setSrFind(query);
-              setSrOpen(true);
-            }}
-            style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, marginLeft: -1, whiteSpace: "nowrap" }}
-            title="Find and replace across the visible rows"
-          >
-            Replace…
-          </button>
-        </div>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, slug, SEO text…" className="input" style={{ flex: 1, minWidth: 220 }} />
       </section>
 
       {confirmPublish && (
@@ -623,19 +567,14 @@ function SeoStudio() {
                 <option value="title">SEO Title only</option>
                 <option value="description">SEO Description only</option>
               </select>
-              <select className="input" value={srLang} onChange={(e) => setSrLang(e.target.value as typeof srLang)}>
-                <option value="both">EN + DE</option>
-                <option value="en">EN only</option>
-                <option value="de">DE only</option>
-              </select>
               <span style={{ color: "var(--muted)", fontSize: 12 }}>
-                {srFind ? `${srMatches} of ${rows.length} visible rows match` : `Matches the ${rows.length} visible rows, case-sensitive`}
+                {srFind ? `${srMatches} of ${rows.length} visible rows match (${locale.toUpperCase()})` : `Matches the ${rows.length} visible rows, ${locale.toUpperCase()}, case-sensitive`}
               </span>
             </div>
             {srFind && srMatches > 0 && (
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--muted)", maxHeight: 140, overflow: "auto" }}>
                 {rows
-                  .filter(srHit)
+                  .filter((r) => (srScope !== "description" && r.seoTitle.includes(srFind)) || (srScope !== "title" && r.seoDescription.includes(srFind)))
                   .slice(0, 30)
                   .map((r) => (
                     <li key={r.key}>{r.internalTitle}</li>
@@ -710,7 +649,7 @@ function SeoStudio() {
             {rows.length} of {items.length}
             {selectedIds.length ? ` · ${selectedIds.length} selected` : ""}
           </span>
-          <span>EN + DE</span>
+          <span>{locale.toUpperCase()}</span>
         </div>
       )}
       {colsOpen && (
