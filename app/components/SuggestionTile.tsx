@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import HomeTile from "./HomeTile";
 
 // The sixth tile on the home page: the suggestion box, form shown directly
 // (no icon). Posts to the admin message board (/admin/messages).
@@ -25,23 +26,8 @@ export default function SuggestionTile() {
   }
 
   return (
-    <div
-      className="home-tile"
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        padding: "14px 16px",
-        background: "rgba(8,8,14,0.8)",
-        backdropFilter: "blur(2px)",
-        display: "grid",
-        gap: 8,
-        alignContent: "start",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <span style={{ fontWeight: 600, fontSize: 15, fontFamily: "var(--font-heading)" }}>Suggestion box</span>
-        <span style={{ fontSize: 11, color: "var(--muted)" }}>→ admin board</span>
-      </div>
+    <HomeTile title="Suggestion box" tileKey="/suggest" status={{ label: "→ admin board", bg: "transparent", fg: "var(--muted)", border: "transparent" }}>
+      <div style={{ display: "grid", gap: 8, marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
       <input
         className="input"
         value={title}
@@ -65,6 +51,7 @@ export default function SuggestionTile() {
         {state === "sent" && <span style={{ color: "#6fcf7c", fontSize: 12 }}>Done. On the board.</span>}
         {state === "error" && <span style={{ color: "#e06c5b", fontSize: 12 }}>Couldn&apos;t send.</span>}
       </div>
-    </div>
+      </div>
+    </HomeTile>
   );
 }

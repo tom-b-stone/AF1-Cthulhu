@@ -22,6 +22,8 @@ export type MorphProps = {
   className?: string;
   style?: React.CSSProperties;
   paused?: boolean;
+  // optional cursor influence (-1..1 each), read every frame, set by the tile
+  pointer?: React.MutableRefObject<{ x: number; y: number }>;
 };
 
 const VERT = /* glsl */ `
@@ -129,9 +131,14 @@ void main(){
   float diff = max(dot(n, l), 0.0);
   vec3 h = normalize(l + v);
   float spec = pow(max(dot(n, h), 0.0), 48.0);
-  col = col * (0.7 + 0.6 * diff) + vec3(1.0) * spec * 1.0 + base * fres * 0.8;
-  // glassy lift: brighten overall, keep saturation
-  col = pow(col, vec3(0.85));
+  // specular tinted (never pure white), rim in the palette colour, and the
+  // outermost silhouette fades toward black so the shape sits on a dark page
+  vec3 specCol = mix(vec3(1.0), base, 0.35);
+  float edge = smoothstep(0.0, 0.18, ndv);
+  col = col * (0.7 + 0.6 * diff) + specCol * spec * 0.8 + base * fres * 0.5;
+  col = pow(col, vec3(0.9));
+  col = mix(base * 0.25, col, edge);
+  col = min(col, vec3(1.0));
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -154,7 +161,7 @@ function makeGeometry(shape: Shape, hi: boolean): THREE.BufferGeometry {
   }
 }
 
-export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq = 1.6, amp = 0.22, hue = 0, speed = 1, className, style, paused }: MorphProps) {
+export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq = 1.6, amp = 0.22, hue = 0, speed = 1, className, style, paused, pointer }: MorphProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -171,6 +178,7 @@ export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq 
     renderer.setPixelRatio(dpr);
     renderer.setSize(size, size, false);
     renderer.setClearColor(0x000000, 0);
+    renderer.setClearAlpha(0);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 10);
@@ -208,8 +216,12 @@ export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq 
       if (!visible || paused) return;
       const t = ((performance.now() - start) / 1000) * speed;
       mat.uniforms.uTime.value = prefersReduced ? 0 : t;
-      mesh.rotation.y = prefersReduced ? 0.6 : t * 0.5;
-      mesh.rotation.x = prefersReduced ? 0.3 : Math.sin(t * 0.3) * 0.35;
+      const px = pointer?.current.x ?? 0;
+      const py = pointer?.current.y ?? 0;
+      mesh.rotation.y = (prefersReduced ? 0.6 : t * 0.5) + px * 0.9;
+      mesh.rotation.x = (prefersReduced ? 0.3 : Math.sin(t * 0.3) * 0.35) + py * 0.7;
+      const sc = 1 + (Math.abs(px) + Math.abs(py)) * 0.12;
+      mesh.scale.setScalar(sc);
       renderer.render(scene, camera);
     };
     tick();
@@ -221,7 +233,7 @@ export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq 
       mat.dispose();
       renderer.dispose();
     };
-  }, [size, shape, seed, freq, amp, hue, speed, paused]);
+  }, [size, shape, seed, freq, amp, hue, speed, paused, pointer]);
 
   return <canvas ref={ref} width={size} height={size} className={className} style={{ width: size, height: size, display: "block", ...style }} aria-hidden />;
 }

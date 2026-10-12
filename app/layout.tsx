@@ -3,6 +3,7 @@ import Sidebar from "./components/Sidebar";
 import ToolHeader from "./components/ToolHeader";
 import SessionProviderWrapper from "./components/SessionProviderWrapper";
 import "./globals.css";
+import { wordmarkFontsHref } from "@/lib/wordmarkFonts";
 
 // Neuron-style type: Fahkwang for headings/buttons, DM Sans for body.
 // Loaded as a stylesheet (not next/font) so the build never depends on
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={FONTS_HREF} />
+        <link rel="stylesheet" href={wordmarkFontsHref()} />
       </head>
       <body>
         <SessionProviderWrapper>

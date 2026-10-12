@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Table, type TableColumn } from "@/components/ui/table-editable";
@@ -154,22 +154,33 @@ function SeoStudio() {
   // panel). No Claude involved: Claude only writes text, the tool publishes.
   // Rows whose text breaks a hard brand rule are reported, not forced.
   const [confirmPublish, setConfirmPublish] = useState(false);
+  // Which rows the confirm overlay is about: all edited rows, or only the
+  // selected ones when the smart top button was used on a selection.
+  const [publishKeys, setPublishKeys] = useState<string[] | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number; action: "draft" | "publish"; current: string } | null>(null);
   async function saveDrafts() {
     return writeEdits("draft");
   }
-  async function writeEdits(action: "draft" | "publish") {
-    if (!items || dirtyKeys.length === 0) return;
+  // Refs so the memoised table cells (per-row Publish) always see the live
+  // list and edits, not the closure from the first render.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const dirtyRef = useRef(dirtyKeys);
+  dirtyRef.current = dirtyKeys;
+  async function writeEdits(action: "draft" | "publish", onlyKeys?: string[]) {
+    const items = itemsRef.current;
+    const keys = onlyKeys ?? dirtyRef.current;
+    if (!items || keys.length === 0) return;
     setConfirmPublish(false);
     setSaving(true);
     setNotice(null);
     const failures: string[] = [];
     let saved = 0;
     let n = 0;
-    for (const key of dirtyKeys) {
+    for (const key of keys) {
       const item = items.find((i) => rowKey(i) === key);
       if (!item) continue;
-      setProgress({ done: n++, total: dirtyKeys.length, action, current: item.internalTitle });
+      setProgress({ done: n++, total: keys.length, action, current: item.internalTitle });
       const en = merged(item, "en");
       const de = merged(item, "de");
       const hard = [
@@ -347,14 +358,28 @@ function SeoStudio() {
             >
               Edit
             </button>
-            <a
-              href={`/api/seo/handoff?collection=${r.item.collection}&id=${r.item.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded border border-border px-2 py-1 text-[11px] no-underline"
-            >
-              {r.missing ? "Generate" : "Regenerate"}
-            </a>
+            {r.dirty ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void writeEdits("publish", [r.key]);
+                }}
+                className="rounded border px-2 py-1 text-[11px]"
+                style={{ borderColor: "var(--accent)", background: "rgba(255,45,0,0.12)", color: "#fff" }}
+                title="Publish this row's edit now (publication date untouched)"
+              >
+                Publish
+              </button>
+            ) : (
+              <a
+                href={`/api/seo/handoff?collection=${r.item.collection}&id=${r.item.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded border border-border px-2 py-1 text-[11px] no-underline"
+              >
+                {r.missing ? "Generate" : "Regenerate"}
+              </a>
+            )}
           </span>
         ),
       },
@@ -382,24 +407,45 @@ function SeoStudio() {
       </p>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <a
-          href="/api/seo/handoff?missing=1"
-          target="_blank"
-          rel="noreferrer"
-          style={{ padding: "8px 14px", borderRadius: 6, background: missingCount ? "var(--accent)" : "#333", color: "#fff", fontSize: 13, whiteSpace: "nowrap", textDecoration: "none", pointerEvents: missingCount ? "auto" : "none" }}
-        >
-          Generate missing {items ? `(${missingCount} left${hasConnector ? ", all at once" : hasConnector === false ? ", 5 per round" : ""})` : ""}
-        </a>
-        {selectedIds.length > 0 && (
-          <a
-            href={`/api/seo/handoff?items=${encodeURIComponent(selectedParam)}`}
-            target="_blank"
-            rel="noreferrer"
-            style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--accent)", color: "var(--fg)", fontSize: 13, whiteSpace: "nowrap", textDecoration: "none" }}
-          >
-            Generate selected ({selectedIds.length})
-          </a>
-        )}
+        {/* Smart primary button: follows the journey.
+            nothing selected → Generate missing;
+            rows selected, none edited → Generate selected;
+            rows selected with edits → Publish selected (the edited ones). */}
+        {(() => {
+          const selectedDirty = selectedIds.filter((k) => dirtyKeys.includes(k));
+          const primary = { padding: "8px 14px", borderRadius: 6, background: "var(--accent)", color: "#fff", fontSize: 13, whiteSpace: "nowrap", textDecoration: "none", border: "none", cursor: "pointer" } as const;
+          if (selectedDirty.length > 0) {
+            return (
+              <button
+                onClick={() => {
+                  setPublishKeys(selectedDirty);
+                  setConfirmPublish(true);
+                }}
+                disabled={saving}
+                style={primary}
+              >
+                Publish selected ({selectedDirty.length} edited)
+              </button>
+            );
+          }
+          if (selectedIds.length > 0) {
+            return (
+              <a href={`/api/seo/handoff?items=${encodeURIComponent(selectedParam)}`} target="_blank" rel="noreferrer" style={primary}>
+                Generate selected ({selectedIds.length})
+              </a>
+            );
+          }
+          return (
+            <a
+              href="/api/seo/handoff?missing=1"
+              target="_blank"
+              rel="noreferrer"
+              style={{ ...primary, background: missingCount ? "var(--accent)" : "#333", pointerEvents: missingCount ? "auto" : "none" }}
+            >
+              Generate missing {items ? `(${missingCount} left${hasConnector ? ", all at once" : hasConnector === false ? ", 5 per round" : ""})` : ""}
+            </a>
+          );
+        })()}
         {dirtyKeys.length > 0 && (
           <>
             <button
@@ -410,7 +456,10 @@ function SeoStudio() {
               {saving ? "Saving…" : `Save ${dirtyKeys.length} draft${dirtyKeys.length === 1 ? "" : "s"}`}
             </button>
             <button
-              onClick={() => setConfirmPublish(true)}
+              onClick={() => {
+                setPublishKeys(null);
+                setConfirmPublish(true);
+              }}
               disabled={saving}
               style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--accent)", background: "none", color: "var(--fg)", fontSize: 13, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
             >
@@ -437,13 +486,13 @@ function SeoStudio() {
       </div>
 
       {confirmPublish && (
-        <Modal title={`Publish ${dirtyKeys.length} edited doc${dirtyKeys.length === 1 ? "" : "s"}?`} onClose={() => setConfirmPublish(false)} width={520}>
+        <Modal title={`Publish ${(publishKeys ?? dirtyKeys).length} edited doc${(publishKeys ?? dirtyKeys).length === 1 ? "" : "s"}?`} onClose={() => setConfirmPublish(false)} width={520}>
           <p style={{ fontSize: 13, margin: "0 0 14px", lineHeight: 1.6 }}>
             Writes the edited texts to the CMS and publishes them. Publication dates stay untouched. Texts that break a hard brand rule are skipped
             and listed afterwards.
           </p>
           <ul style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 12, color: "var(--muted)", maxHeight: 160, overflow: "auto" }}>
-            {dirtyKeys.map((k) => {
+            {(publishKeys ?? dirtyKeys).map((k) => {
               const it = items?.find((i) => rowKey(i) === k);
               return <li key={k}>{it?.internalTitle ?? k}</li>;
             })}
@@ -452,11 +501,11 @@ function SeoStudio() {
             <button className="btn" onClick={() => setConfirmPublish(false)}>
               Keep editing
             </button>
-            <button className="btn" onClick={() => writeEdits("draft")}>
+            <button className="btn" onClick={() => writeEdits("draft", publishKeys ?? undefined)}>
               Save as drafts
             </button>
-            <button className="btn btn-primary" onClick={() => writeEdits("publish")}>
-              Publish all edited
+            <button className="btn btn-primary" onClick={() => writeEdits("publish", publishKeys ?? undefined)}>
+              {publishKeys ? `Publish ${publishKeys.length} selected` : "Publish all edited"}
             </button>
           </div>
         </Modal>
@@ -506,6 +555,7 @@ function SeoStudio() {
                 disabled={dirtyKeys.length === 0}
                 onClick={() => {
                   setSrOpen(false);
+                  setPublishKeys(null);
                   setConfirmPublish(true);
                 }}
               >

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import HomeBackground, { useBackgroundChoice } from "./components/HomeBackground";
 import HomeFooter from "./components/HomeFooter";
-import MorphIcon, { MORPH_PRESETS } from "./components/MorphIcon";
+import HomeTile from "./components/HomeTile";
 import SuggestionTile from "./components/SuggestionTile";
+import Wordmark from "./components/Wordmark";
 
 type Status = "working" | "staging" | "planned";
 
@@ -74,27 +75,7 @@ export default function Home() {
         />
       </div>
 
-      {/* Typographic logo, exactly as wide as the tile grid below */}
-      <h1 aria-label="AF1 Ktulu" style={{ margin: "26px 0 6px" }}>
-        <svg viewBox="0 0 1000 150" width="100%" height="auto" style={{ display: "block", overflow: "visible" }}>
-          <text
-            x="0"
-            y="118"
-            textLength="960"
-            lengthAdjust="spacingAndGlyphs"
-            fontFamily="ui-monospace, Menlo, Consolas, monospace"
-            fontWeight="600"
-            fontSize="150"
-            fill="#fff"
-            style={{ filter: "drop-shadow(0 2px 24px rgba(0,0,0,0.8))" }}
-          >
-            AF1<tspan fill="var(--accent)">-</tspan>KTULU
-          </text>
-          <text x="975" y="60" fontFamily="ui-monospace, Menlo, Consolas, monospace" fontSize="56" fill="var(--vapor-rose)">
-            *
-          </text>
-        </svg>
-      </h1>
+      <Wordmark />
       <div
         aria-hidden
         style={{
@@ -114,55 +95,10 @@ export default function Home() {
         Internal tools for audif1.com
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 30 }}>
-        {TILES.map((t) => {
-          const s = STATUS[t.status];
-          const preset = MORPH_PRESETS[t.key] ?? {};
-          const inner = (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                <span style={{ fontWeight: 600, fontSize: 15, display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-heading)" }}>
-                  <MorphIcon size={40} {...preset} />
-                  {t.title}
-                  {t.external && <span style={{ opacity: 0.5, fontSize: 12, marginLeft: 2 }}>↗</span>}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    padding: "2px 8px",
-                    borderRadius: 999,
-                    background: s.bg,
-                    color: s.fg,
-                    border: `1px solid ${s.border}`,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {s.label}
-                </span>
-              </div>
-              <div style={{ fontSize: 13, opacity: 0.7, lineHeight: 1.55, marginTop: 8 }}>{t.text}</div>
-            </>
-          );
-          const style = {
-            display: "block",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: "14px 16px",
-            background: "rgba(8,8,14,0.8)",
-            backdropFilter: "blur(2px)",
-            textDecoration: "none",
-            color: "inherit",
-          } as const;
-          return t.external ? (
-            <a key={t.title} href={t.href} target="_blank" rel="noreferrer" style={style} className="home-tile">
-              {inner}
-            </a>
-          ) : (
-            <Link key={t.title} href={t.href} style={style} className="home-tile">
-              {inner}
-            </Link>
-          );
-        })}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "1fr", gap: 22, marginTop: 44 }}>
+        {TILES.map((t) => (
+          <HomeTile key={t.key} title={t.title} href={t.href} tileKey={t.key} external={t.external} status={STATUS[t.status]} text={t.text} />
+        ))}
         <SuggestionTile />
       </div>
 
@@ -172,7 +108,7 @@ export default function Home() {
           color: "rgba(245,245,245,0.8)",
           lineHeight: 1.7,
           margin: "28px auto 0",
-          maxWidth: 640,
+          maxWidth: "100%",
           textAlign: "center",
           background: "rgba(4,6,14,0.7)",
           border: "1px solid var(--border)",
