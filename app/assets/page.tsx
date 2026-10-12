@@ -130,7 +130,13 @@ export default function NewBatchPage() {
     try {
       if (!parentId) {
         const galleries = await fetch("/api/assets/folders").then((r) => r.json());
-        const root = (galleries.folders ?? []).find((f: { path: string }) => f.path === "10_Media-Galleries");
+        let root = (galleries.folders ?? []).find((f: { path: string }) => f.path === "10_Media-Galleries");
+        if (!root) {
+          // staging may not have the galleries root yet: create it, same name as production
+          const made = await fetch("/api/assets/folders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "10_Media-Galleries", parent: null }) }).then((x) => x.json());
+          if (!made.folder) throw new Error(made.error ?? "could not create 10_Media-Galleries");
+          root = made.folder;
+        }
         const name = `${race.year}_R${String(race.round).padStart(2, "0")}_${race.loc}-GP`;
         const r = await fetch("/api/assets/folders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, parent: root?.id ?? null }) }).then((x) => x.json());
         if (!r.folder) throw new Error(r.error ?? "could not create the round folder");
