@@ -31,7 +31,11 @@ export default function Sidebar() {
         flexDirection: "column",
       }}
     >
-      <div style={{ fontWeight: 600, marginBottom: 24 }}>AF1 Tools</div>
+      <Link href="/" style={{ fontWeight: 600, marginBottom: 24, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icon.svg" alt="" width={20} height={20} style={{ borderRadius: 4 }} />
+        AF1 Ktulu
+      </Link>
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
         {TOOLS.map((tool) => (
           <li key={tool.href}>

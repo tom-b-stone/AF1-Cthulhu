@@ -1,40 +1,96 @@
 import Link from "next/link";
 import KtuluLogo from "./components/KtuluLogo";
 
+type Status = "working" | "staging" | "planned";
+
+const STATUS: Record<Status, { label: string; bg: string; fg: string }> = {
+  working: { label: "working", bg: "#1e3a24", fg: "#6fcf7c" },
+  staging: { label: "working · staging", bg: "#1e3a24", fg: "#6fcf7c" },
+  planned: { label: "planned", bg: "#333", fg: "#bbb" },
+};
+
+const TILES: { title: string; href: string; external?: boolean; status: Status; text: string }[] = [
+  {
+    title: "UTM Studio",
+    href: "https://utm-studio-two.vercel.app",
+    external: true,
+    status: "working",
+    text: "Build and tag campaign links. Still its own app — opens in a new tab until it moves in here.",
+  },
+  {
+    title: "SEO Studio",
+    href: "/seo",
+    status: "staging",
+    text: "Meta titles and descriptions for every news article and page, EN and DE. Generate with your own Claude, publish with the date untouched.",
+  },
+  {
+    title: "Asset Uploader",
+    href: "/assets",
+    status: "planned",
+    text: "Compress an image, pick a Payload media folder, upload, write the alt text.",
+  },
+  {
+    title: "CRM Images",
+    href: "/images",
+    status: "planned",
+    text: "Cropped, rounded-corner variants for the CRM email templates, ready to download.",
+  },
+  {
+    title: "Claude connector",
+    href: "/connector",
+    status: "working",
+    text: "Let your own Claude use these tools directly. One-minute setup, once per person.",
+  },
+];
+
 export default function Home() {
   return (
-    <div style={{ maxWidth: 820 }}>
-      <KtuluLogo height={280} />
+    <div style={{ maxWidth: 880 }}>
+      <KtuluLogo height={320} />
 
-      <div style={{ display: "flex", gap: 24, alignItems: "flex-start", marginTop: 20, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 320px" }}>
-          <h1 style={{ marginTop: 0, marginBottom: 6 }}>AF1 Ktulu</h1>
-          <p style={{ marginTop: 0 }}>Internal tool shell for audif1.com — pick a tool from the sidebar.</p>
-          <ul>
-            <li><strong>UTM Studio</strong> — link builder (to be migrated in here)</li>
-            <li><strong>SEO Studio</strong> — edit Payload meta titles/descriptions for news &amp; pages</li>
-            <li><strong>Asset Uploader</strong> — compress, pick a folder, upload to Payload media, write alt text</li>
-            <li><strong>CRM Images</strong> — generate cropped, rounded-corner image variants for CRM templates</li>
-          </ul>
-        </div>
+      <p style={{ fontSize: 13, opacity: 0.65, lineHeight: 1.65, marginTop: 16, maxWidth: 720 }}>
+        <strong style={{ opacity: 1 }}>Ktulu</strong> <span style={{ opacity: 0.7 }}>(n.)</span> — short, simplified
+        spelling of <em>Cthulhu</em>: an ancient, god-like cosmic entity that sleeps in the sunken city of
+        R&apos;lyeh. It reaches into the dreams of humans and is worshipped by a cult spread across the world. Its
+        existence exceeds human understanding, and those who witness it are often driven to madness. Here: a box
+        of tools that quietly reaches into every entry of the CMS.
+      </p>
 
-        <aside style={{ flex: "1 1 260px", fontSize: 12, opacity: 0.6, lineHeight: 1.6, borderLeft: "1px solid var(--border)", paddingLeft: 16 }}>
-          <div style={{ fontWeight: 600, opacity: 0.9, marginBottom: 4 }}>Why &ldquo;Ktulu&rdquo;</div>
-          In H. P. Lovecraft&apos;s 1928 story, Cthulhu is an ancient, god-like cosmic being asleep in the sunken city
-          of R&apos;lyeh. It reaches into people&apos;s dreams and is worshipped by a cult spread across the world; its very
-          existence is beyond human understanding, and those who glimpse it tend to lose their minds. &ldquo;Ktulu&rdquo; is
-          the simplified spelling Metallica used for their 1984 instrumental, because the original is hard to say
-          and harder to spell. For a box of tools that quietly reaches into every CMS entry, it felt about right.
-        </aside>
-      </div>
-
-      <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: "12px 16px", marginTop: 24, fontSize: 13 }}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>Claude connector</div>
-        <div style={{ opacity: 0.75, lineHeight: 1.6 }}>
-          Let your own Claude use these tools directly, so &quot;Generate SEO title&quot; ends with Claude publishing — no
-          link to click. One-minute setup, once per person.{" "}
-          <Link href="/connector">Set it up →</Link>
-        </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12, marginTop: 24 }}>
+        {TILES.map((t) => {
+          const s = STATUS[t.status];
+          const inner = (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontWeight: 600, fontSize: 15 }}>
+                  {t.title}
+                  {t.external && <span style={{ opacity: 0.5, fontSize: 12, marginLeft: 6 }}>↗</span>}
+                </span>
+                <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: s.bg, color: s.fg, whiteSpace: "nowrap" }}>
+                  {s.label}
+                </span>
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.7, lineHeight: 1.55, marginTop: 8 }}>{t.text}</div>
+            </>
+          );
+          const style = {
+            display: "block",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "14px 16px",
+            textDecoration: "none",
+            color: "inherit",
+          } as const;
+          return t.external ? (
+            <a key={t.title} href={t.href} target="_blank" rel="noreferrer" style={style}>
+              {inner}
+            </a>
+          ) : (
+            <Link key={t.title} href={t.href} style={style}>
+              {inner}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

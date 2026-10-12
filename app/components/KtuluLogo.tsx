@@ -3,16 +3,18 @@
 import { useEffect, useRef } from "react";
 
 // Animated ASCII "Ktulu" mark for the dashboard. Pure WebGL, no libraries:
-// a fragment shader draws a procedural Cthulhu-ish figure (dome, glowing
-// eyes, swaying tentacles, wings) as signed distance fields, then
+// a fragment shader draws a procedural Cthulhu-ish figure (ridged dome,
+// glowing eyes with pupils, nine swaying suckered tentacles, veined wings,
+// clawed arms) as signed distance fields with noise shading, then
 // ASCII-fies it the classic way — the screen is split into character
 // cells, each cell's brightness picks a glyph from an atlas sorted by ink
-// density (" .:-=+*#%@"), and the glyph is drawn in the cell. Same idea
-// as three.js's AsciiEffect / the usual Shadertoy ASCII post-process,
-// just self-contained. Original figure, not a copy of any existing art.
+// density, and the glyph is drawn in the cell. Same idea as three.js's
+// AsciiEffect / the usual Shadertoy ASCII post-process, self-contained.
+// Original figure, not a copy of any existing art.
 
-const GLYPHS = " .:-=+*#%@";
-const CELL = 8; // px per character cell (atlas glyph size)
+// 70-step density ramp (the classic one), light → dark.
+const GLYPHS = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+const CELL = 7; // px per character cell
 
 const VERT = `
 attribute vec2 p;
@@ -35,6 +37,11 @@ float noise(vec2 p){
   f = f*f*(3.0-2.0*f);
   return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
 }
+float fbm(vec2 p){
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 4; i++) { v += a * noise(p); p = p * 2.1 + 17.0; a *= 0.5; }
+  return v;
+}
 float sdCircle(vec2 p, float r){ return length(p) - r; }
 float sdEllipse(vec2 p, vec2 r){ return (length(p / r) - 1.0) * min(r.x, r.y); }
 float sdSeg(vec2 p, vec2 a, vec2 b, float w){
@@ -53,84 +60,125 @@ float sdTri(vec2 p, vec2 a, vec2 b, vec2 c){
 }
 float smin(float a, float b, float k){ float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0); return mix(b, a, h) - k*h*(1.0-h); }
 
-// A tentacle: a chain of short segments hanging from (x0, y0), swaying.
-float tentacle(vec2 p, float x0, float y0, float len, float phase, float t){
-  float d = 1e9;
+// Tentacle: a chain of segments hanging from (x0,y0), swaying with two
+// frequencies, tapering, with a sucker channel returned via suck.
+float tentacle(vec2 p, float x0, float y0, float len, float phase, float t, out float suck){
+  float d = 1e9; suck = 1e9;
   vec2 a = vec2(x0, y0);
-  float w = 0.075;
-  for (int i = 0; i < 6; i++) {
+  float w = 0.07;
+  for (int i = 0; i < 8; i++) {
     float fi = float(i);
-    float sway = sin(t*1.3 + phase + fi*0.9) * 0.07 * (fi+1.0) / 6.0 * len * 10.0;
-    vec2 b = vec2(x0 + sway, y0 - len * (fi+1.0) / 6.0);
+    float k = (fi+1.0) / 8.0;
+    float sway = (sin(t*1.1 + phase + fi*0.7) * 0.06 + sin(t*2.3 + phase*1.7 + fi*1.3) * 0.02) * k * k * 9.0 * len;
+    vec2 b = vec2(x0 + sway, y0 - len * k);
     d = min(d, sdSeg(p, a, b, w));
-    a = b; w *= 0.82;
+    // suckers: small discs along the inner side
+    vec2 m = mix(a, b, 0.5);
+    suck = min(suck, sdCircle(p - m - vec2(w*0.55, 0.0), w*0.3));
+    a = b; w *= 0.84;
   }
   return d;
 }
 
-// Scene brightness 0..1 for a point in centred, aspect-corrected space.
 vec3 scene(vec2 p, float t){
-  // breathing
-  p.y -= sin(t*0.8) * 0.012;
+  p.y -= sin(t*0.8) * 0.012; // breathing
 
-  // wings (behind everything)
-  float wl = sdTri(p, vec2(-0.05, 0.05), vec2(-0.95, 0.55), vec2(-0.62, -0.25));
-  float wr = sdTri(p, vec2( 0.05, 0.05), vec2( 0.95, 0.55), vec2( 0.62, -0.25));
-  float wings = min(wl, wr);
-  // membrane ribs
-  float ribs = 0.5 + 0.5*sin(atan(p.y-0.05, abs(p.x)-0.05)*14.0);
-
-  // head dome + cheeks
-  float head = sdEllipse(p - vec2(0.0, 0.22), vec2(0.36, 0.34));
-  head = smin(head, sdEllipse(p - vec2(0.0, 0.02), vec2(0.42, 0.2)), 0.12);
-  // body
-  float body = sdEllipse(p - vec2(0.0, -0.5), vec2(0.26, 0.22));
-  float fig = smin(head, body, 0.2);
-
-  // tentacles from the lower face
-  float ten = 1e9;
-  for (int i = 0; i < 5; i++) {
+  // --- wings: membrane + finger bones ---
+  vec2 q = vec2(abs(p.x), p.y);
+  float mem = sdTri(q, vec2(0.08, 0.1), vec2(1.15, 0.72), vec2(0.78, -0.3));
+  float bone = 1e9;
+  for (int i = 0; i < 4; i++) {
     float fi = float(i);
-    float x0 = -0.28 + fi * 0.14;
-    ten = min(ten, tentacle(p, x0, -0.02 - abs(x0)*0.35, 0.55 + 0.1*sin(fi*2.1), fi*1.7, t));
+    vec2 tip = mix(vec2(1.15, 0.72), vec2(0.78, -0.3), fi / 3.0);
+    bone = min(bone, sdSeg(q, vec2(0.08, 0.1), tip, 0.012));
   }
-  fig = smin(fig, ten, 0.05);
+  float veins = 0.5 + 0.5*sin(atan(q.y-0.1, q.x-0.08)*26.0 + fbm(q*6.0)*4.0);
+  float memA = 1.0 - smoothstep(-0.005, 0.02, mem);
+  float wingTex = 0.22 + 0.25*veins + 0.2*fbm(q*5.0 + t*0.05);
+  float boneA = 1.0 - smoothstep(-0.005, 0.01, bone);
+  float wings = max(memA * wingTex, boneA * 0.9);
 
-  // eyes
-  float el = sdCircle(p - vec2(-0.15, 0.27), 0.06);
-  float er = sdCircle(p - vec2( 0.15, 0.27), 0.06);
-  float eyes = min(el, er);
+  // --- head: dome with ridges, brow, cheeks ---
+  float ridge = fbm(vec2(p.x*7.0, p.y*3.0 + t*0.03)) * 0.05;
+  float head = sdEllipse(p - vec2(0.0, 0.27), vec2(0.38, 0.36)) + ridge;
+  head = smin(head, sdEllipse(p - vec2(0.0, 0.05), vec2(0.46, 0.2)), 0.12);
+  float brow = sdSeg(p, vec2(-0.28, 0.36), vec2(0.28, 0.36), 0.035);
+  head = smin(head, brow, 0.06);
 
-  // shading: soft edge + surface noise so the ASCII has texture
-  float n = noise(p*9.0 + vec2(0.0, -t*0.25)) * 0.35 + noise(p*23.0 + t*0.1) * 0.15;
-  float figA = 1.0 - smoothstep(-0.02, 0.02, fig);
-  float wingA = (1.0 - smoothstep(-0.01, 0.02, wings)) * (0.35 + 0.4*ribs);
-  float light = clamp(0.8 + 0.3*(p.y + 0.3) - n*0.8, 0.3, 1.0);
+  // --- body, shoulders, arms with claws ---
+  float body = sdEllipse(p - vec2(0.0, -0.55), vec2(0.3, 0.28));
+  float shoulders = sdEllipse(p - vec2(0.0, -0.25), vec2(0.55, 0.12));
+  float arms = 1e9;
+  for (int s = 0; s < 2; s++) {
+    float sx = s == 0 ? -1.0 : 1.0;
+    vec2 sh = vec2(sx*0.5, -0.25);
+    vec2 el = vec2(sx*0.72, -0.55 + 0.02*sin(t*1.5 + sx));
+    vec2 ha = vec2(sx*0.62, -0.85 + 0.02*sin(t*1.2));
+    arms = min(arms, sdSeg(p, sh, el, 0.07));
+    arms = min(arms, sdSeg(p, el, ha, 0.055));
+    for (int c = 0; c < 3; c++) {
+      float fc = float(c) - 1.0;
+      vec2 tip = ha + vec2(sx*(0.1 + 0.06*fc), -0.14 + 0.04*abs(fc));
+      arms = min(arms, sdSeg(p, ha, tip, 0.016));
+    }
+  }
+  float fig = smin(head, shoulders, 0.15);
+  fig = smin(fig, body, 0.2);
+  fig = min(fig, arms);
 
-  float b = max(figA * light, wingA * (1.0 - figA));
-  // eye glow, pulsing
-  float glow = exp(-max(eyes, 0.0) * 34.0) * (0.8 + 0.2*sin(t*2.2));
+  // --- nine tentacles from the lower face ---
+  float ten = 1e9, suckAll = 1e9;
+  for (int i = 0; i < 9; i++) {
+    float fi = float(i);
+    float x0 = -0.32 + fi * 0.08;
+    float s;
+    ten = min(ten, tentacle(p, x0, 0.0 - abs(x0)*0.4, 0.62 + 0.12*sin(fi*2.1), fi*1.7, t, s));
+    suckAll = min(suckAll, s);
+  }
+  fig = smin(fig, ten, 0.04);
+
+  // --- eyes: lid shape, iris glow, dark pupil ---
+  vec2 pe = vec2(abs(p.x) - 0.15, p.y - 0.28);
+  float eye = sdEllipse(pe, vec2(0.075, 0.05));
+  float pupil = sdEllipse(pe - vec2(0.0, -0.005), vec2(0.018, 0.04));
+
+  // --- shading ---
+  float skin = fbm(p*14.0 + vec2(0.0, -t*0.2)) * 0.45 + noise(p*40.0) * 0.12;
+  float figA = 1.0 - smoothstep(-0.015, 0.015, fig);
+  float lightDir = clamp(0.95 + 0.25*(p.y + 0.2) - 0.25*p.x - skin*0.9, 0.18, 1.0);
+  // rim light along the silhouette
+  float rim = (1.0 - smoothstep(0.0, 0.05, abs(fig))) * 0.35;
+  float suckA = 1.0 - smoothstep(-0.002, 0.006, suckAll);
+  float b = figA * lightDir + rim;
+  b = mix(b, b*0.35, suckA * figA);
+  b = max(b, wings * (1.0 - figA));
+
+  // faint fog behind everything
+  float fog = fbm(p*2.5 + vec2(t*0.04, 0.0)) * 0.035 * (1.0 - figA) * (1.0 - memA);
+  b = max(b, fog);
+
   vec3 col = u_fg * b;
-  col = mix(col, u_eye * 1.3, clamp(glow, 0.0, 1.0));
+  float glow = exp(-max(eye, 0.0) * 40.0) * (0.85 + 0.15*sin(t*2.2));
+  col = mix(col, u_eye * 1.35, clamp(glow, 0.0, 1.0));
+  col *= 1.0 - 0.85 * (1.0 - smoothstep(-0.002, 0.006, pupil));
   return col;
 }
 
 void main(){
   vec2 cell = floor(gl_FragCoord.xy / u_cell);
   vec2 cellCentre = (cell + 0.5) * u_cell;
-  vec2 p = (cellCentre - 0.5*u_res) / min(u_res.x, u_res.y) * 1.55;
+  vec2 p = (cellCentre - 0.5*u_res) / min(u_res.x, u_res.y) * 2.15 + vec2(0.0, 0.12);
 
   vec3 col = scene(p, u_t);
   float lum = max(dot(col, vec3(0.299, 0.587, 0.114)), col.r * 0.9);
 
-  // pick glyph by brightness, draw it from the atlas
   float idx = floor(clamp(lum, 0.0, 0.999) * u_glyphs);
   vec2 inCell = fract(gl_FragCoord.xy / u_cell);
   vec2 uv = vec2((idx + inCell.x) / u_glyphs, inCell.y);
   float ink = texture2D(u_atlas, uv).r;
 
   vec3 tint = lum > 0.0 ? col / max(lum, 1e-3) : u_fg;
-  gl_FragColor = vec4(tint * ink * clamp(lum*1.4 + 0.35, 0.0, 1.0), 1.0);
+  gl_FragColor = vec4(tint * ink * clamp(lum*1.3 + 0.4, 0.0, 1.0), 1.0);
 }
 `;
 
@@ -142,7 +190,7 @@ function makeAtlas(): HTMLCanvasElement {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.fillStyle = "#fff";
-  ctx.font = `${CELL}px ui-monospace, Menlo, Consolas, monospace`;
+  ctx.font = `${CELL + 1}px ui-monospace, Menlo, Consolas, monospace`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
   for (let i = 0; i < GLYPHS.length; i++) {
@@ -151,7 +199,7 @@ function makeAtlas(): HTMLCanvasElement {
   return c;
 }
 
-export default function KtuluLogo({ height = 260 }: { height?: number }) {
+export default function KtuluLogo({ height = 300 }: { height?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -195,13 +243,12 @@ export default function KtuluLogo({ height = 260 }: { height?: number }) {
     gl.uniform1i(u("u_atlas"), 0);
     gl.uniform1f(u("u_glyphs"), GLYPHS.length);
     gl.uniform1f(u("u_cell"), CELL);
-    gl.uniform3f(u("u_fg"), 0.78, 0.8, 0.76); // ash grey, reads as "paper" ASCII
-    gl.uniform3f(u("u_eye"), 1.0, 0.27, 0.1); // the accent red
+    gl.uniform3f(u("u_fg"), 0.8, 0.82, 0.78);
+    gl.uniform3f(u("u_eye"), 1.0, 0.27, 0.1);
 
     const resize = () => {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
-      // Render 1:1 in CSS pixels so a cell stays a crisp CELL×CELL block.
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
