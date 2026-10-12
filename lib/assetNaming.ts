@@ -108,8 +108,9 @@ export function validateAlt(alt: string): string[] {
   if (!alt.trim()) issues.push("Alt text is empty");
   if (alt.length > ALT_MAX) issues.push(`Alt text is ${alt.length} chars (max ${ALT_MAX})`);
   if (/—/.test(alt)) issues.push("Em-dash not allowed");
-  if (/\bAudi F1 Team\b|\bAF1 Team\b|Audi-F1/.test(alt)) issues.push('Use "Audi Revolut F1® Team"');
-  if (/Audi Revolut F1 Team(?!®)/.test(alt) && !/F1® Team/.test(alt)) issues.push("Missing ® after F1");
+  // Team name: exactly "Audi Revolut F1® Team", nothing else, ever.
+  if (/\bAudi F1 Team\b|\bAF1 Team\b|\bAF1\b|Audi-F1|\bARF1T\b|\bAudi Revolut Team\b|\bAudi F1\b(?! ®)/.test(alt)) issues.push('Team name is only "Audi Revolut F1® Team"');
+  if (/Audi Revolut F1 Team/.test(alt)) issues.push('Missing ® : "Audi Revolut F1® Team"');
   if (/Hülkenberg|Huelkenberg/.test(alt)) issues.push('Use "Nico Hulkenberg" (no umlaut in English alt text)');
   return issues;
 }

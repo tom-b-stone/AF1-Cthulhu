@@ -23,7 +23,7 @@ export type KnowledgeEntry = {
 
 export const SEED_KNOWLEDGE: KnowledgeEntry[] = [
   // ---- team naming, set in stone
-  { id: "team", kind: "term", name: "Audi Revolut F1® Team", de: "Audi Revolut F1® Team", aliases: ["Audi F1 Team", "AF1 Team", "Audi Revolut F1 Team", "Audi-F1", "ARF1T"], note: "Always with the ® after F1. Never shortened. Same in German.", active: true },
+  { id: "team", kind: "term", name: "Audi Revolut F1® Team", de: "Audi Revolut F1® Team", aliases: ["Audi F1 Team", "Audi F1", "AF1 Team", "AF1", "Audi Revolut F1 Team", "Audi Revolut Team", "Audi-F1", "ARF1T", "Audi team", "the Audi team", "Sauber"], note: "The only way to write the team name, in every language: 'Audi Revolut F1® Team', with the ®. No short forms, no abbreviations, no 'Audi F1', no 'AF1', no 'the Audi team'. Every alt text that mentions the team uses the full name once.", active: true },
   { id: "car", kind: "term", name: "Audi R26", aliases: ["R26", "the car", "the R26"], note: "The 2026 car. 'Audi R26' on first mention in an alt text, 'R26' after. Never 'A26' or 'R-26'.", active: true },
   { id: "f1", kind: "term", name: "F1®", aliases: ["F1", "Formula 1", "Formula One"], note: "F1® and Formula 1® carry the mark. 'Grand Prix' written out; 'GP' only inside file names.", active: true },
   { id: "revolut", kind: "term", name: "Revolut", note: "Partner; on the site 'the official Audi Revolut F1® Team money app'. 'Revolut' alone when it means the partner, never 'Revolute'.", active: true },
