@@ -1,12 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import JSZip from "jszip";
 import { Table, type TableColumn } from "@/components/ui/table-editable";
 import { batchStore, type AssetRow, type Batch } from "@/lib/batchStore";
 import { fmtBytes } from "@/lib/imageCompress";
-import { ALT_MAX, CONTEXTS, cleanDescriptor, proposeFileName, validateAlt, type Context } from "@/lib/assetNaming";
+import { ALT_MAX, CONTEXTS, cleanDescriptor, descriptorFromAlt, knowledgeIssues, proposeFileName, validateAlt, type Context } from "@/lib/assetNaming";
+import type { KnowledgeEntry } from "@/lib/teamKnowledge";
+import FolderPicker from "@/app/components/FolderPicker";
+import Modal from "@/app/components/Modal";
+import { SideButton, SideSection, useSidebarContent } from "@/app/components/SidebarSlot";
+import Steps from "@/app/components/Steps";
+import TagPicker from "@/app/components/TagPicker";
+import { SCENE_TAGS, isPersonTag, proposeBatchTags, proposeRowTags, tagIssues, uniqueTags, type ContentTag } from "@/lib/contentTags";
+import { compressImage } from "@/lib/imageCompress";
 
 type Row = AssetRow & { key: string; thumb?: string; issues: string[]; nn: number };
 
@@ -17,6 +25,101 @@ export default function BatchPage() {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pickFolder, setPickFolder] = useState(false);
+  const [confirmUpload, setConfirmUpload] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [dialogRow, setDialogRow] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [teachPerson, setTeachPerson] = useState("");
+  const [teachNote, setTeachNote] = useState("");
+  const [teaching, setTeaching] = useState(false);
+  // Claude hand-off: previews + meta go to the server, claude.ai opens with
+  // the prompt, and this page polls the server copy until every alt text
+  // is back (or 15 minutes pass).
+  const [gen, setGen] = useState<{ phase: "sync" | "waiting" | "api"; done: number; total: number; got: number; failed?: number } | null>(null);
+  const [apiMode, setApiMode] = useState<{ configured: boolean; model: string | null } | null>(null);
+  const stopRef = useRef(false);
+  useEffect(() => {
+    fetch("/api/assets/generate")
+      .then((r) => r.json())
+      .then((j) => setApiMode({ configured: Boolean(j.configured), model: j.model ?? null }))
+      .catch(() => setApiMode({ configured: false, model: null }));
+  }, []);
+  const [hasConnector, setHasConnector] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch("/api/connector")
+      .then((r) => r.json())
+      .then((j) => setHasConnector(Boolean(j.active)))
+      .catch(() => setHasConnector(false));
+  }, []);
+  const [knowledge, setKnowledge] = useState<KnowledgeEntry[]>([]);
+  // content tags: the staging vocabulary (titles are the identity)
+  const [tags, setTags] = useState<ContentTag[] | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const tagTitles = useMemo(() => (tags ?? []).map((t) => t.title), [tags]);
+  // Arriving from Claude's "Back to the batch" link (?step=3): pull what
+  // Claude wrote on the server into the local rows once, then show step 3.
+  const [synced, setSynced] = useState(false);
+  useEffect(() => {
+    if (!batch || synced || tags === null) return;
+    if (!new URLSearchParams(window.location.search).has("step")) return;
+    setSynced(true);
+    (async () => {
+      try {
+        const srv = await fetch(`/api/assets/batch/${batch.id}`).then((r) => r.json());
+        if (!srv?.rows) return;
+        let n = 0;
+        const rows = batch.rows.map((r) => {
+          const sr = srv.rows.find((x: { id: string }) => x.id === r.id);
+          if (!sr?.alt || r.alt.trim()) return r;
+          n++;
+          const proposed = proposeRowTags({ people: sr.people, scene: sr.scene }, tagTitles);
+          return { ...r, alt: sr.alt, descriptor: sr.descriptor || r.descriptor, people: sr.people ?? r.people, scene: sr.scene ?? r.scene, tags: uniqueTags(r.tags, proposed), ai: { people: sr.people ?? [], scene: sr.scene, tags: proposed } };
+        });
+        if (n) {
+          await save({ ...batch, rows });
+          setNotice(`Picked up ${n} alt text${n === 1 ? "" : "s"} written by Claude. Check them, then upload.`);
+        }
+        document.getElementById("batch-steps")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {
+        /* ignore */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch?.id, tags]);
+  useEffect(() => {
+    fetch("/api/assets/tags")
+      .then((r) => r.json())
+      .then((j) => setTags(j.tags ?? []))
+      .catch(() => setTags([]));
+  }, []);
+  // first time a batch meets the vocabulary: propose year + GP + day + session
+  useEffect(() => {
+    if (!batch || !tags || batch.tags !== undefined) return;
+    const proposed = proposeBatchTags({ year: batch.year, loc: batch.loc, race: batch.race, session: batch.session }, tagTitles);
+    void save({ ...batch, tags: proposed });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch?.id, tags]);
+  async function createTag(title: string): Promise<ContentTag | null> {
+    const j = await fetch("/api/assets/tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) }).then((r) => r.json());
+    if (j.tags) setTags(j.tags);
+    if (!j.tag) setNotice(`Couldn't create the tag: ${j.error ?? "unknown error"}`);
+    return j.tag ?? null;
+  }
+  async function seedTags() {
+    setSeeding(true);
+    const j = await fetch("/api/assets/tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ seed: true }) }).then((r) => r.json());
+    setSeeding(false);
+    if (j.tags) setTags(j.tags);
+    setNotice(j.ok ? `Done. ${j.created.length} production tags created on staging, ${j.skipped} were there already.` : `Import failed: ${j.error ?? "unknown error"}`);
+  }
+  useEffect(() => {
+    fetch("/api/assets/knowledge")
+      .then((r) => r.json())
+      .then((j) => setKnowledge(j.entries ?? []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +156,7 @@ export default function BatchPage() {
         merged.fileName = proposeFileName({
           year: batch.year,
           loc: batch.loc,
-          context: merged.context as Context,
+          context: merged.context as Context | "",
           descriptor: merged.descriptor,
           nn: i + 1,
           ext: merged.mime === "image/webp" ? "webp" : "jpg",
@@ -71,9 +174,14 @@ export default function BatchPage() {
         key: r.id,
         nn: i + 1,
         thumb: thumbs[r.id],
-        issues: [...validateAlt(r.alt), ...(r.descriptor && cleanDescriptor(r.descriptor) !== r.descriptor ? ["Descriptor was normalised"] : [])],
+        issues: [
+          ...validateAlt(r.alt),
+          ...knowledgeIssues(r.alt, knowledge),
+          ...(r.descriptor && cleanDescriptor(r.descriptor) !== r.descriptor ? ["Descriptor was normalised"] : []),
+          ...(tags ? tagIssues(batch?.tags ?? [], r.tags ?? [], { isGp: Boolean(batch?.round) }) : []),
+        ],
       })),
-    [batch, thumbs]
+    [batch, thumbs, knowledge, tags]
   );
 
   const columns = useMemo<TableColumn<Row>[]>(
@@ -111,51 +219,113 @@ export default function BatchPage() {
           </span>
         ),
       },
-      {
-        key: "context",
-        header: "Context",
-        width: "110px",
-        cell: (r) => (
-          <select value={r.context} onChange={(e) => updateRow(r.id, { context: e.target.value })} className="input" style={{ padding: "3px 6px", fontSize: 12, width: "100%" }}>
-            {CONTEXTS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        ),
-      },
       { key: "descriptor", header: "Descriptor", width: "1fr", editable: true },
       {
         key: "fileName",
         header: "File name",
         width: "260px",
         cell: (r) => (
-          <span className="block truncate" title={r.fileName} style={{ fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12 }}>
-            {r.fileName}
-          </span>
+          r.descriptor ? (
+            <span className="block truncate" title={`${r.fileName} · final number set at upload`} style={{ fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12 }}>
+              {r.fileName.replace(/_\d{2,3}(\.[a-z0-9]+)$/i, "_nn$1")}
+            </span>
+          ) : (
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>named after the alt text</span>
+          )
         ),
       },
       { key: "alt", header: "Alt text (EN)", width: "1.6fr", editable: true },
       {
+        key: "tags",
+        header: "Tags (this image)",
+        width: "260px",
+        cell: (r) =>
+          tags ? (
+            <div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: "100%" }}>
+              <TagPicker value={r.tags ?? []} available={tags} onChange={(next) => setRowTags(r.id, next)} onCreate={createTag} compact placeholder={`+ tag (${batch?.tags?.length ?? 0} from batch)`} onOpenChange={setPickerOpen} />
+            </div>
+          ) : (
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>…</span>
+          ),
+      },
+      {
+        key: "status",
+        header: "CMS",
+        width: "90px",
+        cell: (r) =>
+          r.status === "uploaded" ? (
+            <a href={r.cmsId ? `https://staging.audif1team.com/cms/admin/collections/media/${r.cmsId}` : "#"} target="_blank" rel="noreferrer" style={{ color: "#6fcf7c", fontSize: 12 }} title={`${r.uploadedName ?? ""} · open in the staging CMS`}>
+              uploaded ↗
+            </a>
+          ) : r.status === "error" ? (
+            <span style={{ color: "#e06c5b", fontSize: 12 }} title={r.note}>
+              failed
+            </span>
+          ) : (
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>
+          ),
+      },
+      {
         key: "issues",
         header: "Check",
         width: "140px",
-        cell: (r) =>
-          r.issues.length ? (
-            <span title={r.issues.join("\n")} style={{ color: "#e9c46a", fontSize: 12 }}>
-              {r.issues.length} issue{r.issues.length === 1 ? "" : "s"}
-            </span>
-          ) : r.alt ? (
-            <span style={{ color: "#6fcf7c", fontSize: 12 }}>ok · {r.alt.length}/{ALT_MAX}</span>
-          ) : (
-            <span style={{ color: "var(--muted)", fontSize: 12 }}>no alt yet</span>
-          ),
+        cell: (r) => (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDialogRow(r.id);
+            }}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: r.issues.length ? "#e9c46a" : r.alt ? "#6fcf7c" : "var(--muted)", textDecoration: "underline dotted" }}
+            title="Open"
+          >
+            {r.issues.length ? `${r.issues.length} issue${r.issues.length === 1 ? "" : "s"}` : r.alt ? `ok · ${r.alt.length}/${ALT_MAX}` : "no alt yet"}
+          </button>
+        ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [batch?.id]
+    [batch?.id, batch?.tags, tags]
   );
+
+  // Per-image tags; the scene tag inside them is mirrored to row.scene so
+  // the correction log can compare it with what Claude said.
+  function setRowTags(id: string, next: string[]) {
+    const scene = next.find((t) => (SCENE_TAGS as readonly string[]).includes(t));
+    updateRow(id, { tags: next, scene });
+  }
+  function bulkTags(fn: (cur: string[]) => string[]) {
+    if (!batch) return;
+    const rows = batch.rows.map((r) => {
+      if (!selectedIds.includes(r.id)) return r;
+      const next = fn(r.tags ?? []);
+      return { ...r, tags: next, scene: next.find((t) => (SCENE_TAGS as readonly string[]).includes(t)) };
+    });
+    void save({ ...batch, rows });
+  }
+  async function teach(r: Row) {
+    if (!batch || !teachPerson) return;
+    setTeaching(true);
+    try {
+      const blob = await batchStore.getBlob(batch.id, r.id);
+      if (!blob) throw new Error("image data missing in this browser");
+      const small = await compressImage(new File([blob], r.fileName, { type: blob.type }), 1568, 0.8);
+      const buf = await small.blob.arrayBuffer();
+      let bin = "";
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      const j = await fetch("/api/assets/references", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ person: teachPerson, note: teachNote.trim() || undefined, source: `batch:${batch.id}/${r.originalName}`, mime: small.blob.type || "image/webp", data: btoa(bin) }),
+      }).then((x) => x.json());
+      if (!j.ok) throw new Error(j.error ?? "failed");
+      setNotice(`Saved as a reference photo for ${teachPerson}. Claude looks at it before naming people in the next batch.`);
+      setTeachNote("");
+    } catch (e) {
+      setNotice(`Couldn't save the reference: ${e instanceof Error ? e.message : "failed"}`);
+    }
+    setTeaching(false);
+  }
 
   function onCellEdit(id: string, columnKey: string, value: string) {
     if (columnKey === "descriptor") updateRow(id, { descriptor: cleanDescriptor(value) });
@@ -189,26 +359,224 @@ export default function BatchPage() {
     }
   }
 
+  // Upload every ready row with an alt text to the chosen CMS folder. The
+  // number continues from the highest one already in that folder, per
+  // context prefix. One request per image; results land on the rows.
+  async function uploadAll() {
+    if (!batch || !batch.targetFolderId) return;
+    setConfirmUpload(false);
+    const todo = batch.rows.filter((r) => r.status !== "uploaded" && r.alt.trim());
+    if (todo.length === 0) {
+      setNotice("Nothing to upload: every image is either uploaded already or has no alt text yet.");
+      return;
+    }
+    setBusy("Uploading…");
+    const counters: Record<string, number> = {};
+    let ok = 0;
+    const failures: string[] = [];
+    let rows = batch.rows;
+    for (let i = 0; i < todo.length; i++) {
+      const r = todo[i];
+      setProgress({ done: i, total: todo.length, current: r.fileName });
+      try {
+        // the name is the descriptor (from the alt text if Claude gave none);
+        // the number continues per full name in the target folder, so two
+        // batches of "bortoleto-garage" never collide on _01
+        const descriptor = r.descriptor || descriptorFromAlt(r.alt) || "photo";
+        const ext = r.mime === "image/webp" ? "webp" : "jpg";
+        const prefix = proposeFileName({ year: batch.year, loc: batch.loc, context: r.context as Context | "", descriptor, nn: 0, ext }).replace(/_00\.[a-z0-9]+$/i, "");
+        if (counters[prefix] == null) {
+          const j = await fetch(`/api/assets/next-number?folder=${encodeURIComponent(batch.targetFolderId)}&prefix=${encodeURIComponent(prefix + "_")}`).then((x) => x.json());
+          counters[prefix] = Number(j.next ?? 1);
+        }
+        const nn = counters[prefix]++;
+        const finalName = proposeFileName({ year: batch.year, loc: batch.loc, context: r.context as Context | "", descriptor, nn, ext });
+        const blob = await batchStore.getBlob(batch.id, r.id);
+        if (!blob) throw new Error("image data missing in this browser");
+        const form = new FormData();
+        form.append("file", blob, finalName);
+        form.append("filename", finalName);
+        form.append("alt", r.alt);
+        form.append("folder", batch.targetFolderId);
+        form.append("tags", JSON.stringify(uniqueTags(batch.tags, r.tags)));
+        const res = await fetch("/api/assets/upload", { method: "POST", body: form });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+        rows = rows.map((x) => (x.id === r.id ? { ...x, status: "uploaded" as const, cmsId: j.doc.id, cmsUrl: j.doc.url, uploadedName: j.doc.filename, note: undefined } : x));
+        ok++;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "failed";
+        rows = rows.map((x) => (x.id === r.id ? { ...x, status: "error" as const, note: msg } : x));
+        failures.push(`${r.fileName}: ${msg}`);
+      }
+      await save({ ...batch, rows });
+    }
+    // learning: where the team changed Claude's people / scene, log it
+    const corrections = todo
+      .filter((r) => r.ai)
+      .map((r) => {
+        const final = rows.find((x) => x.id === r.id) ?? r;
+        const finalTags = final.tags ?? [];
+        return {
+          batchId: batch.id,
+          rowId: r.id,
+          originalName: r.originalName,
+          alt: final.alt,
+          ai: { people: r.ai!.tags.filter(isPersonTag), scene: r.ai!.scene },
+          final: { people: finalTags.filter(isPersonTag), scene: final.scene, tags: uniqueTags(batch.tags, finalTags) },
+        };
+      })
+      .filter((c) => c.ai.scene !== c.final.scene || c.ai.people.length !== c.final.people.length || !c.ai.people.every((p) => c.final.people.includes(p)));
+    if (corrections.length) void fetch("/api/assets/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: corrections }) });
+    setProgress(null);
+    setBusy(null);
+    setNotice(`Done. ${ok} of ${todo.length} uploaded to ${batch.targetFolderPath}${failures.length ? `\nNot uploaded: ${failures.length}\n${failures.join("\n")}` : "."}`);
+  }
+
+  async function generateAltText() {
+    if (!batch) return;
+    if (!apiMode?.configured && hasConnector === false) {
+      setNotice("Generate alt text needs the AF1 Tools connector in your Claude. Set it up once from the home page, then click again.");
+      return;
+    }
+    const todo = batch.rows.filter((r) => !r.alt.trim());
+    const target = todo.length ? todo : batch.rows;
+    setGen({ phase: "sync", done: 0, total: target.length, got: 0 });
+    // 1. previews (1024px JPEG) + meta to the server
+    for (let i = 0; i < target.length; i++) {
+      const r = target[i];
+      const blob = await batchStore.getBlob(batch.id, r.id);
+      if (!blob) continue;
+      const bmp = await createImageBitmap(blob);
+      const k = 1568 / Math.max(bmp.width, bmp.height); // Claude looks at up to ~1568px on the long edge
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(bmp.width * Math.min(1, k)));
+      c.height = Math.max(1, Math.round(bmp.height * Math.min(1, k)));
+      c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+      bmp.close();
+      let prev = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.78));
+      if (prev && prev.size > 700_000) prev = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.6));
+      if (prev) {
+        const form = new FormData();
+        form.append("file", prev, "preview.jpg");
+        form.append("rowId", r.id);
+        await fetch(`/api/assets/batch/${batch.id}/preview`, { method: "POST", body: form });
+      }
+      setGen({ phase: "sync", done: i + 1, total: target.length, got: 0 });
+    }
+    await fetch(`/api/assets/batch/${batch.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        folderPath: batch.targetFolderPath ?? batch.folderPath,
+        year: batch.year,
+        loc: batch.loc,
+        round: batch.round,
+        session: batch.session,
+        race: batch.round ? `Round ${batch.round}` : undefined,
+        tags: batch.tags,
+        rows: target.map((r) => ({ id: r.id, originalName: r.originalName, fileName: r.fileName, context: r.context, descriptor: r.descriptor, alt: r.alt, width: r.width, height: r.height, people: r.people, date: r.date, scene: r.scene, tags: r.tags })),
+      }),
+    });
+    // 2a. API key set: describe each photo from here, two at a time
+    if (apiMode?.configured) {
+      stopRef.current = false;
+      let got = 0;
+      let failed = 0;
+      setGen({ phase: "api", done: 0, total: target.length, got: 0, failed: 0 });
+      const queue = [...target];
+      const down: { msg: string | null } = { msg: null }; // Anthropic refused (no credits, bad key, model): stop and hand off
+      const worker = async () => {
+        while (queue.length && !stopRef.current && !down.msg) {
+          const r = queue.shift()!;
+          try {
+            const j = await fetch("/api/assets/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: batch.id, rowId: r.id }) }).then((x) => x.json());
+            if (!j.ok) {
+              const msg = String(j.error ?? "failed");
+              if (/Anthropic (4\d\d)|No Anthropic API key/.test(msg)) {
+                down.msg = msg;
+                queue.unshift(r);
+                return;
+              }
+              throw new Error(msg);
+            }
+            const out = j.result as { descriptor: string; alt: string; people: string[]; scene: string };
+            const proposed = proposeRowTags({ people: out.people, scene: out.scene }, tagTitles);
+            const current = await batchStore.get(batch.id);
+            if (current) {
+              const rows = current.rows.map((x) => (x.id === r.id ? { ...x, alt: out.alt, descriptor: out.descriptor || x.descriptor, people: out.people, scene: out.scene, tags: uniqueTags(x.tags, proposed), ai: { people: out.people, scene: out.scene, tags: proposed } } : x));
+              const next = { ...current, rows };
+              setBatch(next);
+              await batchStore.put(next);
+            }
+            got++;
+          } catch (e) {
+            failed++;
+            const msg = e instanceof Error ? e.message : "failed";
+            const current = await batchStore.get(batch.id);
+            if (current) {
+              const next = { ...current, rows: current.rows.map((x) => (x.id === r.id ? { ...x, note: msg } : x)) };
+              setBatch(next);
+              await batchStore.put(next);
+            }
+          }
+          setGen((g) => (g ? { ...g, done: got + failed, got, failed } : g));
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      if (down.msg && got === 0) {
+        // nothing came back: fall through to the claude.ai hand-off
+        setNotice(`In-tool generation isn't available right now (${down.msg.replace(/^Anthropic \d+: ?/, "")}). Opening claude.ai instead.`);
+      } else {
+        setGen(null);
+        setNotice(`Done. Alt text and tags written for ${got} image${got === 1 ? "" : "s"}${failed ? `; ${failed} failed (hover the Check column)` : ""}${down.msg ? `; stopped early: ${down.msg}` : ""}. Check them, then upload.`);
+        return;
+      }
+    }
+    // 2b. no key: go to claude.ai in this tab; Claude's summary ends with a
+    // link back to this page (?step=3), which pulls the results in.
+    window.location.assign(`/api/assets/handoff?batch=${batch.id}`);
+  }
+
   async function remove() {
     if (!batch) return;
     await batchStore.remove(batch.id);
     router.push("/assets/batches");
   }
 
+  const readyCount = batch ? batch.rows.filter((r) => r.status !== "uploaded" && r.alt.trim()).length : 0;
+  useSidebarContent(
+    <SideSection title="This batch">
+      <SideButton onClick={exportZip} disabled={Boolean(busy)}>
+        Export ZIP + CSV
+      </SideButton>
+      <SideButton onClick={remove}>Delete batch</SideButton>
+    </SideSection>,
+    [batch?.id, busy]
+  );
+
   if (batch === undefined) return <p style={{ color: "var(--muted)" }}>Loading batch…</p>;
   if (batch === null) return <p style={{ color: "var(--muted)" }}>Batch not found in this browser. Batches live in the browser they were created in.</p>;
 
   const withAlt = batch.rows.filter((r) => r.alt).length;
   const issues = rows.reduce((n, r) => n + r.issues.length, 0);
+  const allUploaded = batch.rows.every((r) => r.status === "uploaded");
+  const tagProblems = rows.filter((r) => r.status !== "uploaded" && tagIssues(batch.tags ?? [], r.tags ?? [], { isGp: Boolean(batch.round) }).length > 0).length;
+  const tagsOk = tags != null && tagProblems === 0 && (batch.tags?.length ?? 0) > 0;
+  const suggestedBatch = tags ? proposeBatchTags({ year: batch.year, loc: batch.loc, race: batch.race, session: batch.session }, tagTitles) : [];
 
   return (
     <div>
       <section className="page-head reveal">
         <div>
           <div className="section-label" style={{ marginBottom: 8 }}>Batch · created {new Date(batch.createdAt).toLocaleString("en-GB")}</div>
-          <h1 style={{ fontSize: 24 }}>10_Media-Galleries/{batch.folderPath}</h1>
+          <h1 style={{ fontSize: 24 }}>{batch.targetFolderPath ?? `10_Media-Galleries/${batch.folderPath}`}</h1>
         </div>
       </section>
+      <Steps
+        current={allUploaded ? 5 : withAlt === batch.rows.length ? (tagsOk ? 5 : 4) : 3}
+        done={[1, 2, ...(withAlt === batch.rows.length ? [3] : []), ...(tagsOk && withAlt === batch.rows.length ? [4] : []), ...(allUploaded ? [5] : [])]}
+      />
       <section className="reveal reveal-d1" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 22 }}>
         {[
           { n: batch.rows.length, l: "Images" },
@@ -223,23 +591,225 @@ export default function BatchPage() {
         ))}
       </section>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <button className="btn btn-primary" disabled title="Next step: Claude writes descriptor + alt text per image through the AF1 Tools connector">
-          Generate names + alt text
-        </button>
-        <button className="btn" disabled title="Next step: upload to the staging CMS folder">
-          Upload to staging
-        </button>
-        <button className="btn" onClick={exportZip} disabled={Boolean(busy)}>
-          {busy ?? "Export ZIP + CSV"}
-        </button>
-        <button className="btn" onClick={remove} style={{ marginLeft: "auto", color: "#e06c5b" }}>
-          Delete batch
-        </button>
-      </div>
+      <section id="batch-steps" className="reveal reveal-d2" style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
+          <div className="section-label">Step 3 · Alt text</div>
+          <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+            {batch.rows.filter((r) => !r.alt.trim()).length === 0
+              ? "Every image has an alt text. Review a few by clicking a row's check."
+              : `${batch.rows.filter((r) => !r.alt.trim()).length} of ${batch.rows.length} images still need an alt text. Your Claude writes them from the pictures and the team rules; results land here while you wait.`}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={generateAltText} disabled={Boolean(gen) || Boolean(busy) || batch.rows.filter((r) => !r.alt.trim()).length === 0}>
+              {gen ? (gen.phase === "sync" ? `Sending ${gen.done}/${gen.total}…` : gen.phase === "api" ? `Writing ${gen.done}/${gen.total}…` : `Waiting for Claude ${gen.got}/${gen.total}…`) : apiMode?.configured ? "Generate alt text & tags" : "Generate alt text"}
+            </button>
+            {gen?.phase === "api" && (
+              <button className="btn" onClick={() => { stopRef.current = true; }}>
+                Stop
+              </button>
+            )}
 
+            {apiMode?.configured ? (
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>Runs in the tool ({apiMode.model}).</span>
+            ) : (
+              hasConnector === false && <span style={{ fontSize: 12, color: "#e9c46a" }}>Needs the AF1 Tools connector (home page shows the setup), or an API key in Admin → Claude API.</span>
+            )}
+          </div>
+        </div>
+        <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
+          <div className="section-label">Step 4 · Content tags</div>
+          {tags === null ? (
+            <div style={{ fontSize: 13, color: "var(--muted)" }}>Loading the CMS tags…</div>
+          ) : tags.length === 0 ? (
+            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+              Staging has no content tags yet. Copy the production vocabulary once (105 tags), then they are picked here and applied on upload.
+              <div style={{ marginTop: 8 }}>
+                <button className="btn btn-primary" onClick={seedTags} disabled={seeding}>
+                  {seeding ? "Importing…" : "Import production tags"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
+                For every image in this batch. Per image, Claude adds the people and the scene (on-track &amp; garage / team / off-track) when it writes the alt text; change them in a row&apos;s dialog.
+              </div>
+              <TagPicker value={batch.tags ?? []} available={tags} suggestions={suggestedBatch} onChange={(next) => void save({ ...batch, tags: next })} onCreate={createTag} placeholder="Add a batch tag…" />
+              <div style={{ fontSize: 12, color: tagProblems ? "#e9c46a" : "#6fcf7c" }}>
+                {tagProblems ? `${tagProblems} image${tagProblems === 1 ? "" : "s"} flagged by the tag check (see the Check column).` : batch.tags?.length ? "Tag check passed for every image." : "Pick at least the year and the Grand Prix."}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
+          <div className="section-label">Step 5 · Upload</div>
+          <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+            Target: <code>{batch.targetFolderPath ?? "— no folder chosen —"}</code>{" "}
+            <button className="btn" onClick={() => setPickFolder(true)} style={{ padding: "3px 10px", fontSize: 12, marginLeft: 6 }}>
+              {batch.targetFolderId ? "Change" : "Choose folder"}
+            </button>
+            <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 4 }}>
+              {batch.rows.filter((r) => r.status === "uploaded").length} uploaded · {readyCount} ready · {batch.rows.filter((r) => !r.alt.trim()).length} without alt text (stay here)
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="btn btn-primary" onClick={() => setConfirmUpload(true)} disabled={!batch.targetFolderId || readyCount === 0 || Boolean(busy) || Boolean(gen)}>
+              Upload {readyCount || ""} to staging
+            </button>
+            <button className="btn" onClick={exportZip} disabled={Boolean(busy)}>
+              Export ZIP
+            </button>
+          </div>
+        </div>
+      </section>
+      {gen && (
+        <div role="status" style={{ background: "#141416", border: "1px solid var(--vapor-purple)", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13 }}>
+          {gen.phase === "sync" ? `Sending previews to the server: ${gen.done} of ${gen.total}` : gen.phase === "api" ? `Claude is looking at the photos: ${gen.done} of ${gen.total} done${gen.failed ? `, ${gen.failed} failed` : ""}. Rows fill in as they come back.` : `Claude is writing in the claude.ai tab: ${gen.got} of ${gen.total} back. Press send there if it hasn't started; this page updates on its own.`}
+          <div style={{ height: 4, background: "#2a2a2d", borderRadius: 2, marginTop: 8 }}>
+            <div style={{ height: 4, width: `${Math.round(((gen.phase === "waiting" ? gen.got : gen.done) / Math.max(1, gen.total)) * 100)}%`, background: "var(--accent)", borderRadius: 2, transition: "width 0.3s" }} />
+          </div>
+        </div>
+      )}
+      {progress && (
+        <div role="status" style={{ background: "#141416", border: "1px solid var(--vapor-purple)", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13 }}>
+          Uploading {progress.done + 1} of {progress.total}: {progress.current}
+          <div style={{ height: 4, background: "#2a2a2d", borderRadius: 2, marginTop: 8 }}>
+            <div style={{ height: 4, width: `${Math.round(((progress.done + 1) / progress.total) * 100)}%`, background: "var(--accent)", borderRadius: 2, transition: "width 0.2s" }} />
+          </div>
+        </div>
+      )}
+      {pickFolder && (
+        <FolderPicker
+          initialPath={batch.folderPath}
+          onClose={() => setPickFolder(false)}
+          onPick={(f: { id: string; path: string }) => {
+            void save({ ...batch, targetFolderId: f.id, targetFolderPath: f.path });
+            setPickFolder(false);
+          }}
+        />
+      )}
+      {confirmUpload && (
+        <Modal title="Upload to staging?" onClose={() => setConfirmUpload(false)} width={520}>
+          <p style={{ fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
+            {batch.rows.filter((r) => r.status !== "uploaded" && r.alt.trim()).length} images go to <code>{batch.targetFolderPath}</code> on staging.audif1team.com, with their alt
+            text and content tags ({(batch.tags ?? []).join(", ") || "none"} + per-image tags), numbered after what is already in that folder. Images without alt text stay here.
+            {tagProblems > 0 && <><br /><span style={{ color: "#e9c46a" }}>{tagProblems} image{tagProblems === 1 ? "" : "s"} did not pass the tag check; they upload with what they have.</span></>}
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button className="btn" onClick={() => setConfirmUpload(false)}>
+              Cancel
+            </button>
+            <button className="btn btn-primary" onClick={uploadAll}>
+              Upload
+            </button>
+          </div>
+        </Modal>
+      )}
+      {dialogRow && (() => {
+        const r = rows.find((x) => x.id === dialogRow);
+        if (!r) return null;
+        return (
+          <Modal title={r.originalName} onClose={() => setDialogRow(null)} width={720}>
+            <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 18, fontSize: 13 }}>
+              <div>
+                {r.thumb && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.thumb} alt="" style={{ width: 200, height: 200, objectFit: "cover", borderRadius: 8 }} />
+                )}
+                <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 8 }}>
+                  {r.width}×{r.height} · {fmtBytes(r.bytes)}
+                  <br />
+                  <code style={{ fontSize: 11 }}>{r.fileName}</code>
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+                <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
+                  Alt text (English, under {ALT_MAX})
+                  <textarea className="input" rows={3} value={r.alt} onChange={(e) => updateRow(r.id, { alt: e.target.value })} />
+                  <span style={{ textAlign: "right", color: r.alt.length > ALT_MAX ? "#e06c5b" : "var(--muted)" }}>{r.alt.length}/{ALT_MAX}</span>
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
+                  Descriptor (2–6 words, goes into the file name)
+                  <input className="input" value={r.descriptor} onChange={(e) => updateRow(r.id, { descriptor: e.target.value })} onBlur={(e) => updateRow(r.id, { descriptor: cleanDescriptor(e.target.value) })} />
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
+                  Slot in the file name (optional: only when the picture is made for a slot, pre-filled when the original name says so)
+                  <select className="input" value={r.context} onChange={(e) => updateRow(r.id, { context: e.target.value })}>
+                    <option value="">— none —</option>
+                    {CONTEXTS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
+                  Content tags (batch tags greyed; add people and the scene for this picture)
+                  {tags && (
+                    <TagPicker
+                      value={r.tags ?? []}
+                      locked={batch.tags ?? []}
+                      available={tags}
+                      suggestions={proposeRowTags({ people: r.people, scene: r.scene }, tagTitles)}
+                      onChange={(next) => updateRow(r.id, { tags: next })}
+                      onCreate={createTag}
+                      compact
+                      placeholder="Add a tag for this image…"
+                    />
+                  )}
+                </label>
+                <div className="card" style={{ padding: "10px 12px", display: "grid", gap: 8, background: "var(--surface)" }}>
+                  <div className="section-label">Teach Claude</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
+                    Wrong or missing person? Fix the tags above, then save this photo as a reference so Claude can compare faces, helmets and suits next time.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <select className="input" value={teachPerson} onChange={(e) => setTeachPerson(e.target.value)} style={{ padding: "5px 8px", fontSize: 12 }}>
+                      <option value="">— person in this photo —</option>
+                      {knowledge.filter((k) => k.kind === "person" && k.active).map((k) => (
+                        <option key={k.id} value={k.name}>
+                          {k.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input className="input" value={teachNote} onChange={(e) => setTeachNote(e.target.value)} placeholder="what identifies them here (helmet, suit, face…)" style={{ flex: 1, minWidth: 180, padding: "5px 8px", fontSize: 12 }} />
+                    <button className="btn btn-primary" style={{ padding: "5px 10px", fontSize: 12 }} disabled={!teachPerson || teaching} onClick={() => teach(r)}>
+                      {teaching ? "Saving…" : "Save as reference"}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div className="section-label" style={{ marginBottom: 6 }}>Checks</div>
+                  {r.issues.length === 0 ? (
+                    <div style={{ color: "#6fcf7c" }}>{r.alt ? "All good." : "No alt text yet."}</div>
+                  ) : (
+                    <ul style={{ margin: 0, paddingLeft: 18, color: "#e9c46a", lineHeight: 1.7 }}>
+                      {r.issues.map((i, k) => (
+                        <li key={k}>{i}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn" onClick={() => { const i = rows.findIndex((x) => x.id === r.id); if (i > 0) setDialogRow(rows[i - 1].id); }} disabled={rows.findIndex((x) => x.id === r.id) === 0}>
+                      ← Prev
+                    </button>
+                    <button className="btn" onClick={() => { const i = rows.findIndex((x) => x.id === r.id); if (i < rows.length - 1) setDialogRow(rows[i + 1].id); }} disabled={rows.findIndex((x) => x.id === r.id) === rows.length - 1}>
+                      Next →
+                    </button>
+                  </div>
+                  <button className="btn btn-primary" onClick={() => setDialogRow(null)}>
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
       {notice && (
-        <div role="status" style={{ background: "#122a18", border: "1px solid #2e7d4f", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
+        <div role="status" style={{ background: notice.includes("Not uploaded") ? "#2a1512" : "#122a18", border: `1px solid ${notice.includes("Not uploaded") ? "#c0392b" : "#2e7d4f"}`, borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13, display: "flex", justifyContent: "space-between", whiteSpace: "pre-wrap" }}>
           <span>{notice}</span>
           <button onClick={() => setNotice(null)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", opacity: 0.6 }}>
             ×
@@ -247,11 +817,34 @@ export default function BatchPage() {
         </div>
       )}
 
-      <div className="beui beui-compact">
+      {selectedIds.length > 0 && tags && (
+        <div className="card" style={{ padding: "10px 14px", marginBottom: 10, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", fontSize: 13, borderColor: "var(--accent)" }}>
+          <strong>{selectedIds.length} selected</strong>
+          <div style={{ minWidth: 260, flex: 1 }}>
+            <TagPicker value={[]} available={tags} onChange={(next) => next.length && bulkTags((cur) => uniqueTags(cur, next))} onCreate={createTag} compact placeholder="Add a tag to all selected…" />
+          </div>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>Scene:</span>
+          {SCENE_TAGS.map((sc) => (
+            <button key={sc} className="btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => bulkTags((cur) => [...cur.filter((t) => !(SCENE_TAGS as readonly string[]).includes(t)), sc])}>
+              {sc}
+            </button>
+          ))}
+          <button className="btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => bulkTags(() => [])} title="Remove every per-image tag on the selected rows (batch tags stay)">
+            Clear tags
+          </button>
+          <button className="btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => setSelectedIds([])}>
+            Deselect
+          </button>
+        </div>
+      )}
+      <div className={`beui beui-compact${pickerOpen ? " is-editing" : ""}`}>
         <Table<Row>
           data={rows}
           columns={columns}
           getRowId={(r) => r.key}
+          selectable
+          selectedRowIds={selectedIds}
+          onSelectionChange={setSelectedIds}
           resizable
           onCellEdit={onCellEdit}
           height={Math.max(360, typeof window !== "undefined" ? window.innerHeight - 300 : 600)}

@@ -88,6 +88,9 @@ a { color: inherit; }
    drag grips only on hover (they cost 24px per header otherwise). */
 .beui-compact th .px-4, .beui-compact td .px-4, .beui-compact td.px-4 { padding-left: 8px; padding-right: 8px; }
 .beui-compact th { position: sticky; border-right: 1px solid rgba(255, 255, 255, 0.14); }
+.beui-compact th .px-4 { padding-left: 22px !important; } /* room for the drag grip on hover */
+.beui-compact td input, .beui-compact td textarea { border-radius: 0 !important; margin: 0 !important; width: 100% !important; box-shadow: none !important; }
+.beui-compact td input:focus { background: var(--surface) !important; outline: 1px solid var(--accent) !important; outline-offset: -1px; }
 .beui-compact th:last-child { border-right: 0; }
 .beui-compact td { border-right: 1px solid rgba(255, 255, 255, 0.05); }
 .beui-compact th button[aria-label^="Reorder"] { position: absolute; left: 0; top: 0; width: 14px; opacity: 0; }
@@ -142,3 +145,7 @@ main { animation: pageIn 0.5s cubic-bezier(.2,.8,.2,1) both; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
 .page-head h1 { font-size: 30px; margin: 0; }
 .page-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; max-width: 640px; line-height: 1.6; }
+
+/* one row's tag editor is open: the others step back */
+.beui.is-editing tbody tr:not(:has([data-tp-open])) { opacity: 0.35; transition: opacity 0.15s; }
+.beui.is-editing tbody tr:has([data-tp-open]) { position: relative; z-index: 1; }

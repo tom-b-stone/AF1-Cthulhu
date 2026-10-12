@@ -25,8 +25,8 @@ const SIDEBARS: Record<string, Section[]> = {
       entries: [
         { href: "/assets", label: "New batch", exact: true },
         { href: "/assets/batches", label: "Batches", note: "7 days" },
-        { href: "/assets/rules", label: "Naming + alt rules" },
         { href: "/assets/knowledge", label: "Team knowledge", note: "people, cues" },
+        { href: "/assets/learn", label: "Learn from the library", note: "Claude" },
       ],
     },
     {
@@ -43,6 +43,7 @@ const SIDEBARS: Record<string, Section[]> = {
       entries: [
         { href: "/admin/messages", label: "Message board", note: "suggestions" },
         { href: "/admin/credentials", label: "CMS credentials" },
+        { href: "/admin/anthropic", label: "Claude API", note: "in-tool generation" },
       ],
     },
   ],
