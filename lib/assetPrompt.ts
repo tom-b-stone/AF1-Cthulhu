@@ -56,7 +56,8 @@ HOW TO WORK
 Done.
 Alt texts written: <n> of ${count}
 Then one line per photo: ✓ <descriptor> — <alt text> — <scene>[, <people>]
-If any failed: "Not written: <m>" and one line each with the reason.`;
+If any failed: "Not written: <m>" and one line each with the reason.
+Last line, exactly: Back to the batch: ${appOrigin}/assets/batch/${batchId}?step=3`;
 }
 
 // Learning session: Claude reads photos from the production library that

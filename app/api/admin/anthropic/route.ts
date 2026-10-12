@@ -25,9 +25,14 @@ export async function POST(req: NextRequest) {
   if (!k) return NextResponse.json({ error: "key required" }, { status: 400 });
   if (!/^sk-ant-/.test(k)) return NextResponse.json({ error: "that doesn't look like an Anthropic key (sk-ant-…)" }, { status: 400 });
   // check it works before saving
-  const probe = await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": k, "anthropic-version": "2023-06-01" } });
+  const probe = await fetch("https://api.anthropic.com/v1/models?limit=50", { headers: { "x-api-key": k, "anthropic-version": "2023-06-01" } });
   if (!probe.ok) return NextResponse.json({ error: `Anthropic rejected the key (${probe.status})` }, { status: 400 });
-  await setAnthropicSettings(k, (model ?? "").trim() || current?.model || DEFAULT_MODEL);
+  const models = ((await probe.json()) as { data?: { id: string }[] }).data?.map((m) => m.id) ?? [];
+  const chosen = (model ?? "").trim() || current?.model || DEFAULT_MODEL;
+  if (models.length && !models.includes(chosen)) {
+    return NextResponse.json({ error: `Model "${chosen}" isn't available on this key. Available: ${models.filter((m) => /sonnet|opus|haiku/.test(m)).slice(0, 8).join(", ")}` }, { status: 400 });
+  }
+  await setAnthropicSettings(k, chosen);
   return NextResponse.json({ ok: true });
 }
 

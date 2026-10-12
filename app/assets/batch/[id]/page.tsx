@@ -57,6 +57,36 @@ export default function BatchPage() {
   const [tags, setTags] = useState<ContentTag[] | null>(null);
   const [seeding, setSeeding] = useState(false);
   const tagTitles = useMemo(() => (tags ?? []).map((t) => t.title), [tags]);
+  // Arriving from Claude's "Back to the batch" link (?step=3): pull what
+  // Claude wrote on the server into the local rows once, then show step 3.
+  const [synced, setSynced] = useState(false);
+  useEffect(() => {
+    if (!batch || synced || tags === null) return;
+    if (!new URLSearchParams(window.location.search).has("step")) return;
+    setSynced(true);
+    (async () => {
+      try {
+        const srv = await fetch(`/api/assets/batch/${batch.id}`).then((r) => r.json());
+        if (!srv?.rows) return;
+        let n = 0;
+        const rows = batch.rows.map((r) => {
+          const sr = srv.rows.find((x: { id: string }) => x.id === r.id);
+          if (!sr?.alt || r.alt.trim()) return r;
+          n++;
+          const proposed = proposeRowTags({ people: sr.people, scene: sr.scene }, tagTitles);
+          return { ...r, alt: sr.alt, descriptor: sr.descriptor || r.descriptor, people: sr.people ?? r.people, scene: sr.scene ?? r.scene, tags: uniqueTags(r.tags, proposed), ai: { people: sr.people ?? [], scene: sr.scene, tags: proposed } };
+        });
+        if (n) {
+          await save({ ...batch, rows });
+          setNotice(`Picked up ${n} alt text${n === 1 ? "" : "s"} written by Claude. Check them, then upload.`);
+        }
+        document.getElementById("batch-steps")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {
+        /* ignore */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch?.id, tags]);
   useEffect(() => {
     fetch("/api/assets/tags")
       .then((r) => r.json())
@@ -444,12 +474,21 @@ export default function BatchPage() {
       let failed = 0;
       setGen({ phase: "api", done: 0, total: target.length, got: 0, failed: 0 });
       const queue = [...target];
+      const down: { msg: string | null } = { msg: null }; // Anthropic refused (no credits, bad key, model): stop and hand off
       const worker = async () => {
-        while (queue.length && !stopRef.current) {
+        while (queue.length && !stopRef.current && !down.msg) {
           const r = queue.shift()!;
           try {
             const j = await fetch("/api/assets/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: batch.id, rowId: r.id }) }).then((x) => x.json());
-            if (!j.ok) throw new Error(j.error ?? "failed");
+            if (!j.ok) {
+              const msg = String(j.error ?? "failed");
+              if (/Anthropic (4\d\d)|No Anthropic API key/.test(msg)) {
+                down.msg = msg;
+                queue.unshift(r);
+                return;
+              }
+              throw new Error(msg);
+            }
             const out = j.result as { descriptor: string; alt: string; people: string[]; scene: string };
             const proposed = proposeRowTags({ people: out.people, scene: out.scene }, tagTitles);
             const current = await batchStore.get(batch.id);
@@ -474,9 +513,14 @@ export default function BatchPage() {
         }
       };
       await Promise.all([worker(), worker()]);
-      setGen(null);
-      setNotice(`Done. Alt text and tags written for ${got} image${got === 1 ? "" : "s"}${failed ? `; ${failed} failed (hover the Check column)` : ""}. Check them, then upload.`);
-      return;
+      if (down.msg && got === 0) {
+        // nothing came back: fall through to the claude.ai hand-off
+        setNotice(`In-tool generation isn't available right now (${down.msg.replace(/^Anthropic \d+: ?/, "")}). Opening claude.ai instead.`);
+      } else {
+        setGen(null);
+        setNotice(`Done. Alt text and tags written for ${got} image${got === 1 ? "" : "s"}${failed ? `; ${failed} failed (hover the Check column)` : ""}${down.msg ? `; stopped early: ${down.msg}` : ""}. Check them, then upload.`);
+        return;
+      }
     }
     // 2b. no key: open claude.ai with the prompt
     // a named window: "Open the Claude tab" below brings this same tab back
@@ -577,7 +621,7 @@ export default function BatchPage() {
         ))}
       </section>
 
-      <section className="reveal reveal-d2" style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 14, marginBottom: 14 }}>
+      <section id="batch-steps" className="reveal reveal-d2" style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 14, marginBottom: 14 }}>
         <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
           <div className="section-label">Step 3 · Alt text</div>
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
