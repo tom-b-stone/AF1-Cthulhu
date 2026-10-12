@@ -198,6 +198,14 @@ Claude's proposal (`row.ai`) are logged (`assets:feedback:v1`, cap 100) and the 
 rulebook. Both are visible on `/assets/learn`. The batch table is the SEO table: inline alt/descriptor,
 inline tag picker per row, row selection with a bulk bar (add tag, set scene, clear tags).
 
+**In-tool generation** (`lib/claudeDescribe.ts`, `/api/assets/generate`, `lib/learnRun.ts`,
+`/api/assets/learn/run`, Admin → Claude API `/admin/anthropic`, KV `settings:anthropic` encrypted):
+with an Anthropic API key the batch page describes each photo itself (two in parallel, one Messages
+call per photo, rulebook + reference photos as a cached prefix, same validation as `asset_set_meta`,
+one retry on rule violations) and the learn page builds the reference library per person
+(`learn_person`, also a connector tool). Without a key everything falls back to the claude.ai
+hand-off. claude.ai cannot be iframed (`frame-ancestors 'none'`), hence the API path.
+
 Still to do: production toggle (second CMS login in /admin), SlashLens intake (`/assets/intake`,
 Drive file ids, link-sharing is on).
 

@@ -21,3 +21,28 @@ export async function setStagingCredentials(email: string, password: string): Pr
 }
 
 export { kvConfigured };
+
+// Anthropic API key + model for in-tool generation (no claude.ai tab).
+const ANTHROPIC_KEY = "settings:anthropic";
+export type AnthropicSettings = { key: string; model: string; updatedAt: string };
+export const DEFAULT_MODEL = "claude-sonnet-4-5";
+
+export async function getAnthropicSettings(): Promise<AnthropicSettings | null> {
+  const raw = await kvGet(ANTHROPIC_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(decrypt(raw)) as AnthropicSettings;
+  } catch {
+    return null;
+  }
+}
+
+export async function setAnthropicSettings(key: string, model: string): Promise<void> {
+  const payload: AnthropicSettings = { key, model: model || DEFAULT_MODEL, updatedAt: new Date().toISOString() };
+  await kvSet(ANTHROPIC_KEY, encrypt(JSON.stringify(payload)));
+}
+
+export async function clearAnthropicSettings(): Promise<void> {
+  const { kvDel } = await import("./kv");
+  await kvDel(ANTHROPIC_KEY);
+}

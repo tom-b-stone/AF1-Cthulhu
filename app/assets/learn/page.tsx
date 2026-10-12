@@ -15,6 +15,23 @@ export default function LearnPage() {
   const [examples, setExamples] = useState<AltExample[]>([]);
   const [refs, setRefs] = useState<RefMeta[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
+  const [apiReady, setApiReady] = useState<boolean | null>(null);
+  const [run, setRun] = useState<{ done: number; total: number; current: string; lines: string[] } | null>(null);
+  useEffect(() => {
+    fetch("/api/assets/generate").then((r) => r.json()).then((j) => setApiReady(Boolean(j.configured))).catch(() => setApiReady(false));
+  }, []);
+  async function runInTool() {
+    const names = people.filter((p) => p.active).map((p) => p.name);
+    setRun({ done: 0, total: names.length, current: names[0] ?? "", lines: [] });
+    const lines: string[] = [];
+    for (let i = 0; i < names.length; i++) {
+      setRun({ done: i, total: names.length, current: names[i], lines: [...lines] });
+      const j = await fetch("/api/assets/learn/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ person: names[i] }) }).then((r) => r.json()).catch(() => ({ error: "request failed" }));
+      lines.push(j.ok ? `✓ ${j.result.person}: ${j.result.saved} reference photos from ${j.result.looked} looked at${j.result.skipped ? ` (${j.result.skipped})` : ""}` : `✗ ${names[i]}: ${j.error}`);
+      load();
+    }
+    setRun({ done: names.length, total: names.length, current: "", lines });
+  }
   const [hasConnector, setHasConnector] = useState<boolean | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -50,14 +67,30 @@ export default function LearnPage() {
           </p>
         </div>
         <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-          <a href="/api/assets/learn" target="_blank" rel="noreferrer" className={`btn btn-primary${hasConnector === false ? " is-disabled" : ""}`} aria-disabled={hasConnector === false}>
-            Start a learning session
-          </a>
-          <span style={{ fontSize: 11, color: "var(--muted)", textAlign: "right", maxWidth: 240 }}>
-            {hasConnector === false ? "Needs the AF1 Tools connector (home page shows the setup)." : "Opens claude.ai; results come back here on their own."}
+          {apiReady ? (
+            <button className="btn btn-primary" onClick={runInTool} disabled={Boolean(run && run.done < run.total)}>
+              {run && run.done < run.total ? `Learning ${run.current}… (${run.done}/${run.total})` : "Build the reference library"}
+            </button>
+          ) : (
+            <a href="/api/assets/learn" target="_blank" rel="noreferrer" className={`btn btn-primary${hasConnector === false ? " is-disabled" : ""}`} aria-disabled={hasConnector === false}>
+              Start a learning session
+            </a>
+          )}
+          <span style={{ fontSize: 11, color: "var(--muted)", textAlign: "right", maxWidth: 260 }}>
+            {apiReady
+              ? "Runs in the tool: up to 8 library photos per person, the unmistakable ones become reference photos, plus a cue."
+              : hasConnector === false
+                ? "Needs the AF1 Tools connector (home page shows the setup), or an API key in Admin → Claude API."
+                : "Opens claude.ai; results come back here on their own."}
           </span>
         </div>
       </section>
+      {run && (
+        <div className="card reveal" style={{ padding: "10px 14px", fontSize: 13, marginBottom: 18, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+          {run.done < run.total ? `Looking at the library for ${run.current}…` : `Done. ${run.total} people.`}
+          {run.lines.length > 0 && `\n${run.lines.join("\n")}`}
+        </div>
+      )}
 
       <section className="reveal reveal-d1" style={{ marginBottom: 28 }}>
         <div className="section-label" style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>

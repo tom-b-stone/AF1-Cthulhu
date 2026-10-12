@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import JSZip from "jszip";
 import { Table, type TableColumn } from "@/components/ui/table-editable";
@@ -36,7 +36,15 @@ export default function BatchPage() {
   // Claude hand-off: previews + meta go to the server, claude.ai opens with
   // the prompt, and this page polls the server copy until every alt text
   // is back (or 15 minutes pass).
-  const [gen, setGen] = useState<{ phase: "sync" | "waiting"; done: number; total: number; got: number } | null>(null);
+  const [gen, setGen] = useState<{ phase: "sync" | "waiting" | "api"; done: number; total: number; got: number; failed?: number } | null>(null);
+  const [apiMode, setApiMode] = useState<{ configured: boolean; model: string | null } | null>(null);
+  const stopRef = useRef(false);
+  useEffect(() => {
+    fetch("/api/assets/generate")
+      .then((r) => r.json())
+      .then((j) => setApiMode({ configured: Boolean(j.configured), model: j.model ?? null }))
+      .catch(() => setApiMode({ configured: false, model: null }));
+  }, []);
   const [hasConnector, setHasConnector] = useState<boolean | null>(null);
   useEffect(() => {
     fetch("/api/connector")
@@ -211,7 +219,7 @@ export default function BatchPage() {
         width: "90px",
         cell: (r) =>
           r.status === "uploaded" ? (
-            <a href={r.cmsUrl ? `https://staging.audif1team.com${r.cmsUrl}` : "#"} target="_blank" rel="noreferrer" style={{ color: "#6fcf7c", fontSize: 12 }} title={r.uploadedName}>
+            <a href={r.cmsId ? `https://staging.audif1team.com/cms/admin/collections/media/${r.cmsId}` : "#"} target="_blank" rel="noreferrer" style={{ color: "#6fcf7c", fontSize: 12 }} title={`${r.uploadedName ?? ""} · open in the staging CMS`}>
               uploaded ↗
             </a>
           ) : r.status === "error" ? (
@@ -387,7 +395,7 @@ export default function BatchPage() {
 
   async function generateAltText() {
     if (!batch) return;
-    if (hasConnector === false) {
+    if (!apiMode?.configured && hasConnector === false) {
       setNotice("Generate alt text needs the AF1 Tools connector in your Claude. Set it up once from the home page, then click again.");
       return;
     }
@@ -429,7 +437,48 @@ export default function BatchPage() {
         rows: target.map((r) => ({ id: r.id, originalName: r.originalName, fileName: r.fileName, context: r.context, descriptor: r.descriptor, alt: r.alt, width: r.width, height: r.height, people: r.people, date: r.date, scene: r.scene, tags: r.tags })),
       }),
     });
-    // 2. open claude.ai with the prompt
+    // 2a. API key set: describe each photo from here, two at a time
+    if (apiMode?.configured) {
+      stopRef.current = false;
+      let got = 0;
+      let failed = 0;
+      setGen({ phase: "api", done: 0, total: target.length, got: 0, failed: 0 });
+      const queue = [...target];
+      const worker = async () => {
+        while (queue.length && !stopRef.current) {
+          const r = queue.shift()!;
+          try {
+            const j = await fetch("/api/assets/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: batch.id, rowId: r.id }) }).then((x) => x.json());
+            if (!j.ok) throw new Error(j.error ?? "failed");
+            const out = j.result as { descriptor: string; alt: string; people: string[]; scene: string };
+            const proposed = proposeRowTags({ people: out.people, scene: out.scene }, tagTitles);
+            const current = await batchStore.get(batch.id);
+            if (current) {
+              const rows = current.rows.map((x) => (x.id === r.id ? { ...x, alt: out.alt, descriptor: out.descriptor || x.descriptor, people: out.people, scene: out.scene, tags: uniqueTags(x.tags, proposed), ai: { people: out.people, scene: out.scene, tags: proposed } } : x));
+              const next = { ...current, rows };
+              setBatch(next);
+              await batchStore.put(next);
+            }
+            got++;
+          } catch (e) {
+            failed++;
+            const msg = e instanceof Error ? e.message : "failed";
+            const current = await batchStore.get(batch.id);
+            if (current) {
+              const next = { ...current, rows: current.rows.map((x) => (x.id === r.id ? { ...x, note: msg } : x)) };
+              setBatch(next);
+              await batchStore.put(next);
+            }
+          }
+          setGen((g) => (g ? { ...g, done: got + failed, got, failed } : g));
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      setGen(null);
+      setNotice(`Done. Alt text and tags written for ${got} image${got === 1 ? "" : "s"}${failed ? `; ${failed} failed (hover the Check column)` : ""}. Check them, then upload.`);
+      return;
+    }
+    // 2b. no key: open claude.ai with the prompt
     // a named window: "Open the Claude tab" below brings this same tab back
     // to the front instead of opening a second one
     window.open(`/api/assets/handoff?batch=${batch.id}`, "af1-claude");
@@ -538,8 +587,13 @@ export default function BatchPage() {
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button className="btn btn-primary" onClick={generateAltText} disabled={Boolean(gen) || Boolean(busy) || batch.rows.filter((r) => !r.alt.trim()).length === 0}>
-              {gen ? (gen.phase === "sync" ? `Sending ${gen.done}/${gen.total}…` : `Waiting for Claude ${gen.got}/${gen.total}…`) : "Generate alt text"}
+              {gen ? (gen.phase === "sync" ? `Sending ${gen.done}/${gen.total}…` : gen.phase === "api" ? `Writing ${gen.done}/${gen.total}…` : `Waiting for Claude ${gen.got}/${gen.total}…`) : apiMode?.configured ? "Generate alt text & tags" : "Generate alt text"}
             </button>
+            {gen?.phase === "api" && (
+              <button className="btn" onClick={() => { stopRef.current = true; }}>
+                Stop
+              </button>
+            )}
             {gen?.phase === "waiting" && (
               <>
                 <button className="btn" onClick={() => window.open("", "af1-claude")?.focus()}>
@@ -550,7 +604,11 @@ export default function BatchPage() {
                 </button>
               </>
             )}
-            {hasConnector === false && <span style={{ fontSize: 12, color: "#e9c46a" }}>Needs the AF1 Tools connector (home page shows the setup).</span>}
+            {apiMode?.configured ? (
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>Runs in the tool ({apiMode.model}).</span>
+            ) : (
+              hasConnector === false && <span style={{ fontSize: 12, color: "#e9c46a" }}>Needs the AF1 Tools connector (home page shows the setup), or an API key in Admin → Claude API.</span>
+            )}
           </div>
         </div>
         <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
@@ -601,9 +659,9 @@ export default function BatchPage() {
       </section>
       {gen && (
         <div role="status" style={{ background: "#141416", border: "1px solid var(--vapor-purple)", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13 }}>
-          {gen.phase === "sync" ? `Sending previews to the server: ${gen.done} of ${gen.total}` : `Claude is writing in the claude.ai tab: ${gen.got} of ${gen.total} back. Press send there if it hasn't started; this page updates on its own.`}
+          {gen.phase === "sync" ? `Sending previews to the server: ${gen.done} of ${gen.total}` : gen.phase === "api" ? `Claude is looking at the photos: ${gen.done} of ${gen.total} done${gen.failed ? `, ${gen.failed} failed` : ""}. Rows fill in as they come back.` : `Claude is writing in the claude.ai tab: ${gen.got} of ${gen.total} back. Press send there if it hasn't started; this page updates on its own.`}
           <div style={{ height: 4, background: "#2a2a2d", borderRadius: 2, marginTop: 8 }}>
-            <div style={{ height: 4, width: `${Math.round(((gen.phase === "sync" ? gen.done : gen.got) / Math.max(1, gen.total)) * 100)}%`, background: "var(--accent)", borderRadius: 2, transition: "width 0.3s" }} />
+            <div style={{ height: 4, width: `${Math.round(((gen.phase === "waiting" ? gen.got : gen.done) / Math.max(1, gen.total)) * 100)}%`, background: "var(--accent)", borderRadius: 2, transition: "width 0.3s" }} />
           </div>
         </div>
       )}

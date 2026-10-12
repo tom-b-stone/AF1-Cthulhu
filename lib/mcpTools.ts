@@ -19,6 +19,7 @@ import { searchLibrary, fetchLibraryImage } from "./library";
 import { addExample, readExamples } from "./examplesStore";
 import { addReference, listReferences, readReferenceImage } from "./referenceStore";
 import { readCorrections } from "./feedbackStore";
+import { learnPerson } from "./learnRun";
 import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 
@@ -324,6 +325,21 @@ export const TOOLS: ToolDef[] = [
       const refs = await addReference({ person: match, note: typeof args.note === "string" ? args.note.slice(0, 200) : undefined, source: `library:${args.libraryId}`, mime: img.mime, data: img.data });
       console.log(`[connector] ${actor} saved a reference for ${match}`);
       return text(`Saved. ${refs.filter((r) => r.person === match).length} reference photos for ${match}.`);
+    },
+  },
+  {
+    name: "learn_person",
+    annotations: { title: "Learn a person from the library", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description: "Runs the tool's own learning for one person (needs the Anthropic API key set in the app): looks at up to 8 production library photos that name them, saves the unmistakable ones as reference photos (up to 6 per person) and writes a recognition cue into Team knowledge. Call once per person from asset_rulebook's PEOPLE list.",
+    inputSchema: { type: "object", required: ["person"], properties: { person: { type: "string", description: "official name" } } },
+    async run(args, actor) {
+      try {
+        const r = await learnPerson(String(args.person ?? ""), { maxLook: 8, wantRefs: 6 });
+        console.log(`[connector] ${actor} learned ${r.person}: ${r.saved} refs`);
+        return text(`${r.person}: looked at ${r.looked} photos, saved ${r.saved} reference photos${r.cue ? `, cue: ${r.cue}` : ""}${r.skipped ? ` (${r.skipped})` : ""}`);
+      } catch (e) {
+        return text(e instanceof Error ? e.message : "failed", true);
+      }
     },
   },
 ];
