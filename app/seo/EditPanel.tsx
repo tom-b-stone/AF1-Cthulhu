@@ -62,13 +62,14 @@ export default function EditPanel({
 }: {
   item: SeoListItem;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (message: string) => void;
 }) {
   const [en, setEn] = useState<SeoLocaleMeta>(item.en);
   const [de, setDe] = useState<SeoLocaleMeta>(item.de);
   const [loadingDoc, setLoadingDoc] = useState(true);
   const [saving, setSaving] = useState<"draft" | "publish" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [blockingIssues, setBlockingIssues] = useState<string[] | null>(null);
 
   // Re-fetch the live doc on open rather than trusting the list snapshot —
@@ -97,6 +98,7 @@ export default function EditPanel({
   async function save(action: "draft" | "publish", force = false) {
     setSaving(action);
     setError(null);
+    setSuccess(null);
     setBlockingIssues(null);
     try {
       const res = await fetch("/api/seo/doc", {
@@ -113,7 +115,12 @@ export default function EditPanel({
         }
         return;
       }
-      onSaved();
+      const msg =
+        action === "publish"
+          ? `Done. SEO written to: ${json.result?.internalTitle ?? item.internalTitle}. ${json.dateLine ?? "Publication date untouched."}`
+          : `Draft saved: ${item.internalTitle}.`;
+      setSuccess(msg);
+      onSaved(msg);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed.");
     } finally {
@@ -233,6 +240,11 @@ export default function EditPanel({
                 >
                   Save anyway
                 </button>
+              </div>
+            )}
+            {success && (
+              <div style={{ color: success.includes("WARNING") ? "#e06c5b" : "#7fc97f", fontSize: 12, marginBottom: 12 }}>
+                {success}
               </div>
             )}
             {error && (

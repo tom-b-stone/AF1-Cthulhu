@@ -401,8 +401,9 @@ export default function SeoStudioPage() {
         <EditPanel
           item={selected}
           onClose={() => setSelected(null)}
-          onSaved={() => {
+          onSaved={(msg) => {
             setSelected(null);
+            setNotice(msg);
             load();
           }}
         />

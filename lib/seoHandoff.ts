@@ -65,7 +65,11 @@ ${RULES}
 ${pages}
 
 HOW TO ANSWER
-First check your tools. If you have a tool named "seo_publish" (the AF1 Tools connector): call it once per page with collection, id and the four texts, then reply with one short line per page: EN title, DE title, "Published". If it answers "NOT published" with validation issues, fix the text and call it again; never pass force unless the user tells you to.
+First check your tools. If you have a tool named "seo_publish" (the AF1 Tools connector): call it once per page with collection, id and the four texts. Then reply, per page, with exactly what the tool returned in this shape:
+Done. SEO written to: <internal title> (<CMS link from the tool>)
+<the tool's "Publication date untouched" line>
+EN: <title> / DE: <title>
+If it answers "NOT published" with validation issues, fix the text and call it again; never pass force unless the user tells you to.
 
 If you do NOT have that tool, do two things. First, tell the user in 3 short lines that the AF1 Tools connector isn't set up in their Claude yet, that with it you could publish directly, and how to add it (once, about a minute): open ${appOrigin}/connector and click "Make my URL", then in claude.ai go to Settings → Connectors → Add custom connector, name it "AF1 Tools", paste that URL, Add. Say you can't add it for them. Then, below that, reply with ONLY one markdown link per page, one per line. Clicking it publishes the text in SEO Studio. Template:
 [Publish: <internal title>](${appOrigin}/seo/apply?c=<collection>&id=<id>&et=<EN title>&ed=<EN description>&dt=<DE title>&dd=<DE description>)
@@ -85,7 +89,10 @@ HOW TO WORK
 1. Call seo_list_missing with limit 20.
 2. For each doc listed: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
 3. When the list is done, call seo_list_missing again and continue until it reports 0 missing.
-4. Reply with a short table as you go: internal title, EN title, DE title, result. Don't ask me to confirm each page; just work through them. If a page fails to publish for a reason you can't fix (e.g. "One or more children are invalid"), skip it, note it in the table, and continue.`;
+4. Don't ask me to confirm each page; just work through them. If a page fails to publish for a reason you can't fix (e.g. "One or more children are invalid"), skip it and continue.
+5. When everything is done, reply with ONE summary, not a page-by-page log:
+Done. SEO written for <n> docs, publication dates untouched (still published).
+Then, only if any failed: "<m> not published:" followed by one line each: internal title, CMS link, the reason. If the tool ever reports a WARNING about a changed publication date, quote that line verbatim at the top.`;
 }
 
 // Bulk prompt for a hand-picked set of docs (the table's "Generate
@@ -103,7 +110,8 @@ ${list}
 HOW TO WORK
 0. First check your tools. If you do NOT have a tool named seo_publish, stop and tell the user in 3 short lines: the AF1 Tools connector isn't active in their Claude yet; add it once (about a minute) by opening ${appOrigin}/connector, clicking "Make my URL", then in claude.ai Settings → Connectors → Add custom connector, name "AF1 Tools", paste the URL, Add; then click "Generate selected" again. Say you can't add it for them. Do nothing else.
 1. For each doc: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
-2. Reply with a short table: internal title, EN title, DE title, result. Don't ask me to confirm each page. If a page fails for a reason you can't fix, note it and continue.`;
+2. Don't ask me to confirm each page. If a page fails for a reason you can't fix, skip it and continue.
+3. When done, reply with ONE summary: "Done. SEO written for <n> of <total> docs, publication dates untouched (still published)." followed by the CMS link of each (the tool returns it), one per line. If any failed: "<m> not published:" with internal title, CMS link and reason, one per line. If the tool ever reports a WARNING about a changed publication date, quote it verbatim at the top.`;
 }
 
 export function claudeUrlFor(prompt: string): string {

@@ -23,6 +23,16 @@ export type ToolDef = {
   run: (args: Record<string, unknown>, actor: string) => Promise<ToolResult>;
 };
 
+// "Publication date untouched: 12 Sep 2026, still published" — or a loud
+// warning if Payload moved it, which is the one thing this flow must never do.
+export function describeDate(r: { publishedAtBefore: string | null; publishedAtAfter: string | null; status: string }): string {
+  const fmt = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "none";
+  const same = (r.publishedAtBefore ?? "") === (r.publishedAtAfter ?? "");
+  if (same) return `Publication date untouched: ${fmt(r.publishedAtAfter)}, still ${r.status}.`;
+  return `WARNING: publication date changed from ${fmt(r.publishedAtBefore)} to ${fmt(r.publishedAtAfter)} (status ${r.status}). Tell the user.`;
+}
+
 const text = (t: string, isError = false): ToolResult => ({ content: [{ type: "text", text: t }], isError });
 
 function isCollection(v: unknown): v is Collection {
@@ -110,11 +120,12 @@ export const TOOLS: ToolDef[] = [
         return text(`NOT published — fix these and call again:\n${errors.join("\n")}`, true);
       }
 
-      await publishSeo(args.collection, args.id, { en, de });
+      const r = await publishSeo(args.collection, args.id, { en, de });
       console.log(`[connector] ${actor} published SEO for ${args.collection}/${args.id}`);
       const warn = warnings.length ? `\nWarnings (published anyway): ${warnings.join("; ")}` : "";
+      const dateLine = describeDate(r);
       return text(
-        `Published ${args.collection}/${args.id}. Publication date unchanged.\nEN: ${en.title} (${en.title.length}) / ${en.description.length} chars\nDE: ${de.title} (${de.title.length}) / ${de.description.length} chars${warn}`
+        `Done. SEO written to: ${r.internalTitle}\n${r.cmsUrl}\n${dateLine}\nEN: ${en.title} (${en.title.length}) / ${en.description.length} chars\nDE: ${de.title} (${de.title.length}) / ${de.description.length} chars${warn}`
       );
     },
   },

@@ -326,11 +326,21 @@ export async function saveSeoDraft(
 // collection to settle, then PATCH EN with _status: 'published'. publishedAt
 // is read back and re-sent so promoting the draft doesn't reset it to "now"
 // (which would reorder the news feed).
+export type PublishResult = {
+  internalTitle: string;
+  cmsUrl: string;
+  // publishedAt before and after, so the UI / connector can show that the
+  // date really is untouched (and shout if it isn't).
+  publishedAtBefore: string | null;
+  publishedAtAfter: string | null;
+  status: "published" | "draft";
+};
+
 export async function publishSeo(
   collection: Collection,
   id: string,
   locales: { en: SeoLocaleMeta; de?: SeoLocaleMeta }
-): Promise<void> {
+): Promise<PublishResult> {
   const current = await payloadFetch(`/${collection}/${id}?locale=en&depth=0&draft=true`).then((r) => r.json());
   const publishedAt = current?.publishedAt;
 
@@ -352,4 +362,13 @@ export async function publishSeo(
     }),
   });
   if (!res.ok) throw new Error(`Publish failed (${res.status}): ${await res.text()}`);
+
+  const after = await payloadFetch(`/${collection}/${id}?locale=en&depth=0`).then((r) => r.json());
+  return {
+    internalTitle: after?.title ?? current?.title ?? "(untitled)",
+    cmsUrl: cmsAdminUrlFor(collection, id, "en"),
+    publishedAtBefore: publishedAt ?? null,
+    publishedAtAfter: after?.publishedAt ?? null,
+    status: after?._status === "published" ? "published" : "draft",
+  };
 }

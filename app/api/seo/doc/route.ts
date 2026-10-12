@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import { getSeoDoc, saveSeoDraft, publishSeo, type SeoLocaleMeta, type Collection } from "@/lib/payloadClient";
 import { validateSeoField } from "@/lib/seoBrand";
+import { describeDate } from "@/lib/mcpTools";
 
 function isCollection(v: string | null): v is Collection {
   return v === "news" || v === "pages";
@@ -72,7 +73,8 @@ export async function PATCH(req: NextRequest) {
     if (body.action === "draft") {
       await saveSeoDraft(body.collection, body.id, { en: body.en, de: body.de });
     } else {
-      await publishSeo(body.collection, body.id, { en: body.en!, de: body.de });
+      const result = await publishSeo(body.collection, body.id, { en: body.en!, de: body.de });
+      return NextResponse.json({ ok: true, result, dateLine: describeDate(result) });
     }
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -24,6 +24,7 @@ function ApplyInner() {
   const [message, setMessage] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
   const [values, setValues] = useState<Values | null>(null);
+  const [done, setDone] = useState<{ internalTitle: string; cmsUrl: string; dateLine: string } | null>(null);
   const started = useRef(false);
 
   async function publish(v: Values, force: boolean) {
@@ -35,6 +36,7 @@ function ApplyInner() {
     });
     const json = await res.json().catch(() => ({}));
     if (res.ok) {
+      if (json.result) setDone({ internalTitle: json.result.internalTitle, cmsUrl: json.result.cmsUrl, dateLine: json.dateLine ?? "" });
       setState("done");
       return;
     }
@@ -102,7 +104,17 @@ function ApplyInner() {
       <p style={{ opacity: 0.6, fontSize: 13, marginTop: 0, marginBottom: 20 }}>
         {state === "checking" && "Checking the text from Claude…"}
         {state === "publishing" && "Publishing to the CMS (DE draft, then EN publish, publication date unchanged)…"}
-        {state === "done" && "Published. The publication date was not changed."}
+        {state === "done" && !done && "Done. SEO written. The publication date was not changed."}
+        {state === "done" && done && (
+          <>
+            Done. SEO written to:{" "}
+            <a href={done.cmsUrl} target="_blank" rel="noreferrer" style={{ color: "#e9c46a" }}>
+              {done.internalTitle}
+            </a>
+            <br />
+            <span style={{ color: done.dateLine.startsWith("WARNING") ? "#e06c5b" : undefined }}>{done.dateLine}</span>
+          </>
+        )}
         {state === "blocked" && "Not published yet — the text breaks a brand rule:"}
         {state === "error" && "Couldn't publish."}
       </p>

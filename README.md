@@ -84,6 +84,14 @@ done by the user's own Claude account, hand-off in both directions by link:
    isn't signed in yet, `/login` bounces them back to the same apply link afterwards
    (`callbackUrl`).
 
+**What comes back.** Every publish path (connector `seo_publish`, `/seo/apply`, the edit panel)
+reads the doc back after publishing and answers in one shape: `Done. SEO written to: <internal
+title>` + CMS link + `Publication date untouched: <date>, still published.` (`describeDate` in
+`lib/mcpTools.ts`). If Payload ever moved `publishedAt`, that line becomes a red WARNING with
+before/after instead, and the prompts tell Claude to quote it verbatim. Bulk prompts ask Claude for
+one summary at the end ("Done. SEO written for n docs, publication dates untouched") plus a list of
+failures with title, link and reason, not a page-by-page log.
+
 "Generate missing" above the table: with a connector token (see below) it opens one claude.ai
 prompt with no page content at all — Claude lists the missing docs itself (`seo_list_missing`),
 reads each (`seo_get_page`), publishes (`seo_publish`) and loops until nothing is missing, no
