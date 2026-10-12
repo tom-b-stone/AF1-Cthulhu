@@ -1,18 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="12" fill="#0b0b0c"/>
-  <!-- dome -->
-  <path d="M14 34c0-12 8-20 18-20s18 8 18 20v4H14z" fill="#2a2a2d"/>
-  <!-- eyes -->
-  <circle cx="24" cy="30" r="4" fill="#ff4519"/>
-  <circle cx="40" cy="30" r="4" fill="#ff4519"/>
-  <circle cx="24" cy="30" r="1.4" fill="#0b0b0c"/>
-  <circle cx="40" cy="30" r="1.4" fill="#0b0b0c"/>
-  <!-- tentacles -->
-  <g fill="none" stroke="#c9cbc6" stroke-width="3" stroke-linecap="round">
-    <path d="M18 40c-2 6 2 8-1 14"/>
-    <path d="M25 40c-1 6 3 8 0 14"/>
-    <path d="M32 40c0 6 2 9 0 15"/>
-    <path d="M39 40c1 6-3 8 0 14"/>
-    <path d="M46 40c2 6-2 8 1 14"/>
-  </g>
+  <text x="32" y="40" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="19" font-weight="700" fill="#ff4519">^(;,;)^</text>
 </svg>

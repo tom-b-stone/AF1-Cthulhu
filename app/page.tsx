@@ -46,8 +46,24 @@ const TILES: { title: string; href: string; external?: boolean; status: Status; 
 
 export default function Home() {
   return (
-    <div style={{ maxWidth: 880, margin: "0 auto", paddingTop: 16 }}>
-      <KtuluLogo height={360} />
+    <div style={{ maxWidth: 880, margin: "0 auto", paddingTop: 16, position: "relative", zIndex: 1 }}>
+      <KtuluLogo background />
+      <div
+        aria-label="Ktulu"
+        style={{
+          textAlign: "center",
+          fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+          fontSize: "clamp(56px, 10vw, 112px)",
+          fontWeight: 700,
+          color: "var(--accent)",
+          lineHeight: 1,
+          letterSpacing: "0.02em",
+          margin: "40px 0 12px",
+          textShadow: "0 0 24px rgba(255,69,25,0.35)",
+        }}
+      >
+        ^(;,;)^
+      </div>
       <h1 style={{ textAlign: "center", margin: "20px 0 4px", letterSpacing: 2 }}>AF1 Ktulu</h1>
       <p style={{ textAlign: "center", margin: 0, opacity: 0.6, fontSize: 13 }}>Internal tools for audif1.com</p>
 
@@ -81,6 +97,8 @@ export default function Home() {
             border: "1px solid var(--border)",
             borderRadius: 8,
             padding: "14px 16px",
+            background: "rgba(11,11,12,0.78)",
+            backdropFilter: "blur(2px)",
             textDecoration: "none",
             color: "inherit",
           } as const;

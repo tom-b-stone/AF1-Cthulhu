@@ -33,8 +33,7 @@ export default function Sidebar() {
       }}
     >
       <Link href="/" style={{ fontWeight: 600, marginBottom: 24, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon.svg" alt="" width={20} height={20} style={{ borderRadius: 4 }} />
+        <span style={{ fontFamily: "ui-monospace, Menlo, Consolas, monospace", color: "var(--accent)", fontSize: 13 }}>^(;,;)^</span>
         AF1 Ktulu
       </Link>
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
