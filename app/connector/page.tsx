@@ -1,5 +1,7 @@
 "use client";
 
+import ConnectorOnboarding from "@/app/components/ConnectorOnboarding";
+
 import { useEffect, useState } from "react";
 
 type Status = { active: boolean; createdAt: string | null; persistent: boolean };
@@ -12,6 +14,7 @@ export default function ConnectorPage() {
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [replay, setReplay] = useState(false);
 
   const refresh = () =>
     fetch("/api/connector")
@@ -67,6 +70,10 @@ export default function ConnectorPage() {
   return (
     <div style={{ maxWidth: 640 }}>
       <h1 style={{ marginBottom: 4 }}>Claude connector</h1>
+      <button className="btn" onClick={() => setReplay(true)} style={{ marginBottom: 12 }}>
+        Open the step-by-step setup
+      </button>
+      {replay && <ConnectorOnboarding force onClose={() => setReplay(false)} />}
       <p style={{ opacity: 0.7, fontSize: 13, marginTop: 0 }}>
         Lets your own Claude (claude.ai) use the AF1 tools directly. With it, &quot;Generate SEO title&quot; ends with
         Claude publishing the text itself — no link to click. Set it up once per person, about one minute.

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Sidebar from "./components/Sidebar";
 import ToolHeader from "./components/ToolHeader";
 import NeuronFx from "./components/NeuronFx";
+import ConnectorOnboarding from "./components/ConnectorOnboarding";
 import SessionProviderWrapper from "./components/SessionProviderWrapper";
 import "./globals.css";
 import { wordmarkFontsHref } from "@/lib/wordmarkFonts";
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Header spans the full width; the sidebar is in-tool navigation
               under it, the main column takes the rest. */}
           <NeuronFx />
+          <ConnectorOnboarding />
           <ToolHeader />
           <div style={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
             <Sidebar />
