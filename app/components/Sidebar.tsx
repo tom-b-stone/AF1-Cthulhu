@@ -25,7 +25,6 @@ const SIDEBARS: Record<string, Section[]> = {
       entries: [
         { href: "/assets", label: "New batch", exact: true },
         { href: "/assets/batches", label: "Batches", note: "7 days" },
-        { href: "/assets/rules", label: "Naming + alt rules" },
         { href: "/assets/knowledge", label: "Team knowledge", note: "people, cues" },
       ],
     },

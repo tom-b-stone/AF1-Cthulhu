@@ -11,6 +11,7 @@ import type { KnowledgeEntry } from "@/lib/teamKnowledge";
 import FolderPicker from "@/app/components/FolderPicker";
 import Modal from "@/app/components/Modal";
 import { SideButton, SideSection, useSidebarContent } from "@/app/components/SidebarSlot";
+import Steps from "@/app/components/Steps";
 
 type Row = AssetRow & { key: string; thumb?: string; issues: string[]; nn: number };
 
@@ -24,6 +25,7 @@ export default function BatchPage() {
   const [pickFolder, setPickFolder] = useState(false);
   const [confirmUpload, setConfirmUpload] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [dialogRow, setDialogRow] = useState<string | null>(null);
   const [knowledge, setKnowledge] = useState<KnowledgeEntry[]>([]);
   useEffect(() => {
     fetch("/api/assets/knowledge")
@@ -125,20 +127,6 @@ export default function BatchPage() {
           </span>
         ),
       },
-      {
-        key: "context",
-        header: "Context",
-        width: "110px",
-        cell: (r) => (
-          <select value={r.context} onChange={(e) => updateRow(r.id, { context: e.target.value })} className="input" style={{ padding: "3px 6px", fontSize: 12, width: "100%" }}>
-            {CONTEXTS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        ),
-      },
       { key: "descriptor", header: "Descriptor", width: "1fr", editable: true },
       {
         key: "fileName",
@@ -172,16 +160,18 @@ export default function BatchPage() {
         key: "issues",
         header: "Check",
         width: "140px",
-        cell: (r) =>
-          r.issues.length ? (
-            <span title={r.issues.join("\n")} style={{ color: "#e9c46a", fontSize: 12 }}>
-              {r.issues.length} issue{r.issues.length === 1 ? "" : "s"}
-            </span>
-          ) : r.alt ? (
-            <span style={{ color: "#6fcf7c", fontSize: 12 }}>ok · {r.alt.length}/{ALT_MAX}</span>
-          ) : (
-            <span style={{ color: "var(--muted)", fontSize: 12 }}>no alt yet</span>
-          ),
+        cell: (r) => (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDialogRow(r.id);
+            }}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: r.issues.length ? "#e9c46a" : r.alt ? "#6fcf7c" : "var(--muted)", textDecoration: "underline dotted" }}
+            title="Open"
+          >
+            {r.issues.length ? `${r.issues.length} issue${r.issues.length === 1 ? "" : "s"}` : r.alt ? `ok · ${r.alt.length}/${ALT_MAX}` : "no alt yet"}
+          </button>
+        ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,9 +302,10 @@ export default function BatchPage() {
       <section className="page-head reveal">
         <div>
           <div className="section-label" style={{ marginBottom: 8 }}>Batch · created {new Date(batch.createdAt).toLocaleString("en-GB")}</div>
-          <h1 style={{ fontSize: 24 }}>10_Media-Galleries/{batch.folderPath}</h1>
+          <h1 style={{ fontSize: 24 }}>{batch.targetFolderPath ?? `10_Media-Galleries/${batch.folderPath}`}</h1>
         </div>
       </section>
+      <Steps current={batch.rows.every((r) => r.status === "uploaded") ? 4 : withAlt === batch.rows.length ? 4 : 3} done={[1, 2, ...(withAlt === batch.rows.length ? [3] : []), ...(batch.rows.every((r) => r.status === "uploaded") ? [4] : [])]} />
       <section className="reveal reveal-d1" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 22 }}>
         {[
           { n: batch.rows.length, l: "Images" },
@@ -336,8 +327,7 @@ export default function BatchPage() {
           {batch.targetFolderId ? "Change" : "Choose folder"}
         </button>
         <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>
-          {batch.rows.filter((r) => r.status === "uploaded").length} uploaded · {batch.rows.filter((r) => r.status !== "uploaded" && r.alt.trim()).length} ready ·{" "}
-          {batch.rows.filter((r) => !r.alt.trim()).length} without alt text
+          Step 3: every image needs an alt text (click a row&apos;s check to edit it in a dialog). Step 4: Upload, in the left bar.
         </span>
       </section>
       {progress && (
@@ -374,6 +364,73 @@ export default function BatchPage() {
           </div>
         </Modal>
       )}
+      {dialogRow && (() => {
+        const r = rows.find((x) => x.id === dialogRow);
+        if (!r) return null;
+        return (
+          <Modal title={r.originalName} onClose={() => setDialogRow(null)} width={720}>
+            <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 18, fontSize: 13 }}>
+              <div>
+                {r.thumb && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.thumb} alt="" style={{ width: 200, height: 200, objectFit: "cover", borderRadius: 8 }} />
+                )}
+                <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 8 }}>
+                  {r.width}×{r.height} · {fmtBytes(r.bytes)}
+                  <br />
+                  <code style={{ fontSize: 11 }}>{r.fileName}</code>
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+                <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
+                  Alt text (English, under {ALT_MAX})
+                  <textarea className="input" rows={3} value={r.alt} onChange={(e) => updateRow(r.id, { alt: e.target.value })} />
+                  <span style={{ textAlign: "right", color: r.alt.length > ALT_MAX ? "#e06c5b" : "var(--muted)" }}>{r.alt.length}/{ALT_MAX}</span>
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
+                  Descriptor (2–6 words, goes into the file name)
+                  <input className="input" value={r.descriptor} onChange={(e) => updateRow(r.id, { descriptor: e.target.value })} onBlur={(e) => updateRow(r.id, { descriptor: cleanDescriptor(e.target.value) })} />
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
+                  Image type in the file name (gallery is the default; hero / teaser / quote only when the picture is made for that slot)
+                  <select className="input" value={r.context} onChange={(e) => updateRow(r.id, { context: e.target.value })}>
+                    {CONTEXTS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  <div className="section-label" style={{ marginBottom: 6 }}>Checks</div>
+                  {r.issues.length === 0 ? (
+                    <div style={{ color: "#6fcf7c" }}>{r.alt ? "All good." : "No alt text yet."}</div>
+                  ) : (
+                    <ul style={{ margin: 0, paddingLeft: 18, color: "#e9c46a", lineHeight: 1.7 }}>
+                      {r.issues.map((i, k) => (
+                        <li key={k}>{i}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn" onClick={() => { const i = rows.findIndex((x) => x.id === r.id); if (i > 0) setDialogRow(rows[i - 1].id); }} disabled={rows.findIndex((x) => x.id === r.id) === 0}>
+                      ← Prev
+                    </button>
+                    <button className="btn" onClick={() => { const i = rows.findIndex((x) => x.id === r.id); if (i < rows.length - 1) setDialogRow(rows[i + 1].id); }} disabled={rows.findIndex((x) => x.id === r.id) === rows.length - 1}>
+                      Next →
+                    </button>
+                  </div>
+                  <button className="btn btn-primary" onClick={() => setDialogRow(null)}>
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
       {notice && (
         <div role="status" style={{ background: notice.includes("Not uploaded") ? "#2a1512" : "#122a18", border: `1px solid ${notice.includes("Not uploaded") ? "#c0392b" : "#2e7d4f"}`, borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13, display: "flex", justifyContent: "space-between", whiteSpace: "pre-wrap" }}>
           <span>{notice}</span>

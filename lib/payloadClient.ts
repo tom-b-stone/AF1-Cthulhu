@@ -67,6 +67,9 @@ async function payloadFetch(path: string, init: RequestInit = {}, retry = true):
   return res;
 }
 
+// Exposed for modules that only need to read (races calendar).
+export const payloadFetchPublic = (path: string) => payloadFetch(path);
+
 export type Collection = "news" | "pages";
 
 export type SeoLocaleMeta = { title: string; description: string };

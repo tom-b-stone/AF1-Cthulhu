@@ -8,11 +8,12 @@ import type { KnowledgeEntry, KnowledgeKind } from "@/lib/teamKnowledge";
 // Team knowledge editor: people, terms, rules and alt-text patterns the
 // Asset Uploader (and Claude, through the connector) work from. Shared by
 // everyone, saved in the app. Add / edit / delete / switch off.
+// Only people and terms are editable here. The alt-text rules and sentence
+// patterns are the tool's own rulebook (lib/teamKnowledge.ts) and stay out
+// of the user's way.
 const KINDS: { k: KnowledgeKind; label: string; hint: string }[] = [
   { k: "person", label: "People", hint: "Official names, roles, visual cues. German form where it differs." },
   { k: "term", label: "Names & terms", hint: "Team, car, partners: the exact spellings." },
-  { k: "rule", label: "Alt text rules", hint: "What every alt text must follow." },
-  { k: "pattern", label: "Patterns", hint: "Sentence shapes that match the CMS." },
 ];
 
 const EMPTY: KnowledgeEntry = { id: "", kind: "person", name: "", active: true };
@@ -66,7 +67,7 @@ export default function KnowledgePage() {
     setDirty(true);
   }
 
-  const shown = useMemo(() => (entries ?? []).filter((e) => filter === "all" || e.kind === filter), [entries, filter]);
+  const shown = useMemo(() => (entries ?? []).filter((e) => (e.kind === "person" || e.kind === "term") && (filter === "all" || e.kind === filter)), [entries, filter]);
 
   useSidebarContent(
     <>
@@ -79,7 +80,7 @@ export default function KnowledgePage() {
         </SideButton>
       </SideSection>
       <SideSection title="Show">
-        <SideButton onClick={() => setFilter("all")} active={filter === "all"} note={entries?.length ?? ""}>
+        <SideButton onClick={() => setFilter("all")} active={filter === "all"} note={entries?.filter((e) => e.kind === "person" || e.kind === "term").length ?? ""}>
           All
         </SideButton>
         {KINDS.map((k) => (
@@ -99,8 +100,8 @@ export default function KnowledgePage() {
           <div className="section-label" style={{ marginBottom: 8 }}>Asset Uploader · shared</div>
           <h1>Team knowledge</h1>
           <p>
-            Who is who, how things are spelled, what an alt text must look like. Claude reads this when it names and describes photos; the
-            checks in the batch table use it too. Edit here, save once, it applies for everyone.
+            Who is who and how things are spelled. Claude reads this when it names and describes photos; the checks in the batch table use it
+            too. Edit here, save once, it applies for everyone.
           </p>
         </div>
       </section>
