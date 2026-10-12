@@ -26,7 +26,8 @@ export const SEED_KNOWLEDGE: KnowledgeEntry[] = [
   { id: "team", kind: "term", name: "Audi Revolut F1® Team", de: "Audi Revolut F1® Team", aliases: ["Audi F1 Team", "AF1 Team", "Audi Revolut F1 Team", "Audi-F1", "ARF1T"], note: "Always with the ® after F1. Never shortened. Same in German.", active: true },
   { id: "car", kind: "term", name: "Audi R26", aliases: ["R26", "the car", "the R26"], note: "The 2026 car. 'Audi R26' on first mention in an alt text, 'R26' after. Never 'A26' or 'R-26'.", active: true },
   { id: "f1", kind: "term", name: "F1®", aliases: ["F1", "Formula 1", "Formula One"], note: "F1® and Formula 1® carry the mark. 'Grand Prix' written out; 'GP' only inside file names.", active: true },
-  { id: "revolut", kind: "term", name: "Revolut", note: "Title partner. 'Revolut' alone when it means the partner, never 'Revolute'.", active: true },
+  { id: "revolut", kind: "term", name: "Revolut", note: "Partner; on the site 'the official Audi Revolut F1® Team money app'. 'Revolut' alone when it means the partner, never 'Revolute'.", active: true },
+  { id: "apex", kind: "term", name: "Revolut Apex Card", de: "Revolut Apex Card", aliases: ["Apex card", "Apex Card", "Revolut Apex", "the Apex", "Audi Apex Card", "Revolut card"], note: "The card product, always this way: 'Revolut Apex Card', capital A and C, with 'Revolut' in front. Same in German. Site wording: 'The Revolut Apex Card.' and the alt text 'Audi Revolut F1® Team Revolut Apex Card'.", active: true },
   { id: "adidas", kind: "term", name: "adidas", note: "Lowercase a, always. Pattern in use: 'adidas x Audi Revolut F1® Team …'.", active: true },
   { id: "ddp", kind: "term", name: "Audi Driver Development Programme", aliases: ["DDP", "Driver Development Programme"], note: "British spelling 'Programme'.", active: true },
 
