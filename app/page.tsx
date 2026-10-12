@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function Home() {
   return (
     <div>
-      <h1>AF1 Cthulhu</h1>
+      <h1>AF1 Ktulu</h1>
       <p>Internal tool shell for audif1.com — pick a tool from the sidebar.</p>
       <ul>
         <li><strong>UTM Studio</strong> — link builder (to be migrated in here)</li>

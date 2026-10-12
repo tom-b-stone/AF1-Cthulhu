@@ -1,7 +1,7 @@
-# AF1 Cthulhu
+# AF1 Ktulu
 
 Internal tool shell for audif1.com, built alongside UTM Studio. One Next.js app, several tools
-in the sidebar, deployed to Vercel, tested against `staging.audif1team.com` (the staging CMS
+in the sidebar, deployed at https://af1-ktulu.vercel.app (repo tom-b-stone/AF1-Ktulu; was "AF1-Cthulhu" until 2026-10-12), tested against `staging.audif1team.com` (the staging CMS
 domain — note it's `audif1team.com`, not `audif1.com`) before anything touches production.
 
 ## Navigation structure

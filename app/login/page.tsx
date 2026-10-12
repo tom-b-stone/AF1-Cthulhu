@@ -60,7 +60,7 @@ function LoginError() {
 export default function LoginPage() {
   return (
     <div style={{ maxWidth: 360 }}>
-      <h1>AF1 Cthulhu</h1>
+      <h1>AF1 Ktulu</h1>
       <p style={{ fontSize: 13, opacity: 0.7 }}>
         Sign in with your slash.digital Google account — same restriction as UTM Studio.
       </p>

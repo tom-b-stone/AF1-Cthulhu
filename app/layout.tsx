@@ -4,7 +4,7 @@ import SessionProviderWrapper from "./components/SessionProviderWrapper";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AF1 Cthulhu",
+  title: "AF1 Ktulu",
   description: "Internal tools for audif1.com: UTM Studio, SEO Studio, Asset Uploader, CRM Images",
 };
 
