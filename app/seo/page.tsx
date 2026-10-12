@@ -140,6 +140,7 @@ export default function SeoStudioPage() {
   // panel). No Claude involved: Claude only writes text, the tool publishes.
   // Rows whose text breaks a hard brand rule are reported, not forced.
   const [confirmPublish, setConfirmPublish] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; action: "draft" | "publish"; current: string } | null>(null);
   async function saveDrafts() {
     return writeEdits("draft");
   }
@@ -147,11 +148,14 @@ export default function SeoStudioPage() {
     if (!items || dirtyKeys.length === 0) return;
     setConfirmPublish(false);
     setSaving(true);
+    setNotice(null);
     const failures: string[] = [];
     let saved = 0;
+    let n = 0;
     for (const key of dirtyKeys) {
       const item = items.find((i) => rowKey(i) === key);
       if (!item) continue;
+      setProgress({ done: n++, total: dirtyKeys.length, action, current: item.internalTitle });
       const en = merged(item, "en");
       const de = merged(item, "de");
       const hard = [
@@ -184,6 +188,7 @@ export default function SeoStudioPage() {
       }
     }
     setSaving(false);
+    setProgress(null);
     const verb = action === "publish" ? "published, publication dates untouched" : "saved as draft";
     setNotice(`Done. ${saved} doc${saved === 1 ? "" : "s"} ${verb}${failures.length ? `\nNot written: ${failures.length}\n${failures.join("\n")}` : "."}`);
     load();
@@ -480,10 +485,35 @@ export default function SeoStudioPage() {
       </div>
 
       {error && <div style={{ color: "#e06c5b", marginBottom: 16, fontSize: 13 }}>Couldn&apos;t load the list: {error}</div>}
+      {progress && (
+        <div
+          role="status"
+          style={{ background: "#141416", border: "1px solid var(--vapor-purple)", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13 }}
+        >
+          {progress.action === "publish" ? "Publishing" : "Saving drafts"} {progress.done + 1} of {progress.total}: {progress.current}
+          <div style={{ height: 4, background: "#2a2a2d", borderRadius: 2, marginTop: 8 }}>
+            <div style={{ height: 4, width: `${Math.round(((progress.done + 1) / progress.total) * 100)}%`, background: "var(--accent)", borderRadius: 2, transition: "width 0.2s" }} />
+          </div>
+        </div>
+      )}
       {notice && (
-        <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10, whiteSpace: "pre-wrap" }}>
-          {notice}{" "}
-          <button onClick={() => setNotice(null)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", opacity: 0.6 }}>
+        <div
+          role="status"
+          style={{
+            background: notice.includes("WARNING") || notice.includes("Not written") ? "#2a1512" : "#122a18",
+            border: `1px solid ${notice.includes("WARNING") || notice.includes("Not written") ? "#c0392b" : "#2e7d4f"}`,
+            borderRadius: 8,
+            padding: "10px 14px",
+            margin: "0 0 12px",
+            fontSize: 13,
+            whiteSpace: "pre-wrap",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <span>{notice}</span>
+          <button onClick={() => setNotice(null)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", opacity: 0.6, fontSize: 14, lineHeight: 1 }}>
             ×
           </button>
         </div>

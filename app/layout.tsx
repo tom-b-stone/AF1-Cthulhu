@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Sidebar from "./components/Sidebar";
+import ToolHeader from "./components/ToolHeader";
 import SessionProviderWrapper from "./components/SessionProviderWrapper";
 import "./globals.css";
 
@@ -15,7 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SessionProviderWrapper>
           <div style={{ display: "flex" }}>
             <Sidebar />
-            <main style={{ flex: 1, minWidth: 0, padding: "32px 40px" }}>{children}</main>
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+              <ToolHeader />
+              <main style={{ flex: 1, minWidth: 0, padding: "28px 40px" }}>{children}</main>
+            </div>
           </div>
         </SessionProviderWrapper>
       </body>
