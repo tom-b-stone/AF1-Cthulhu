@@ -29,7 +29,9 @@ export function buildAssetPrompt(batchId: string, count: number, folderPath: str
 APPROVALS: when claude.ai asks you to allow an AF1 Tools call, ask the user once to choose "Always allow" for the AF1 Tools connector, then continue without asking again.
 
 HOW TO WORK
-0. Check your tools. If you do NOT have a tool named asset_list_batch, stop and tell the user in 3 short lines: the AF1 Tools connector isn't active in their Claude yet; set it up once on ${appOrigin} (home page shows the steps, or ${appOrigin}/connector), then click "Generate alt text" again. Say you can't add it for them. Do nothing else.
+0. Check your tools. If you do NOT have a tool named asset_list_batch:
+   - If you DO have seo_publish: the AF1 Tools connector is connected but claude.ai still holds an old tool list. Tell the user in 2 lines: in claude.ai go to Settings → Connectors → AF1 Tools, remove it and add it again with the same URL (from ${appOrigin}/connector), then start a new chat and click "Generate alt text" again. Do nothing else.
+   - If you have no AF1 tools at all: tell the user in 3 short lines that the AF1 Tools connector isn't active in their Claude yet; set it up once on ${appOrigin} (the home page shows the steps), then click "Generate alt text" again. Say you can't add it for them. Do nothing else.
 1. Call asset_rulebook once and follow it exactly.
 2. Call asset_list_batch with batchId "${batchId}". It lists every photo with its id and what is already known (round, session, date, original file name, people if any).
 3. For each photo: call asset_get_image (batchId, rowId) to see it, then call asset_set_meta (batchId, rowId, descriptor, alt). Write from what is in the picture plus the batch facts (Grand Prix, session). Skip nothing; a photo you cannot read gets a short factual alt from the batch facts.
