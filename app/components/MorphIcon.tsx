@@ -234,6 +234,9 @@ export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq 
       geo.dispose();
       mat.dispose();
       renderer.dispose();
+      // dispose() keeps the GL context alive; browsers allow ~16 of them, so
+      // every home visit would leak four until the icons stop rendering.
+      renderer.forceContextLoss();
     };
   }, [size, shape, seed, freq, amp, hue, speed, paused, pointer]);
 

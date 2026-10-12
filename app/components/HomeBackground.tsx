@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import KtuluLogo, { type AsciiSource } from "./KtuluLogo";
 
 // The home page background: one of a few images rendered as a living
@@ -36,7 +37,13 @@ export function useBackgroundChoice(): [string, (k: string) => void] {
 
 export default function HomeBackground({ choice }: { choice: string }) {
   const bg = BACKGROUNDS[choice] ?? BACKGROUNDS.vapor;
-  return (
+  // Rendered into <body>, not into <main>: main animates with a transform on
+  // every page enter, and a transformed ancestor turns position:fixed into
+  // "fixed inside main", so the canvas stopped at main's edges.
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => setHost(document.body), []);
+  if (!host) return null;
+  return createPortal(
     <>
       <KtuluLogo background source={bg.source} opacity={bg.opacity} />
       {/* Vignette over the ASCII field so the copy stays readable: darkest
@@ -46,13 +53,16 @@ export default function HomeBackground({ choice }: { choice: string }) {
         style={{
           position: "fixed",
           inset: 0,
-          zIndex: 0,
+          width: "100vw",
+          height: "100dvh",
+          zIndex: -1,
           pointerEvents: "none",
           background:
             "radial-gradient(ellipse 60% 70% at 50% 45%, rgba(4,6,14,0.82) 0%, rgba(4,6,14,0.55) 55%, rgba(4,6,14,0.15) 100%)",
         }}
       />
-    </>
+    </>,
+    host
   );
 }
 

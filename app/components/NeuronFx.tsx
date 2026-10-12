@@ -55,16 +55,27 @@ export default function NeuronFx() {
       },
       { threshold: 0.08 }
     );
-    const scan = () => document.querySelectorAll<HTMLElement>(".reveal:not(.in):not([data-rv])").forEach((el) => {
-      el.dataset.rv = "1";
-      io.observe(el);
-    });
+    const scan = () =>
+      document.querySelectorAll<HTMLElement>(".reveal:not(.in):not([data-rv])").forEach((el) => {
+        el.dataset.rv = "1";
+        // already in view (first paint, back navigation): show it now rather
+        // than waiting for the observer's first callback
+        const r = el.getBoundingClientRect();
+        if (r.top < window.innerHeight && r.bottom > 0) el.classList.add("in");
+        else io.observe(el);
+      });
     scan();
     const mo = new MutationObserver(() => scan());
     mo.observe(document.body, { childList: true, subtree: true });
+    // Safety net: whatever the observer missed (back navigation, a tab that
+    // was hidden while mounting) is shown after a moment anyway.
+    const fallback = window.setTimeout(() => {
+      document.querySelectorAll<HTMLElement>(".reveal:not(.in)").forEach((el) => el.classList.add("in"));
+    }, 1500);
     return () => {
       io.disconnect();
       mo.disconnect();
+      window.clearTimeout(fallback);
     };
   }, [pathname]);
 

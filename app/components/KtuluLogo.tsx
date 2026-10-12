@@ -196,7 +196,11 @@ export default function KtuluLogo({
     };
     img.src = source.src;
 
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      ready = false;
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    };
   }, [source.src, source.gamma, source.gain, source.fit]);
 
   if (background) {
@@ -204,7 +208,7 @@ export default function KtuluLogo({
       <canvas
         ref={ref}
         aria-hidden
-        style={{ position: "fixed", inset: 0, width: "100%", height: "100%", display: "block", opacity, pointerEvents: "none", zIndex: 0, background: "#000" }}
+        style={{ position: "fixed", inset: 0, width: "100vw", height: "100dvh", display: "block", opacity, pointerEvents: "none", zIndex: -1, background: "#000" }}
       />
     );
   }
