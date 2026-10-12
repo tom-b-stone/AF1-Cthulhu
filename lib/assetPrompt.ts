@@ -79,6 +79,7 @@ HOW TO WORK
 Done.
 Cues updated: <names>
 Reference photos saved: <n>
+Last line, exactly: Back to the tool: ${appOrigin}/assets/learn
 Examples saved: <n>
 Then one line per cue you wrote.`;
 }

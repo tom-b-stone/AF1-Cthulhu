@@ -72,7 +72,7 @@ export default function LearnPage() {
               {run && run.done < run.total ? `Learning ${run.current}… (${run.done}/${run.total})` : "Build the reference library"}
             </button>
           ) : (
-            <a href="/api/assets/learn" target="_blank" rel="noreferrer" className={`btn btn-primary${hasConnector === false ? " is-disabled" : ""}`} aria-disabled={hasConnector === false}>
+            <a href="/api/assets/learn" className={`btn btn-primary${hasConnector === false ? " is-disabled" : ""}`} aria-disabled={hasConnector === false}>
               Start a learning session
             </a>
           )}

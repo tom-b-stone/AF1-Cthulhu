@@ -82,7 +82,7 @@ export function SideButton({
     </>
   );
   if (href) {
-    const ext = href.startsWith("http") || href.startsWith("/api/");
+    const ext = href.startsWith("http"); // hand-offs (/api/…) navigate this tab; Claude links back
     return (
       <a href={href} target={ext ? "_blank" : undefined} rel={ext ? "noreferrer" : undefined} style={style} className="side-btn" aria-disabled={disabled}>
         {inner}

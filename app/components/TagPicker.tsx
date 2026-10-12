@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ContentTag } from "@/lib/contentTags";
 
 // Chip input for content tags. Type to filter the CMS vocabulary, Enter or
@@ -17,6 +18,7 @@ export default function TagPicker({
   onCreate,
   placeholder = "Add a tag…",
   compact = false,
+  onOpenChange,
 }: {
   value: string[];
   available: ContentTag[];
@@ -26,12 +28,37 @@ export default function TagPicker({
   onCreate?: (title: string) => Promise<ContentTag | null>;
   placeholder?: string;
   compact?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   const [creating, setCreating] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  // compact (table cell): while open, the editor floats over the table in a
+  // portal, measured from the cell, so it is never clipped by the row
+  const floating = compact && open;
+  useLayoutEffect(() => {
+    if (!floating) return;
+    const measure = () => {
+      const r = anchorRef.current?.getBoundingClientRect();
+      if (r) setRect({ top: r.top, left: r.left, width: Math.max(r.width, 380) });
+    };
+    measure();
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [floating]);
+  useEffect(() => {
+    onOpenChange?.(open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const titles = useMemo(() => available.map((t) => t.title), [available]);
   const shown = useMemo(() => [...locked, ...value.filter((v) => !locked.includes(v))], [locked, value]);
@@ -79,7 +106,7 @@ export default function TagPicker({
     else add(opt);
   }
 
-  return (
+  const inner = (
     <div ref={boxRef} style={{ position: "relative" }}>
       <div
         style={{
@@ -92,6 +119,8 @@ export default function TagPicker({
           background: "var(--bg-2)",
           borderRadius: 8,
           minHeight: compact ? 32 : 38,
+          ...(floating ? { boxShadow: "0 12px 30px rgba(0,0,0,0.5)", borderColor: "var(--accent)", background: "var(--surface)" } : {}),
+          ...(compact && !open ? { flexWrap: "nowrap", overflow: "hidden" } : {}),
         }}
         onClick={() => setOpen(true)}
       >
@@ -151,6 +180,7 @@ export default function TagPicker({
             else if (e.key === "Backspace" && !q && value.length) remove(value[value.length - 1]);
           }}
           placeholder={shown.length ? "" : placeholder}
+          autoFocus={floating}
           style={{ flex: 1, minWidth: 120, background: "transparent", border: "none", outline: "none", color: "var(--fg)", fontSize: 13, padding: "2px 4px" }}
         />
       </div>
@@ -212,6 +242,17 @@ export default function TagPicker({
           ))}
         </ul>
       )}
+    </div>
+  );
+
+  if (!floating) return <div ref={anchorRef}>{inner}</div>;
+  return (
+    <div ref={anchorRef} data-tp-open="1" style={{ minHeight: 32 }}>
+      {rect &&
+        createPortal(
+          <div style={{ position: "fixed", top: rect.top, left: rect.left, width: rect.width, zIndex: 80 }}>{inner}</div>,
+          document.body
+        )}
     </div>
   );
 }

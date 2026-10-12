@@ -89,6 +89,20 @@ export function contextFromName(filename: string): Context | "" {
   return (m?.[1] as Context) ?? "";
 }
 
+// Fallback descriptor from an alt text when Claude didn't give one: the
+// first meaningful words, team name and filler dropped.
+const STOP = new Set(["a", "an", "the", "of", "in", "on", "at", "to", "and", "with", "for", "from", "by", "his", "her", "their", "its", "during", "before", "after", "while", "audi", "revolut", "f1", "team", "grand", "prix", "gp"]);
+export function descriptorFromAlt(alt: string): string {
+  const words = alt
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w && !STOP.has(w));
+  return cleanDescriptor(words.slice(0, 5).join("-"));
+}
+
 export function proposeFileName(opts: { year: number; loc: string; context?: Context | ""; descriptor?: string; nn: number; ext?: string }): string {
   const parts = ["audif1", String(opts.year), opts.loc.toUpperCase(), "GP"];
   if (opts.context) parts.push(opts.context);
