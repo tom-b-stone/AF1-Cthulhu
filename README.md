@@ -160,11 +160,25 @@ and `T02_MONZ_ARF1T04_17_26_…`, US date order in the second). Taken from the l
 
 Built: `/assets` (new batch), `/assets/batch/[id]` (editable table: context, descriptor, alt, checks;
 ZIP export with alt-texts.csv + .md), `/assets/batches`, `/assets/rules`, `/assets/knowledge`.
-Next: server-side batch store (Vercel Blob) so the connector can read previews; connector tools
-`asset_list_batch` / `asset_get_image` / `asset_set_meta` + claude.ai hand-off for descriptor + alt;
-folder picker + create; upload to staging (`POST /media` multipart with alt + folder, numbering per
-folder); production toggle (second CMS login in /admin); SlashLens intake (`/assets/intake`, Drive
-file ids, link-sharing is on).
+Journey (`app/components/Steps.tsx`): 1 Images → 2 Grand Prix & folder (calendar from the
+production `race-weekend` collection, `lib/races.ts`; round pre-selected from camera names or photo
+date; existing round/session folder used or created, `FolderPicker.tsx` for anything else) → 3 Alt
+text → 4 Upload (`/api/assets/upload`, numbering per folder via `/api/assets/next-number`).
+
+**Alt text by Claude** (step 3): the batch page sends 1024px previews + meta to the server
+(`/api/assets/batch/[id]` + `/preview`, KV, 7-day TTL, `lib/assetBatchStore.ts`) and opens claude.ai
+with the prompt (`lib/assetPrompt.ts`, `/api/assets/handoff`). Claude works through the connector:
+`asset_rulebook` (people + terms from the editable knowledge store, rules + patterns from the seed),
+`asset_list_batch`, `asset_get_image` (image content), `asset_set_meta` (validated: length, team
+name, spellings, em-dash). The page polls the server copy every 5s and fills the rows. No connector
+→ the button explains the setup; there is no URL fallback because images can't travel in a link.
+
+Team knowledge (`/assets/knowledge`, `lib/teamKnowledge.ts` seed, KV `assets:knowledge:v1`): only
+people and terms are user-editable; alt-text rules and patterns are the tool's rulebook. Team name
+is exactly "Audi Revolut F1® Team", nothing else; "Revolut Apex Card"; Hulkenberg EN / Hülkenberg DE.
+
+Still to do: production toggle (second CMS login in /admin), SlashLens intake (`/assets/intake`,
+Drive file ids, link-sharing is on).
 
 ### CRM Images
 Generates cropped, rounded-corner image variants matched to the CRM template library

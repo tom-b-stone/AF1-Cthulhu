@@ -11,8 +11,12 @@ import {
   type Collection,
 } from "./payloadClient";
 import { validateSeoField } from "./seoBrand";
+import { readBatch, readPreview, writeBatch } from "./assetBatchStore";
+import { readKnowledge } from "./knowledgeStore";
+import { rulebook } from "./assetPrompt";
+import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 
-export type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
+export type ToolResult = { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[]; isError?: boolean };
 
 type JsonSchema = Record<string, unknown>;
 
@@ -43,7 +47,7 @@ export function describeDate(r: { publishedAtBefore: string | null; publishedAtA
   const fmt = (d: string | null) =>
     d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "none";
   const same = (r.publishedAtBefore ?? "") === (r.publishedAtAfter ?? "");
-  if (same) return `Publication date untouched: ${fmt(r.publishedAtAfter)}, still ${r.status}.`;
+  if (same) return `Publication date: untouched, ${fmt(r.publishedAtAfter)}, still ${r.status}`;
   return `WARNING: publication date changed from ${fmt(r.publishedAtBefore)} to ${fmt(r.publishedAtAfter)} (status ${r.status}). Tell the user.`;
 }
 
@@ -142,8 +146,69 @@ export const TOOLS: ToolDef[] = [
       const warn = warnings.length ? `\nWarnings (published anyway): ${warnings.join("; ")}` : "";
       const dateLine = describeDate(r);
       return text(
-        `Done. SEO written to: ${r.internalTitle}\n${r.cmsUrl}\n${dateLine}\nEN: ${en.title} (${en.title.length}) / ${en.description.length} chars\nDE: ${de.title} (${de.title.length}) / ${de.description.length} chars${warn}`
+        `Done.\nSEO written to: ${r.internalTitle}\nCMS: ${r.cmsUrl}\n${dateLine}\nEN title: ${en.title} (${en.title.length} chars, description ${en.description.length})\nDE title: ${de.title || "(none)"} (${de.title.length} chars, description ${de.description.length})${warn}`
       );
+    },
+  },
+  // ---- Asset Uploader -------------------------------------------------
+  {
+    name: "asset_rulebook",
+    annotations: { title: "Alt text rulebook", readOnlyHint: true, openWorldHint: false },
+    description: "The rules for audif1.com image alt texts and file-name descriptors: people (official spellings), terms, rules, patterns. Call once before writing alt texts.",
+    inputSchema: { type: "object", properties: {} },
+    async run() {
+      return text(rulebook(await readKnowledge()));
+    },
+  },
+  {
+    name: "asset_list_batch",
+    annotations: { title: "List a photo batch", readOnlyHint: true, openWorldHint: false },
+    description: "List the photos of an Asset Uploader batch: row ids, original file names, what is known (Grand Prix, session, date, people), and the current descriptor / alt text.",
+    inputSchema: { type: "object", required: ["batchId"], properties: { batchId: { type: "string" } } },
+    async run(args) {
+      const b = await readBatch(String(args.batchId ?? ""));
+      if (!b) return text("Batch not found on the server (previews expire after 7 days; open the batch and click Generate alt text again).", true);
+      const head = `Batch ${b.id} · ${b.rows.length} photos · folder ${b.folderPath} · ${b.race ?? ""} ${b.year} ${b.loc}${b.session ? ` · session ${b.session}` : ""}`;
+      const rows = b.rows.map((r) => `${r.id} · ${r.originalName}${r.date ? ` · ${r.date}` : ""}${r.context ? ` · slot ${r.context}` : ""}${r.people?.length ? ` · people: ${r.people.join(", ")}` : ""} · descriptor: ${r.descriptor || "(none)"} · alt: ${r.alt || "(none)"}`);
+      return text(`${head}\n${rows.join("\n")}`);
+    },
+  },
+  {
+    name: "asset_get_image",
+    annotations: { title: "See a photo", readOnlyHint: true, openWorldHint: false },
+    description: "Returns a preview of one photo in a batch so you can describe it.",
+    inputSchema: { type: "object", required: ["batchId", "rowId"], properties: { batchId: { type: "string" }, rowId: { type: "string" } } },
+    async run(args) {
+      const p = await readPreview(String(args.batchId ?? ""), String(args.rowId ?? ""));
+      if (!p) return text("No preview for this photo on the server.", true);
+      return { content: [{ type: "image", data: p.data, mimeType: p.mime }, { type: "text", text: `Photo ${args.rowId} of batch ${args.batchId}.` }] };
+    },
+  },
+  {
+    name: "asset_set_meta",
+    annotations: { title: "Write descriptor + alt text", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: `Write the file-name descriptor and the English alt text for one photo. Validates: alt under ${ALT_MAX} chars, team name only "Audi Revolut F1® Team", no em-dash, official spellings. Returns the issues if any; fix and call again.`,
+    inputSchema: {
+      type: "object",
+      required: ["batchId", "rowId", "descriptor", "alt"],
+      properties: { batchId: { type: "string" }, rowId: { type: "string" }, descriptor: { type: "string" }, alt: { type: "string" } },
+    },
+    async run(args, actor) {
+      const b = await readBatch(String(args.batchId ?? ""));
+      if (!b) return text("Batch not found on the server.", true);
+      const row = b.rows.find((r) => r.id === String(args.rowId));
+      if (!row) return text("Row not found in this batch.", true);
+      const alt = String(args.alt ?? "").trim().replace(/\s+/g, " ");
+      const descriptor = cleanDescriptor(String(args.descriptor ?? ""));
+      const issues = [...validateAlt(alt), ...knowledgeIssues(alt, await readKnowledge())];
+      if (issues.length) return text(`NOT written — fix and call again:\n${issues.join("\n")}`, true);
+      if (!descriptor) return text("NOT written — descriptor is empty after cleaning (2–6 lowercase words, hyphens).", true);
+      row.alt = alt;
+      row.descriptor = descriptor;
+      b.updatedAt = new Date().toISOString();
+      await writeBatch(b);
+      console.log(`[connector] ${actor} wrote alt for ${b.id}/${row.id}`);
+      return text(`Written. ${row.originalName} → ${descriptor} · "${alt}" (${alt.length} chars)`);
     },
   },
 ];

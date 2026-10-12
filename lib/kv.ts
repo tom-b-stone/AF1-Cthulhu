@@ -71,6 +71,15 @@ export async function kvSet(key: string, value: string): Promise<void> {
   memoryStore.set(key, value);
 }
 
+// SET with a TTL (seconds). Used for batch previews so they clean up.
+export async function kvSetEx(key: string, value: string, seconds: number): Promise<void> {
+  if (URL && TOKEN) {
+    await command(["SET", key, value, "EX", seconds]);
+    return;
+  }
+  memoryStore.set(key, value);
+}
+
 export async function kvDel(key: string): Promise<void> {
   if (URL && TOKEN) {
     await command(["DEL", key]);

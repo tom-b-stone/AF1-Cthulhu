@@ -26,6 +26,17 @@ export default function BatchPage() {
   const [confirmUpload, setConfirmUpload] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [dialogRow, setDialogRow] = useState<string | null>(null);
+  // Claude hand-off: previews + meta go to the server, claude.ai opens with
+  // the prompt, and this page polls the server copy until every alt text
+  // is back (or 15 minutes pass).
+  const [gen, setGen] = useState<{ phase: "sync" | "waiting"; done: number; total: number; got: number } | null>(null);
+  const [hasConnector, setHasConnector] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch("/api/connector")
+      .then((r) => r.json())
+      .then((j) => setHasConnector(Boolean(j.active)))
+      .catch(() => setHasConnector(false));
+  }, []);
   const [knowledge, setKnowledge] = useState<KnowledgeEntry[]>([]);
   useEffect(() => {
     fetch("/api/assets/knowledge")
@@ -261,6 +272,90 @@ export default function BatchPage() {
     setNotice(`Done. ${ok} of ${todo.length} uploaded to ${batch.targetFolderPath}${failures.length ? `\nNot uploaded: ${failures.length}\n${failures.join("\n")}` : "."}`);
   }
 
+  async function generateAltText() {
+    if (!batch) return;
+    if (hasConnector === false) {
+      setNotice("Generate alt text needs the AF1 Tools connector in your Claude. Set it up once from the home page, then click again.");
+      return;
+    }
+    const todo = batch.rows.filter((r) => !r.alt.trim());
+    const target = todo.length ? todo : batch.rows;
+    setGen({ phase: "sync", done: 0, total: target.length, got: 0 });
+    // 1. previews (1024px JPEG) + meta to the server
+    for (let i = 0; i < target.length; i++) {
+      const r = target[i];
+      const blob = await batchStore.getBlob(batch.id, r.id);
+      if (!blob) continue;
+      const bmp = await createImageBitmap(blob);
+      const k = 1024 / Math.max(bmp.width, bmp.height);
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(bmp.width * Math.min(1, k)));
+      c.height = Math.max(1, Math.round(bmp.height * Math.min(1, k)));
+      c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+      bmp.close();
+      const prev = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.72));
+      if (prev) {
+        const form = new FormData();
+        form.append("file", prev, "preview.jpg");
+        form.append("rowId", r.id);
+        await fetch(`/api/assets/batch/${batch.id}/preview`, { method: "POST", body: form });
+      }
+      setGen({ phase: "sync", done: i + 1, total: target.length, got: 0 });
+    }
+    await fetch(`/api/assets/batch/${batch.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        folderPath: batch.targetFolderPath ?? batch.folderPath,
+        year: batch.year,
+        loc: batch.loc,
+        round: batch.round,
+        session: batch.session,
+        race: batch.round ? `Round ${batch.round}` : undefined,
+        rows: target.map((r) => ({ id: r.id, originalName: r.originalName, fileName: r.fileName, context: r.context, descriptor: r.descriptor, alt: r.alt, width: r.width, height: r.height, people: r.people, date: r.date })),
+      }),
+    });
+    // 2. open claude.ai with the prompt
+    window.open(`/api/assets/handoff?batch=${batch.id}`, "_blank", "noopener");
+    setGen({ phase: "waiting", done: target.length, total: target.length, got: 0 });
+    // 3. poll until everything is back
+    const started = Date.now();
+    const ids = new Set(target.map((r) => r.id));
+    const poll = async () => {
+      if (Date.now() - started > 15 * 60_000) {
+        setGen(null);
+        return;
+      }
+      try {
+        const srv = await fetch(`/api/assets/batch/${batch.id}`).then((r) => r.json());
+        const current = await batchStore.get(batch.id);
+        if (srv?.rows && current) {
+          let got = 0;
+          const rows = current.rows.map((r) => {
+            const sr = srv.rows.find((x: { id: string }) => x.id === r.id);
+            if (!sr || !ids.has(r.id)) return r;
+            if (sr.alt) got++;
+            if (sr.alt && (!r.alt.trim() || r.alt !== sr.alt) && r.alt.trim() === "") return { ...r, alt: sr.alt, descriptor: sr.descriptor || r.descriptor };
+            return r;
+          });
+          const next = { ...current, rows };
+          setBatch(next);
+          await batchStore.put(next);
+          setGen((g) => (g ? { ...g, got } : g));
+          if (got >= ids.size) {
+            setGen(null);
+            setNotice(`Done. Alt text written for ${got} image${got === 1 ? "" : "s"} by Claude. Check them, then upload.`);
+            return;
+          }
+        }
+      } catch {
+        /* keep polling */
+      }
+      setTimeout(poll, 5000);
+    };
+    setTimeout(poll, 8000);
+  }
+
   async function remove() {
     if (!batch) return;
     await batchStore.remove(batch.id);
@@ -271,9 +366,14 @@ export default function BatchPage() {
   useSidebarContent(
     <>
       <SideSection title="Batch">
-        <SideButton primary disabled note="next">
-          Generate names + alt text
+        <SideButton primary onClick={generateAltText} disabled={Boolean(gen) || Boolean(busy)} note={gen ? (gen.phase === "sync" ? `${gen.done}/${gen.total}` : `${gen.got}/${gen.total}`) : batch?.rows.filter((r) => !r.alt.trim()).length || ""}>
+          {gen ? (gen.phase === "sync" ? "Sending to Claude…" : "Waiting for Claude…") : "Generate alt text"}
         </SideButton>
+        {gen?.phase === "waiting" && (
+          <button onClick={() => setGen(null)} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 11, cursor: "pointer", textAlign: "left", padding: "0 10px" }}>
+            stop waiting
+          </button>
+        )}
         <SideButton onClick={() => setPickFolder(true)} note={batch?.targetFolderId ? "set" : ""}>
           {batch?.targetFolderId ? "Change folder" : "Choose CMS folder"}
         </SideButton>
@@ -288,7 +388,7 @@ export default function BatchPage() {
         <SideButton onClick={remove}>Delete batch</SideButton>
       </SideSection>
     </>,
-    [batch?.id, batch?.targetFolderId, readyCount, busy]
+    [batch?.id, batch?.targetFolderId, readyCount, busy, gen, batch?.rows]
   );
 
   if (batch === undefined) return <p style={{ color: "var(--muted)" }}>Loading batch…</p>;
@@ -327,9 +427,17 @@ export default function BatchPage() {
           {batch.targetFolderId ? "Change" : "Choose folder"}
         </button>
         <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>
-          Step 3: every image needs an alt text (click a row&apos;s check to edit it in a dialog). Step 4: Upload, in the left bar.
+          Step 3: &quot;Generate alt text&quot; sends previews to your Claude, which writes descriptor + alt text per photo; results appear here. Click a row&apos;s check to review or edit. Step 4: Upload.
         </span>
       </section>
+      {gen && (
+        <div role="status" style={{ background: "#141416", border: "1px solid var(--vapor-purple)", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13 }}>
+          {gen.phase === "sync" ? `Sending previews to the server: ${gen.done} of ${gen.total}` : `Claude is writing in the claude.ai tab: ${gen.got} of ${gen.total} back. Press send there if it hasn't started; this page updates on its own.`}
+          <div style={{ height: 4, background: "#2a2a2d", borderRadius: 2, marginTop: 8 }}>
+            <div style={{ height: 4, width: `${Math.round(((gen.phase === "sync" ? gen.done : gen.got) / Math.max(1, gen.total)) * 100)}%`, background: "var(--accent)", borderRadius: 2, transition: "width 0.3s" }} />
+          </div>
+        </div>
+      )}
       {progress && (
         <div role="status" style={{ background: "#141416", border: "1px solid var(--vapor-purple)", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13 }}>
           Uploading {progress.done + 1} of {progress.total}: {progress.current}
