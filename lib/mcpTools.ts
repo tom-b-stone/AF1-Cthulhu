@@ -70,7 +70,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "seo_publish",
     description:
-      "Publish SEO meta title + description (EN and DE) for one audif1.com news article or page. Validates the brand rules first (title 50-60 chars ending '| Audi Revolut F1® Team', description 100-150, no em-dash, ® marks). Publishes immediately; the publication date is preserved. If validation fails, fix the text and call again — only pass force=true when the user explicitly says to publish anyway.",
+      "Publish SEO meta title + description (EN and DE) for one audif1.com news article or page. Validates the brand rules first (title 50-60 chars ending '| Audi Revolut F1® Team', description 100-150, no em-dash, ® marks). Publishes immediately; the publication date is preserved, and a doc without a meta image gets the home page's meta image. If validation fails, fix the text and call again — only pass force=true when the user explicitly says to publish anyway.",
     inputSchema: {
       type: "object",
       required: ["collection", "id", "en_title", "en_description", "de_title", "de_description"],

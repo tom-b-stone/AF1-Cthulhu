@@ -42,6 +42,11 @@ meta title/description can be seen and edited in Payload, not the public page. B
 `PAYLOAD_API_URL` itself (never hardcoded) so it always matches whatever environment this
 deployment points at.
 
+**Meta image rule:** every save/publish sends `meta.image` too — the doc's own image if it has
+one, otherwise the home page's meta image (`pages` doc with slug `HOME_PAGE_SLUG`, default `home`;
+DE falls back to the EN home image). Always sending the key also stops a partial `meta` PATCH from
+nulling an image that was there (`metaBodyFor` in `lib/payloadClient.ts`).
+
 Auth: the CMS's `users` collection doesn't have Payload's API-key auth enabled (no code change
 was made to add it), so writes go through a server-side login instead — `lib/payloadClient.ts`
 logs in as the dedicated staging CMS user already saved via `/admin/credentials`

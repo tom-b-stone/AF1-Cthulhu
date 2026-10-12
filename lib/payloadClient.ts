@@ -249,6 +249,56 @@ export async function getSeoGenerationSource(
 const LOCALE_WRITE_GAP_MS = 3000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// --- meta image rule -------------------------------------------------------
+// Tom's rule: a page or article with no meta image of its own gets the
+// home page's meta image. Applied on every save/publish, per locale. The
+// home page is the `pages` doc with slug HOME_PAGE_SLUG (default "home").
+const HOME_PAGE_SLUG = process.env.HOME_PAGE_SLUG || "home";
+const homeImageCache: Record<string, { id: string | null; at: number }> = {};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function imageIdOf(meta: any): string | null {
+  const img = meta?.image;
+  if (!img) return null;
+  if (typeof img === "string") return img;
+  if (typeof img === "object" && typeof img.id === "string") return img.id;
+  return null;
+}
+
+export async function getHomeMetaImageId(locale: "en" | "de"): Promise<string | null> {
+  const cached = homeImageCache[locale];
+  if (cached && Date.now() - cached.at < 10 * 60 * 1000) return cached.id;
+  const res = await payloadFetch(
+    `/pages?where[slug][equals]=${encodeURIComponent(HOME_PAGE_SLUG)}&depth=0&draft=true&locale=${locale}&limit=1`
+  );
+  let id: string | null = null;
+  if (res.ok) {
+    const json = await res.json();
+    id = imageIdOf(json.docs?.[0]?.meta);
+  }
+  // DE without an image of its own falls back to the EN home image.
+  if (!id && locale === "de") id = await getHomeMetaImageId("en");
+  homeImageCache[locale] = { id, at: Date.now() };
+  return id;
+}
+
+// Builds the `meta` body for one locale: the new title/description plus
+// the image — the doc's own if it has one, otherwise the home page's.
+// Always sending `image` also stops a partial meta PATCH from nulling it.
+async function metaBodyFor(
+  collection: Collection,
+  id: string,
+  locale: "en" | "de",
+  meta: SeoLocaleMeta
+): Promise<{ title: string; description: string; image?: string }> {
+  const current = await payloadFetch(`/${collection}/${id}?locale=${locale}&depth=0&draft=true`)
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
+  const own = imageIdOf(current?.meta);
+  const image = own ?? (await getHomeMetaImageId(locale));
+  return { title: meta.title, description: meta.description, ...(image ? { image } : {}) };
+}
+
 export async function saveSeoDraft(
   collection: Collection,
   id: string,
@@ -257,7 +307,7 @@ export async function saveSeoDraft(
   if (locales.de) {
     const res = await payloadFetch(`/${collection}/${id}?locale=de&draft=true&overrideLock=true`, {
       method: "PATCH",
-      body: JSON.stringify({ meta: locales.de }),
+      body: JSON.stringify({ meta: await metaBodyFor(collection, id, "de", locales.de) }),
     });
     if (!res.ok) throw new Error(`DE draft save failed (${res.status}): ${await res.text()}`);
     if (locales.en) await sleep(LOCALE_WRITE_GAP_MS);
@@ -265,7 +315,7 @@ export async function saveSeoDraft(
   if (locales.en) {
     const res = await payloadFetch(`/${collection}/${id}?locale=en&draft=true&overrideLock=true`, {
       method: "PATCH",
-      body: JSON.stringify({ meta: locales.en }),
+      body: JSON.stringify({ meta: await metaBodyFor(collection, id, "en", locales.en) }),
     });
     if (!res.ok) throw new Error(`EN draft save failed (${res.status}): ${await res.text()}`);
   }
@@ -287,7 +337,7 @@ export async function publishSeo(
   if (locales.de) {
     const res = await payloadFetch(`/${collection}/${id}?locale=de&draft=true&overrideLock=true`, {
       method: "PATCH",
-      body: JSON.stringify({ meta: locales.de }),
+      body: JSON.stringify({ meta: await metaBodyFor(collection, id, "de", locales.de) }),
     });
     if (!res.ok) throw new Error(`DE draft save failed (${res.status}): ${await res.text()}`);
     await sleep(LOCALE_WRITE_GAP_MS);
@@ -297,7 +347,7 @@ export async function publishSeo(
     method: "PATCH",
     body: JSON.stringify({
       _status: "published",
-      meta: locales.en,
+      meta: await metaBodyFor(collection, id, "en", locales.en),
       ...(publishedAt ? { publishedAt } : {}),
     }),
   });

@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import KtuluLogo from "./components/KtuluLogo";
+import HomeBackground, { useBackgroundChoice } from "./components/HomeBackground";
 import HomeFooter from "./components/HomeFooter";
 
 type Status = "working" | "staging" | "planned";
@@ -45,9 +47,10 @@ const TILES: { title: string; href: string; external?: boolean; status: Status; 
 ];
 
 export default function Home() {
+  const [bg, setBg] = useBackgroundChoice();
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", paddingTop: 16, position: "relative", zIndex: 1 }}>
-      <KtuluLogo background />
+      <HomeBackground choice={bg} />
       <div
         aria-label="Ktulu"
         style={{
@@ -113,7 +116,7 @@ export default function Home() {
           );
         })}
       </div>
-      <HomeFooter />
+      <HomeFooter bg={bg} onBg={setBg} />
     </div>
   );
 }
