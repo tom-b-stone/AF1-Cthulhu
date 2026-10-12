@@ -69,7 +69,7 @@ export default function BatchPage() {
         merged.fileName = proposeFileName({
           year: batch.year,
           loc: batch.loc,
-          context: merged.context as Context,
+          context: merged.context as Context | "",
           descriptor: merged.descriptor,
           nn: i + 1,
           ext: merged.mime === "image/webp" ? "webp" : "jpg",
@@ -230,13 +230,13 @@ export default function BatchPage() {
       const r = todo[i];
       setProgress({ done: i, total: todo.length, current: r.fileName });
       try {
-        const prefix = `audif1_${batch.year}_${batch.loc}_GP_${r.context}`;
+        const prefix = `audif1_${batch.year}_${batch.loc}_GP${r.context ? `_${r.context}` : ""}`;
         if (counters[prefix] == null) {
           const j = await fetch(`/api/assets/next-number?folder=${encodeURIComponent(batch.targetFolderId)}&prefix=${encodeURIComponent(prefix)}`).then((x) => x.json());
           counters[prefix] = Number(j.next ?? 1);
         }
         const nn = counters[prefix]++;
-        const finalName = proposeFileName({ year: batch.year, loc: batch.loc, context: r.context as Context, descriptor: r.descriptor, nn, ext: r.mime === "image/webp" ? "webp" : "jpg" });
+        const finalName = proposeFileName({ year: batch.year, loc: batch.loc, context: r.context as Context | "", descriptor: r.descriptor, nn, ext: r.mime === "image/webp" ? "webp" : "jpg" });
         const blob = await batchStore.getBlob(batch.id, r.id);
         if (!blob) throw new Error("image data missing in this browser");
         const form = new FormData();
@@ -392,8 +392,9 @@ export default function BatchPage() {
                   <input className="input" value={r.descriptor} onChange={(e) => updateRow(r.id, { descriptor: e.target.value })} onBlur={(e) => updateRow(r.id, { descriptor: cleanDescriptor(e.target.value) })} />
                 </label>
                 <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
-                  Image type in the file name (gallery is the default; hero / teaser / quote only when the picture is made for that slot)
+                  Slot in the file name (optional: only when the picture is made for a slot, pre-filled when the original name says so)
                   <select className="input" value={r.context} onChange={(e) => updateRow(r.id, { context: e.target.value })}>
+                    <option value="">— none —</option>
                     {CONTEXTS.map((c) => (
                       <option key={c} value={c}>
                         {c}

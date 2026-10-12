@@ -81,8 +81,17 @@ export function cleanDescriptor(s: string): string {
     .join("-");
 }
 
-export function proposeFileName(opts: { year: number; loc: string; context: Context; descriptor?: string; nn: number; ext?: string }): string {
-  const parts = ["audif1", String(opts.year), opts.loc.toUpperCase(), "GP", opts.context];
+// Context (hero, teaser, quote …) is an optional add-on: only in the name
+// when the image is made for that slot. Picked up from the original file
+// name when it carries one ("…_hero_02.jpg").
+export function contextFromName(filename: string): Context | "" {
+  const m = filename.toLowerCase().match(/(?:^|[_\-\s])(gallery|hero|teaser|quote|recap|wallpaper|postcard|racetrack)(?:[_\-\s.]|$)/);
+  return (m?.[1] as Context) ?? "";
+}
+
+export function proposeFileName(opts: { year: number; loc: string; context?: Context | ""; descriptor?: string; nn: number; ext?: string }): string {
+  const parts = ["audif1", String(opts.year), opts.loc.toUpperCase(), "GP"];
+  if (opts.context) parts.push(opts.context);
   const d = opts.descriptor ? cleanDescriptor(opts.descriptor) : "";
   if (d) parts.push(d);
   parts.push(String(opts.nn).padStart(2, "0"));

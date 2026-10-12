@@ -6,7 +6,7 @@ import Steps from "@/app/components/Steps";
 import FolderPicker from "@/app/components/FolderPicker";
 import { batchStore, newId, type AssetRow, type Batch } from "@/lib/batchStore";
 import { canEncodeWebp, compressImage, fmtBytes, thumbnail, EDGE_PRESETS, type EdgePreset } from "@/lib/imageCompress";
-import { SESSIONS, canonicalLoc, parseCameraName, proposeFileName } from "@/lib/assetNaming";
+import { SESSIONS, canonicalLoc, contextFromName, parseCameraName, proposeFileName } from "@/lib/assetNaming";
 
 // Steps 1 + 2 of the uploader journey.
 // 1 Images: drop photos, compression starts right away in the background.
@@ -100,7 +100,7 @@ export default function NewBatchPage() {
               test: p.test,
               loc: canonicalLoc(p.loc),
               date: p.date,
-              context: "gallery",
+              context: contextFromName(f.name),
               descriptor: "",
               alt: "",
               fileName: "",
@@ -163,7 +163,7 @@ export default function NewBatchPage() {
       const p = prepared[f.name + f.size];
       if (!p) continue;
       i++;
-      const row = { ...p.row, fileName: proposeFileName({ year: race.year, loc: race.loc, context: "gallery", nn: i, ext: p.row.mime === "image/webp" ? "webp" : "jpg" }) };
+      const row = { ...p.row, fileName: proposeFileName({ year: race.year, loc: race.loc, context: p.row.context as "" | "hero", nn: i, ext: p.row.mime === "image/webp" ? "webp" : "jpg" }) };
       rows.push(row);
       await batchStore.putBlob(batchId, row.id, p.blob);
       await batchStore.putThumb(batchId, row.id, p.thumb);
@@ -338,7 +338,7 @@ export default function NewBatchPage() {
                 </button>
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                Files will be named <code>audif1_{race.year}_{race.loc}_GP_gallery_&lt;descriptor&gt;_&lt;nn&gt;.webp</code>; the number continues from what is already in the folder.
+                Files will be named <code>audif1_{race.year}_{race.loc}_GP_&lt;descriptor&gt;_&lt;nn&gt;.webp</code> (plus a slot like <code>hero</code> only when the original name carries one); the number continues from what is already in the folder.
               </div>
             </div>
           )}
