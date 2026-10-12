@@ -177,6 +177,18 @@ Team knowledge (`/assets/knowledge`, `lib/teamKnowledge.ts` seed, KV `assets:kno
 people and terms are user-editable; alt-text rules and patterns are the tool's rulebook. Team name
 is exactly "Audi Revolut F1® Team", nothing else; "Revolut Apex Card"; Hulkenberg EN / Hülkenberg DE.
 
+**Content tags** (step 4, `lib/contentTags.ts`, `/api/assets/tags`, `app/components/TagPicker.tsx`):
+the production vocabulary (105 `content-tags` titles, Oct 2026) is in `PROD_TAG_TITLES`; a one-time
+`POST /api/assets/tags {seed:true}` copied it to staging. Tags live on a batch/row by *title* and
+are resolved to staging ids at upload (`uploadMedia(..., contentTagIds)` → `_payload.contentTags`).
+Production pattern, learned from 3,000 media: every GP photo carries `2026` + `gp | <gp> | <circuit>`
++ weekday + session (`fp1`…`race`), per photo a person tag (`nico hulkenberg`, `mattia binotto`, …)
+and a scene (`on-track & garage` / `team` / `off-track`); wallpapers `2026 | <city> | wallpaper`.
+`proposeBatchTags` fills the batch tags from year/race/session; `asset_set_meta` now takes `people`
++ `scene` and the page turns them into per-image tags (`proposeRowTags`). `tagIssues` runs in the
+Check column and before upload (year, GP, day/session, scene-or-person, no "do not use"). New tags
+are created on staging from the picker ("Create … on staging").
+
 Still to do: production toggle (second CMS login in /admin), SlashLens intake (`/assets/intake`,
 Drive file ids, link-sharing is on).
 

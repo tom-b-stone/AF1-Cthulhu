@@ -32,6 +32,8 @@ export type AssetRow = {
   // extras (SlashLens intake)
   driveId?: string;
   people?: string[];
+  scene?: string; // on-track & garage | team | off-track (from Claude)
+  tags?: string[]; // per-image content tags (titles), on top of the batch tags
 };
 
 export type Batch = {
@@ -47,6 +49,8 @@ export type Batch = {
   targetFolderId?: string | null; // chosen CMS folder (staging)
   targetFolderPath?: string;
   edge: number;
+  race?: string; // Grand Prix name from the calendar
+  tags?: string[]; // batch-wide content tags (titles), applied to every image
   rows: AssetRow[];
 };
 

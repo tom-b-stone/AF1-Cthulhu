@@ -11,6 +11,7 @@ import {
   type Collection,
 } from "./payloadClient";
 import { validateSeoField } from "./seoBrand";
+import { SCENE_TAGS, type Scene } from "./contentTags";
 import { readBatch, readPreview, writeBatch } from "./assetBatchStore";
 import { readKnowledge, KNOWLEDGE_KEY } from "./knowledgeStore";
 import { kvSet } from "./kv";
@@ -190,11 +191,18 @@ export const TOOLS: ToolDef[] = [
   {
     name: "asset_set_meta",
     annotations: { title: "Write descriptor + alt text", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    description: `Write the file-name descriptor and the English alt text for one photo. Validates: alt under ${ALT_MAX} chars, team name only "Audi Revolut F1® Team", no em-dash, official spellings. Returns the issues if any; fix and call again.`,
+    description: `Write the file-name descriptor and the English alt text for one photo, plus what is in it for the content tags: "people" (official names of team people you can identify with evidence, empty if none) and "scene" (one of "on-track & garage" = car, track, pit lane, garage; "team" = team members, staff, management in frame; "off-track" = paddock, fans, city, events). Validates: alt under ${ALT_MAX} chars, team name only "Audi Revolut F1® Team", no em-dash, official spellings. Returns the issues if any; fix and call again.`,
     inputSchema: {
       type: "object",
-      required: ["batchId", "rowId", "descriptor", "alt"],
-      properties: { batchId: { type: "string" }, rowId: { type: "string" }, descriptor: { type: "string" }, alt: { type: "string" } },
+      required: ["batchId", "rowId", "descriptor", "alt", "scene"],
+      properties: {
+        batchId: { type: "string" },
+        rowId: { type: "string" },
+        descriptor: { type: "string" },
+        alt: { type: "string" },
+        people: { type: "array", items: { type: "string" }, description: "Official names, e.g. [\"Nico Hulkenberg\"]. Only with evidence (car number, helmet, suit name, clear face)." },
+        scene: { type: "string", enum: ["on-track & garage", "team", "off-track"] },
+      },
     },
     async run(args, actor) {
       const b = await readBatch(String(args.batchId ?? ""));
@@ -208,10 +216,12 @@ export const TOOLS: ToolDef[] = [
       if (!descriptor) return text("NOT written — descriptor is empty after cleaning (2–6 lowercase words, hyphens).", true);
       row.alt = alt;
       row.descriptor = descriptor;
+      if (Array.isArray(args.people)) row.people = (args.people as unknown[]).map(String).filter(Boolean);
+      if (typeof args.scene === "string" && SCENE_TAGS.includes(args.scene as Scene)) row.scene = args.scene;
       b.updatedAt = new Date().toISOString();
       await writeBatch(b);
       console.log(`[connector] ${actor} wrote alt for ${b.id}/${row.id}`);
-      return text(`Written. ${row.originalName} → ${descriptor} · "${alt}" (${alt.length} chars)`);
+      return text(`Written. ${row.originalName} → ${descriptor} · "${alt}" (${alt.length} chars)${row.scene ? ` · ${row.scene}` : ""}${row.people?.length ? ` · ${row.people.join(", ")}` : ""}`);
     },
   },
   // ---- Learning session (production library, read-only) ---------------

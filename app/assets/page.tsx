@@ -175,6 +175,7 @@ export default function NewBatchPage() {
       year: race.year,
       loc: race.loc,
       round: race.round,
+      race: `${race.country} ${race.city}`,
       session,
       folderPath: folder.path.replace(/^10_Media-Galleries\//, ""),
       targetFolderId: folder.id,

@@ -32,6 +32,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     round: body.round,
     session: body.session,
     race: body.race,
+    tags: Array.isArray(body.tags) ? body.tags.map(String) : undefined,
     rows: body.rows.map((r) => ({
       id: String(r.id),
       originalName: String(r.originalName ?? ""),
@@ -43,6 +44,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       height: Number(r.height ?? 0),
       people: r.people,
       date: r.date,
+      scene: r.scene,
+      tags: r.tags,
     })),
   };
   await writeBatch(b);

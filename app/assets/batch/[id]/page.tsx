@@ -12,6 +12,8 @@ import FolderPicker from "@/app/components/FolderPicker";
 import Modal from "@/app/components/Modal";
 import { SideButton, SideSection, useSidebarContent } from "@/app/components/SidebarSlot";
 import Steps from "@/app/components/Steps";
+import TagPicker from "@/app/components/TagPicker";
+import { proposeBatchTags, proposeRowTags, tagIssues, uniqueTags, type ContentTag } from "@/lib/contentTags";
 
 type Row = AssetRow & { key: string; thumb?: string; issues: string[]; nn: number };
 
@@ -38,6 +40,36 @@ export default function BatchPage() {
       .catch(() => setHasConnector(false));
   }, []);
   const [knowledge, setKnowledge] = useState<KnowledgeEntry[]>([]);
+  // content tags: the staging vocabulary (titles are the identity)
+  const [tags, setTags] = useState<ContentTag[] | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const tagTitles = useMemo(() => (tags ?? []).map((t) => t.title), [tags]);
+  useEffect(() => {
+    fetch("/api/assets/tags")
+      .then((r) => r.json())
+      .then((j) => setTags(j.tags ?? []))
+      .catch(() => setTags([]));
+  }, []);
+  // first time a batch meets the vocabulary: propose year + GP + day + session
+  useEffect(() => {
+    if (!batch || !tags || batch.tags !== undefined) return;
+    const proposed = proposeBatchTags({ year: batch.year, loc: batch.loc, race: batch.race, session: batch.session }, tagTitles);
+    void save({ ...batch, tags: proposed });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch?.id, tags]);
+  async function createTag(title: string): Promise<ContentTag | null> {
+    const j = await fetch("/api/assets/tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) }).then((r) => r.json());
+    if (j.tags) setTags(j.tags);
+    if (!j.tag) setNotice(`Couldn't create the tag: ${j.error ?? "unknown error"}`);
+    return j.tag ?? null;
+  }
+  async function seedTags() {
+    setSeeding(true);
+    const j = await fetch("/api/assets/tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ seed: true }) }).then((r) => r.json());
+    setSeeding(false);
+    if (j.tags) setTags(j.tags);
+    setNotice(j.ok ? `Done. ${j.created.length} production tags created on staging, ${j.skipped} were there already.` : `Import failed: ${j.error ?? "unknown error"}`);
+  }
   useEffect(() => {
     fetch("/api/assets/knowledge")
       .then((r) => r.json())
@@ -98,9 +130,14 @@ export default function BatchPage() {
         key: r.id,
         nn: i + 1,
         thumb: thumbs[r.id],
-        issues: [...validateAlt(r.alt), ...knowledgeIssues(r.alt, knowledge), ...(r.descriptor && cleanDescriptor(r.descriptor) !== r.descriptor ? ["Descriptor was normalised"] : [])],
+        issues: [
+          ...validateAlt(r.alt),
+          ...knowledgeIssues(r.alt, knowledge),
+          ...(r.descriptor && cleanDescriptor(r.descriptor) !== r.descriptor ? ["Descriptor was normalised"] : []),
+          ...(tags ? tagIssues(batch?.tags ?? [], r.tags ?? [], { isGp: Boolean(batch?.round) }) : []),
+        ],
       })),
-    [batch, thumbs, knowledge]
+    [batch, thumbs, knowledge, tags]
   );
 
   const columns = useMemo<TableColumn<Row>[]>(
@@ -151,6 +188,28 @@ export default function BatchPage() {
       },
       { key: "alt", header: "Alt text (EN)", width: "1.6fr", editable: true },
       {
+        key: "tags",
+        header: "Tags",
+        width: "150px",
+        cell: (r) => {
+          const own = r.tags ?? [];
+          const batchN = batch?.tags?.length ?? 0;
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setDialogRow(r.id);
+              }}
+              title={[...(batch?.tags ?? []), ...own].join(", ") || "No tags"}
+              className="block truncate"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: own.length ? "var(--fg)" : "var(--muted)", textAlign: "left", maxWidth: "100%" }}
+            >
+              {own.length ? own.join(", ") : batchN ? `${batchN} batch tag${batchN === 1 ? "" : "s"}` : "—"}
+            </button>
+          );
+        },
+      },
+      {
         key: "status",
         header: "CMS",
         width: "90px",
@@ -186,7 +245,7 @@ export default function BatchPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [batch?.id]
+    [batch?.id, batch?.tags]
   );
 
   function onCellEdit(id: string, columnKey: string, value: string) {
@@ -255,6 +314,7 @@ export default function BatchPage() {
         form.append("filename", finalName);
         form.append("alt", r.alt);
         form.append("folder", batch.targetFolderId);
+        form.append("tags", JSON.stringify(uniqueTags(batch.tags, r.tags)));
         const res = await fetch("/api/assets/upload", { method: "POST", body: form });
         const j = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
@@ -312,7 +372,8 @@ export default function BatchPage() {
         round: batch.round,
         session: batch.session,
         race: batch.round ? `Round ${batch.round}` : undefined,
-        rows: target.map((r) => ({ id: r.id, originalName: r.originalName, fileName: r.fileName, context: r.context, descriptor: r.descriptor, alt: r.alt, width: r.width, height: r.height, people: r.people, date: r.date })),
+        tags: batch.tags,
+        rows: target.map((r) => ({ id: r.id, originalName: r.originalName, fileName: r.fileName, context: r.context, descriptor: r.descriptor, alt: r.alt, width: r.width, height: r.height, people: r.people, date: r.date, scene: r.scene, tags: r.tags })),
       }),
     });
     // 2. open claude.ai with the prompt
@@ -335,7 +396,10 @@ export default function BatchPage() {
             const sr = srv.rows.find((x: { id: string }) => x.id === r.id);
             if (!sr || !ids.has(r.id)) return r;
             if (sr.alt) got++;
-            if (sr.alt && (!r.alt.trim() || r.alt !== sr.alt) && r.alt.trim() === "") return { ...r, alt: sr.alt, descriptor: sr.descriptor || r.descriptor };
+            if (sr.alt && (!r.alt.trim() || r.alt !== sr.alt) && r.alt.trim() === "") {
+              const proposed = proposeRowTags({ people: sr.people, scene: sr.scene }, tagTitles);
+              return { ...r, alt: sr.alt, descriptor: sr.descriptor || r.descriptor, people: sr.people ?? r.people, scene: sr.scene ?? r.scene, tags: uniqueTags(r.tags, proposed) };
+            }
             return r;
           });
           const next = { ...current, rows };
@@ -378,6 +442,10 @@ export default function BatchPage() {
 
   const withAlt = batch.rows.filter((r) => r.alt).length;
   const issues = rows.reduce((n, r) => n + r.issues.length, 0);
+  const allUploaded = batch.rows.every((r) => r.status === "uploaded");
+  const tagProblems = rows.filter((r) => r.status !== "uploaded" && tagIssues(batch.tags ?? [], r.tags ?? [], { isGp: Boolean(batch.round) }).length > 0).length;
+  const tagsOk = tags != null && tagProblems === 0 && (batch.tags?.length ?? 0) > 0;
+  const suggestedBatch = tags ? proposeBatchTags({ year: batch.year, loc: batch.loc, race: batch.race, session: batch.session }, tagTitles) : [];
 
   return (
     <div>
@@ -387,7 +455,10 @@ export default function BatchPage() {
           <h1 style={{ fontSize: 24 }}>{batch.targetFolderPath ?? `10_Media-Galleries/${batch.folderPath}`}</h1>
         </div>
       </section>
-      <Steps current={batch.rows.every((r) => r.status === "uploaded") ? 4 : withAlt === batch.rows.length ? 4 : 3} done={[1, 2, ...(withAlt === batch.rows.length ? [3] : []), ...(batch.rows.every((r) => r.status === "uploaded") ? [4] : [])]} />
+      <Steps
+        current={allUploaded ? 5 : withAlt === batch.rows.length ? (tagsOk ? 5 : 4) : 3}
+        done={[1, 2, ...(withAlt === batch.rows.length ? [3] : []), ...(tagsOk && withAlt === batch.rows.length ? [4] : []), ...(allUploaded ? [5] : [])]}
+      />
       <section className="reveal reveal-d1" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 22 }}>
         {[
           { n: batch.rows.length, l: "Images" },
@@ -402,7 +473,7 @@ export default function BatchPage() {
         ))}
       </section>
 
-      <section className="reveal reveal-d2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+      <section className="reveal reveal-d2" style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 14, marginBottom: 14 }}>
         <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
           <div className="section-label">Step 3 · Alt text</div>
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
@@ -423,7 +494,32 @@ export default function BatchPage() {
           </div>
         </div>
         <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
-          <div className="section-label">Step 4 · Upload</div>
+          <div className="section-label">Step 4 · Content tags</div>
+          {tags === null ? (
+            <div style={{ fontSize: 13, color: "var(--muted)" }}>Loading the CMS tags…</div>
+          ) : tags.length === 0 ? (
+            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+              Staging has no content tags yet. Copy the production vocabulary once (105 tags), then they are picked here and applied on upload.
+              <div style={{ marginTop: 8 }}>
+                <button className="btn btn-primary" onClick={seedTags} disabled={seeding}>
+                  {seeding ? "Importing…" : "Import production tags"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
+                For every image in this batch. Per image, Claude adds the people and the scene (on-track &amp; garage / team / off-track) when it writes the alt text; change them in a row&apos;s dialog.
+              </div>
+              <TagPicker value={batch.tags ?? []} available={tags} suggestions={suggestedBatch} onChange={(next) => void save({ ...batch, tags: next })} onCreate={createTag} placeholder="Add a batch tag…" />
+              <div style={{ fontSize: 12, color: tagProblems ? "#e9c46a" : "#6fcf7c" }}>
+                {tagProblems ? `${tagProblems} image${tagProblems === 1 ? "" : "s"} flagged by the tag check (see the Check column).` : batch.tags?.length ? "Tag check passed for every image." : "Pick at least the year and the Grand Prix."}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
+          <div className="section-label">Step 5 · Upload</div>
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
             Target: <code>{batch.targetFolderPath ?? "— no folder chosen —"}</code>{" "}
             <button className="btn" onClick={() => setPickFolder(true)} style={{ padding: "3px 10px", fontSize: 12, marginLeft: 6 }}>
@@ -473,7 +569,8 @@ export default function BatchPage() {
         <Modal title="Upload to staging?" onClose={() => setConfirmUpload(false)} width={520}>
           <p style={{ fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
             {batch.rows.filter((r) => r.status !== "uploaded" && r.alt.trim()).length} images go to <code>{batch.targetFolderPath}</code> on staging.audif1team.com, with their alt
-            text, numbered after what is already in that folder. Images without alt text stay here.
+            text and content tags ({(batch.tags ?? []).join(", ") || "none"} + per-image tags), numbered after what is already in that folder. Images without alt text stay here.
+            {tagProblems > 0 && <><br /><span style={{ color: "#e9c46a" }}>{tagProblems} image{tagProblems === 1 ? "" : "s"} did not pass the tag check; they upload with what they have.</span></>}
           </p>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button className="btn" onClick={() => setConfirmUpload(false)}>
@@ -522,6 +619,21 @@ export default function BatchPage() {
                       </option>
                     ))}
                   </select>
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
+                  Content tags (batch tags greyed; add people and the scene for this picture)
+                  {tags && (
+                    <TagPicker
+                      value={r.tags ?? []}
+                      locked={batch.tags ?? []}
+                      available={tags}
+                      suggestions={proposeRowTags({ people: r.people, scene: r.scene }, tagTitles)}
+                      onChange={(next) => updateRow(r.id, { tags: next })}
+                      onCreate={createTag}
+                      compact
+                      placeholder="Add a tag for this image…"
+                    />
+                  )}
                 </label>
                 <div>
                   <div className="section-label" style={{ marginBottom: 6 }}>Checks</div>

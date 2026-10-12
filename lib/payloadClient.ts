@@ -438,10 +438,39 @@ export async function nextNumberInFolder(folderId: string, prefix: string): Prom
   return max + 1;
 }
 
-export async function uploadMedia(file: Blob, filename: string, alt: string, folderId: string | null): Promise<{ id: string; url: string; filename: string }> {
+// ---- content tags (staging). Titles are the identity; ids are per CMS.
+export type ContentTag = { id: string; title: string };
+let tagCache: { at: number; tags: ContentTag[] } | null = null;
+
+export async function listContentTags(fresh = false): Promise<ContentTag[]> {
+  if (!fresh && tagCache && Date.now() - tagCache.at < 60_000) return tagCache.tags;
+  const out: ContentTag[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const res = await payloadFetch(`/content-tags?limit=100&sort=title&depth=0&page=${page}`);
+    if (!res.ok) throw new Error(`content-tags failed (${res.status})`);
+    const json = (await res.json()) as { docs: { id: string; title: string }[]; hasNextPage?: boolean };
+    out.push(...json.docs.map((d) => ({ id: d.id, title: d.title })));
+    if (!json.hasNextPage) break;
+  }
+  tagCache = { at: Date.now(), tags: out };
+  return out;
+}
+
+export async function createContentTag(title: string): Promise<ContentTag> {
+  const t = title.trim();
+  const existing = (await listContentTags()).find((x) => x.title.toLowerCase() === t.toLowerCase());
+  if (existing) return existing;
+  const res = await payloadFetch(`/content-tags`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t }) });
+  if (!res.ok) throw new Error(`Create tag failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { doc: { id: string; title: string } };
+  tagCache = null;
+  return { id: json.doc.id, title: json.doc.title };
+}
+
+export async function uploadMedia(file: Blob, filename: string, alt: string, folderId: string | null, contentTagIds: string[] = []): Promise<{ id: string; url: string; filename: string }> {
   const form = new FormData();
   form.append("file", file, filename);
-  form.append("_payload", JSON.stringify({ alt, ...(folderId ? { folder: folderId } : {}) }));
+  form.append("_payload", JSON.stringify({ alt, ...(folderId ? { folder: folderId } : {}), ...(contentTagIds.length ? { contentTags: contentTagIds } : {}) }));
   const res = await payloadFetch(`/media`, { method: "POST", body: form });
   if (!res.ok) throw new Error(`Upload failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
   const json = (await res.json()) as { doc: { id: string; url: string; filename: string } };

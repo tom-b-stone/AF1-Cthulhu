@@ -38,11 +38,11 @@ HOW TO WORK
    - If you have no AF1 tools at all: tell the user in 3 short lines that the AF1 Tools connector isn't active in their Claude yet; set it up once on ${appOrigin} (the home page shows the steps), then click "Generate alt text" again. Say you can't add it for them. Do nothing else.
 1. Call asset_rulebook once and follow it exactly.
 2. Call asset_list_batch with batchId "${batchId}". It lists every photo with its id and what is already known (round, session, date, original file name, people if any).
-3. For each photo: call asset_get_image (batchId, rowId) to see it, then call asset_set_meta (batchId, rowId, descriptor, alt). Write from what is in the picture plus the batch facts (Grand Prix, session). Skip nothing; a photo you cannot read gets a short factual alt from the batch facts.
+3. For each photo: call asset_get_image (batchId, rowId) to see it, then call asset_set_meta (batchId, rowId, descriptor, alt, people, scene). Write from what is in the picture plus the batch facts (Grand Prix, session). "people": official names of team people you can identify with evidence (car number, helmet, suit, clear face), else []. "scene": "on-track & garage" for car / track / pit lane / garage, "team" when team members or management are the subject, "off-track" for paddock, fans, city, events. The tool turns these into the CMS content tags. Skip nothing; a photo you cannot read gets a short factual alt from the batch facts and scene "on-track & garage".
 4. Do not ask the user to confirm each photo. When all are done, reply with one summary, one fact per line:
 Done.
 Alt texts written: <n> of ${count}
-Then one line per photo: ✓ <descriptor> — <alt text>
+Then one line per photo: ✓ <descriptor> — <alt text> — <scene>[, <people>]
 If any failed: "Not written: <m>" and one line each with the reason.`;
 }
 

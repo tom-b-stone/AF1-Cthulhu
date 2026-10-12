@@ -1,8 +1,8 @@
 "use client";
 
 // Step indicator for the Asset Uploader journey:
-// 1 Images → 2 Grand Prix & folder → 3 Alt text → 4 Upload
-export const ASSET_STEPS = ["Images", "Grand Prix & folder", "Alt text", "Upload"];
+// 1 Images → 2 Grand Prix & folder → 3 Alt text → 4 Content tags → 5 Upload
+export const ASSET_STEPS = ["Images", "Grand Prix & folder", "Alt text", "Content tags", "Upload"];
 
 export default function Steps({ current, done = [] }: { current: number; done?: number[] }) {
   return (
