@@ -27,7 +27,9 @@ export default function ConnectorOnboarding({ force, onClose }: { force?: boolea
     if (force) return;
     if (!PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
     let cancelled = false;
-    Promise.all([fetch("/api/connector").then((r) => r.json()), fetch("/api/onboarding").then((r) => r.json())]).then(([st, ob]) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const safe = (u: string): Promise<any> => fetch(u).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    Promise.all([safe("/api/connector"), safe("/api/onboarding")]).then(([st, ob]) => {
       if (cancelled) return;
       setStatus(st);
       const mine = ob?.[FLOW];
