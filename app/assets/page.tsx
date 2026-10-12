@@ -28,9 +28,48 @@ export default function NewBatchPage() {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState(1);
+  // Whole page is a drop target on step 1: drag anything over the window and
+  // an overlay takes it, no aiming at the dashed box needed.
+  useEffect(() => {
+    if (step !== 1) return;
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const onEnter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth++;
+      setDragging(true);
+    };
+    const onOver = (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
+    };
+    const onLeave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setDragging(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDragging(false);
+      if (e.dataTransfer?.files.length) addFilesRef.current(e.dataTransfer.files);
+    };
+    window.addEventListener("dragenter", onEnter);
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("dragleave", onLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onEnter);
+      window.removeEventListener("dragover", onOver);
+      window.removeEventListener("dragleave", onLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [step]);
+  const addFilesRef = useRef<(list: FileList | File[]) => void>(() => {});
 
   // step 2 state
   const [races, setRaces] = useState<Race[] | null>(null);
+  const [raceQ, setRaceQ] = useState("");
   const [round, setRound] = useState<number | null>(null);
   const [session, setSession] = useState<string>("");
   const [folder, setFolder] = useState<{ id: string; path: string } | null>(null);
@@ -187,6 +226,7 @@ export default function NewBatchPage() {
     router.push(`/assets/batch/${batchId}`);
   }
 
+  addFilesRef.current = addFiles;
   const totalBytes = files.reduce((n, f) => n + f.size, 0);
   const compressedBytes = Object.values(prepared).reduce((n, p) => n + p.blob.size, 0);
 
@@ -204,31 +244,29 @@ export default function NewBatchPage() {
 
       {step === 1 && (
         <section className="reveal">
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              addFiles(e.dataTransfer.files);
-            }}
-            onClick={() => inputRef.current?.click()}
-            className="card"
-            style={{ padding: "40px 24px", textAlign: "center", cursor: "pointer", borderStyle: "dashed", borderColor: dragging ? "var(--accent)" : "var(--border-2)", background: dragging ? "rgba(255,45,0,0.06)" : "var(--bg-2)" }}
-          >
-            <input ref={inputRef} type="file" accept="image/*" multiple hidden onChange={(e) => e.target.files && addFiles(e.target.files)} />
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 700 }}>Drop photos here</div>
-            <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>or click to choose · JPG, PNG, WebP, HEIC · a whole race weekend is fine · compression starts immediately</div>
-          </div>
-
-          {webp === false && <div style={{ marginTop: 10, fontSize: 12, color: "#e9c46a" }}>This browser can&apos;t encode WebP (Safari); images will be JPEG. Chrome or Firefox for WebP.</div>}
-          {error && <div style={{ marginTop: 10, fontSize: 12, color: "#e06c5b" }}>{error}</div>}
+          {dragging && (
+            <div
+              aria-hidden
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 60,
+                background: "rgba(12,13,14,0.86)",
+                border: "3px dashed var(--accent)",
+                display: "grid",
+                placeItems: "center",
+                pointerEvents: "none",
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: 34, fontWeight: 800 }}>Drop to add</div>
+                <div style={{ color: "var(--muted)", fontSize: 14, marginTop: 6 }}>anywhere on this page</div>
+              </div>
+            </div>
+          )}
 
           {files.length > 0 && (
-            <div className="card" style={{ marginTop: 14, padding: 14 }}>
+            <div className="card" style={{ marginBottom: 14, padding: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 13 }}>
                   <strong>{files.length}</strong> photos · {fmtBytes(totalBytes)} → {readyCount === files.length ? fmtBytes(compressedBytes) : `compressing ${readyCount}/${files.length}…`}
@@ -245,41 +283,79 @@ export default function NewBatchPage() {
                   <button className="btn" onClick={() => { setFiles([]); setPrepared({}); }} style={{ padding: "5px 10px", fontSize: 12 }}>
                     Clear
                   </button>
+                  <button className="btn btn-primary" onClick={() => setStep(2)} disabled={!allReady}>
+                    {allReady ? "Next: Grand Prix & folder" : "Compressing…"}
+                  </button>
                 </div>
               </div>
               <div style={{ height: 4, background: "var(--border)", borderRadius: 2, marginTop: 10 }}>
                 <div style={{ height: 4, width: `${Math.round((readyCount / files.length) * 100)}%`, background: "var(--accent)", borderRadius: 2, transition: "width 0.2s" }} />
               </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
-                {files.slice(0, 40).map((f) => {
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))", gap: 6, marginTop: 12 }}>
+                {files.slice(0, 120).map((f) => {
                   const p = prepared[f.name + f.size];
                   return p ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={f.name} src={p.thumb} alt="" title={f.name} style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6 }} />
+                    <img key={f.name} src={p.thumb} alt="" title={f.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, display: "block" }} />
                   ) : (
-                    <span key={f.name} style={{ width: 48, height: 48, borderRadius: 6, background: "var(--surface)" }} />
+                    <span key={f.name} style={{ width: "100%", aspectRatio: "1", borderRadius: 6, background: "var(--surface)", display: "block" }} />
                   );
                 })}
-                {files.length > 40 && <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>+{files.length - 40}</span>}
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-                <button className="btn btn-primary" onClick={() => setStep(2)} disabled={!allReady}>
-                  {allReady ? "Next: Grand Prix & folder" : "Compressing…"}
-                </button>
+                {files.length > 120 && <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>+{files.length - 120}</span>}
               </div>
             </div>
           )}
+
+          <div
+            onClick={() => inputRef.current?.click()}
+            className="card"
+            style={{
+              minHeight: files.length ? 200 : "min(56vh, 520px)",
+              display: "grid",
+              placeItems: "center",
+              padding: "40px 24px",
+              textAlign: "center",
+              cursor: "pointer",
+              borderStyle: "dashed",
+              borderWidth: 2,
+              borderColor: dragging ? "var(--accent)" : "var(--border-2)",
+              background: dragging ? "rgba(255,45,0,0.06)" : "var(--bg-2)",
+              transition: "border-color 0.15s, background 0.15s",
+            }}
+          >
+            <input ref={inputRef} type="file" accept="image/*" multiple hidden onChange={(e) => e.target.files && addFiles(e.target.files)} />
+            <div>
+              <div style={{ fontFamily: "var(--font-heading)", fontSize: files.length ? 20 : 30, fontWeight: 800 }}>{files.length ? "Drop more photos" : "Drop photos anywhere"}</div>
+              <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 8 }}>or click to choose · JPG, PNG, WebP, HEIC · a whole race weekend is fine · compression starts immediately</div>
+            </div>
+          </div>
+
+          {webp === false && <div style={{ marginTop: 10, fontSize: 12, color: "#e9c46a" }}>This browser can&apos;t encode WebP (Safari); images will be JPEG. Chrome or Firefox for WebP.</div>}
+          {error && <div style={{ marginTop: 10, fontSize: 12, color: "#e06c5b" }}>{error}</div>}
         </section>
       )}
 
       {step === 2 && (
         <section className="reveal" style={{ display: "grid", gap: 14 }}>
           <div className="card" style={{ padding: 16 }}>
-            <div className="section-label" style={{ marginBottom: 10 }}>Grand Prix</div>
+            <div className="section-label" style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <span>Grand Prix</span>
+              <input
+                className="input"
+                value={raceQ}
+                onChange={(e) => setRaceQ(e.target.value)}
+                placeholder="Filter: country, city, R14, ESP…"
+                style={{ padding: "5px 10px", fontSize: 12, width: 240, textTransform: "none", letterSpacing: 0 }}
+              />
+            </div>
             {!races && <div style={{ fontSize: 12, color: "var(--muted)" }}>Loading the race calendar from the CMS…</div>}
             {races && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 6 }}>
-                {races.map((r) => {
+                {races.filter((r) => {
+                  const n = raceQ.trim().toLowerCase();
+                  if (!n) return true;
+                  return `r${String(r.round).padStart(2, "0")} ${r.country} ${r.city} ${r.loc} ${r.folderPath ?? ""}`.toLowerCase().includes(n);
+                }).map((r) => {
                   const active = round === r.round;
                   return (
                     <button

@@ -377,7 +377,9 @@ export default function BatchPage() {
       }),
     });
     // 2. open claude.ai with the prompt
-    window.open(`/api/assets/handoff?batch=${batch.id}`, "_blank", "noopener");
+    // a named window: "Open the Claude tab" below brings this same tab back
+    // to the front instead of opening a second one
+    window.open(`/api/assets/handoff?batch=${batch.id}`, "af1-claude");
     setGen({ phase: "waiting", done: target.length, total: target.length, got: 0 });
     // 3. poll until everything is back
     const started = Date.now();
@@ -486,9 +488,14 @@ export default function BatchPage() {
               {gen ? (gen.phase === "sync" ? `Sending ${gen.done}/${gen.total}…` : `Waiting for Claude ${gen.got}/${gen.total}…`) : "Generate alt text"}
             </button>
             {gen?.phase === "waiting" && (
-              <button className="btn" onClick={() => setGen(null)}>
-                Stop waiting
-              </button>
+              <>
+                <button className="btn" onClick={() => window.open("", "af1-claude")?.focus()}>
+                  Open the Claude tab ↗
+                </button>
+                <button className="btn" onClick={() => setGen(null)}>
+                  Stop waiting
+                </button>
+              </>
             )}
             {hasConnector === false && <span style={{ fontSize: 12, color: "#e9c46a" }}>Needs the AF1 Tools connector (home page shows the setup).</span>}
           </div>
