@@ -70,15 +70,15 @@ export default function Home() {
           textAlign: "center",
           fontFamily: "ui-monospace, Menlo, Consolas, monospace",
           fontSize: "clamp(40px, 7.5vw, 84px)",
-          fontWeight: 300,
-          color: "var(--fg)",
+          fontWeight: 600,
+          color: "#fff",
           lineHeight: 1,
-          letterSpacing: "0.18em",
+          letterSpacing: "0.14em",
           margin: "28px 0 10px",
           textShadow: "0 2px 24px rgba(0,0,0,0.8), 0 0 40px rgba(239,162,214,0.25)",
         }}
       >
-        AF1<span style={{ color: "var(--accent)", fontWeight: 200 }}>-</span>KTULU
+        AF1<span style={{ color: "var(--accent)" }}>-</span>KTULU
         <sup style={{ fontSize: "0.35em", color: "var(--vapor-rose)", marginLeft: 4, letterSpacing: 0 }}>*</sup>
       </h1>
       <div

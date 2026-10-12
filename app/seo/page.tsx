@@ -183,7 +183,43 @@ export default function SeoStudioPage() {
 
   const selectedParam = selectedIds.join(",");
 
-  const columns = useMemo<TableColumn<Row>[]>(
+  // Column visibility: a per-browser choice (localStorage). The two
+  // character-count columns start hidden; the counts still colour the edit
+  // panel and the validation, this is only about table real estate.
+  const COLUMN_LABELS: Record<string, string> = {
+    status: "Status",
+    publishedDate: "Published",
+    internalTitle: "Title",
+    seoTitle: "SEO Title",
+    seoTitleCount: "SEO Title length",
+    seoDescription: "SEO Description",
+    seoDescriptionCount: "SEO Description length",
+    actions: "Actions",
+  };
+  const DEFAULT_HIDDEN = ["seoTitleCount", "seoDescriptionCount"];
+  const [hiddenCols, setHiddenCols] = useState<string[]>(DEFAULT_HIDDEN);
+  const [colsOpen, setColsOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("seo:hiddenCols");
+      if (saved) setHiddenCols(JSON.parse(saved));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  function toggleCol(key: string) {
+    setHiddenCols((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      try {
+        localStorage.setItem("seo:hiddenCols", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  const allColumns = useMemo<TableColumn<Row>[]>(
     () => [
       {
         key: "status",
@@ -268,6 +304,7 @@ export default function SeoStudioPage() {
     ],
     []
   );
+  const columns = useMemo(() => allColumns.filter((c) => !hiddenCols.includes(c.key)), [allColumns, hiddenCols]);
 
   const input = {
     background: "#161617",
@@ -361,10 +398,51 @@ export default function SeoStudioPage() {
       )}
 
       {items && (
-        <p style={{ opacity: 0.5, fontSize: 12, marginBottom: 8 }}>
-          {rows.length} of {items.length}
-          {selectedIds.length ? ` · ${selectedIds.length} selected` : ""}
-        </p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, fontSize: 12 }}>
+          <span style={{ opacity: 0.5 }}>
+            {rows.length} of {items.length}
+            {selectedIds.length ? ` · ${selectedIds.length} selected` : ""}
+          </span>
+          <span style={{ position: "relative" }}>
+            <button
+              onClick={() => setColsOpen((o) => !o)}
+              style={{ background: "none", border: "1px solid var(--border)", color: "inherit", borderRadius: 6, padding: "3px 10px", fontSize: 12, cursor: "pointer", opacity: 0.8 }}
+            >
+              Columns{hiddenCols.length ? ` (${allColumns.length - hiddenCols.length}/${allColumns.length})` : ""}
+            </button>
+            {colsOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 6px)",
+                  zIndex: 20,
+                  background: "#141416",
+                  border: "1px solid var(--border)",
+                  borderRadius: 8,
+                  padding: "8px 10px",
+                  minWidth: 220,
+                  boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
+                }}
+              >
+                {allColumns.map((c) => (
+                  <label key={c.key} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    <input type="checkbox" checked={!hiddenCols.includes(c.key)} onChange={() => toggleCol(c.key)} />
+                    {COLUMN_LABELS[c.key] ?? c.key}
+                  </label>
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, opacity: 0.6 }}>
+                  <button onClick={() => { setHiddenCols([]); try { localStorage.setItem("seo:hiddenCols", "[]"); } catch {} }} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0 }}>
+                    Show all
+                  </button>
+                  <button onClick={() => setColsOpen(false)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0 }}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </span>
+        </div>
       )}
 
       <div className="beui beui-compact">
