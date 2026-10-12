@@ -63,6 +63,11 @@ it (`tailwind.config.ts` maps shadcn token names onto the app's existing dark pa
 `lib/utils.ts`). SEO Title / Description are editable inline per locale; edits stay local until
 "Save N drafts" writes them (draft only, hard brand-rule violations are reported, not forced).
 Selecting rows enables "Generate selected" (`/api/seo/handoff?items=collection:id,…`).
+"Publish edited (N)" publishes every inline-edited row after a confirm box (same two-step publish,
+dates untouched); "Search & replace" rewrites title/description across the visible rows for the
+current locale as local edits, so a typo fix across 40 pages is one replace + one publish. Claude
+is only involved in writing new text; publishing is always the tool with the stored CMS login.
+"Columns" shows/hides columns per browser (the two length columns start hidden).
 
 **Generate / Regenerate SEO title** (`lib/seoHandoff.ts`, `app/api/seo/handoff/route.ts`,
 `app/seo/apply/page.tsx`). This app calls no LLM API and holds no AI key — the writing is

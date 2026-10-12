@@ -135,12 +135,17 @@ export default function SeoStudioPage() {
     }));
   }
 
-  // Saves every row with unsaved inline edits as a draft (never publishes
-  // from here — publishing stays an explicit act in the drawer or via
-  // Generate). Rows whose text breaks a hard brand rule are reported, not
-  // forced.
+  // Writes every row with unsaved inline edits to the CMS — as drafts, or
+  // published (publication date untouched, same two-step path as the edit
+  // panel). No Claude involved: Claude only writes text, the tool publishes.
+  // Rows whose text breaks a hard brand rule are reported, not forced.
+  const [confirmPublish, setConfirmPublish] = useState(false);
   async function saveDrafts() {
+    return writeEdits("draft");
+  }
+  async function writeEdits(action: "draft" | "publish") {
     if (!items || dirtyKeys.length === 0) return;
+    setConfirmPublish(false);
     setSaving(true);
     const failures: string[] = [];
     let saved = 0;
@@ -162,10 +167,12 @@ export default function SeoStudioPage() {
       const res = await fetch("/api/seo/doc", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collection: item.collection, id: item.id, action: "draft", en, de }),
+        body: JSON.stringify({ collection: item.collection, id: item.id, action, en, de }),
       });
       if (res.ok) {
         saved++;
+        const j = await res.json().catch(() => ({}));
+        if (j.dateLine && String(j.dateLine).startsWith("WARNING")) failures.push(`${item.internalTitle}: ${j.dateLine}`);
         setEdits((prev) => {
           const next = { ...prev };
           delete next[key];
@@ -177,8 +184,39 @@ export default function SeoStudioPage() {
       }
     }
     setSaving(false);
-    setNotice(`${saved} draft${saved === 1 ? "" : "s"} saved${failures.length ? `, ${failures.length} not saved:\n${failures.join("\n")}` : "."}`);
+    const verb = action === "publish" ? "published, publication dates untouched" : "saved as draft";
+    setNotice(`Done. ${saved} doc${saved === 1 ? "" : "s"} ${verb}${failures.length ? `\nNot written: ${failures.length}\n${failures.join("\n")}` : "."}`);
     load();
+  }
+
+  // Search & replace across the visible rows' SEO title/description for the
+  // current locale. Only touches local edits — nothing reaches the CMS until
+  // "Save drafts" / "Publish edited". Case-sensitive, plain text.
+  const [srOpen, setSrOpen] = useState(false);
+  const [srFind, setSrFind] = useState("");
+  const [srReplace, setSrReplace] = useState("");
+  const [srScope, setSrScope] = useState<"both" | "title" | "description">("both");
+  const srMatches = useMemo(() => {
+    if (!srFind) return 0;
+    return rows.reduce((n, r) => {
+      const t = srScope !== "description" && r.seoTitle.includes(srFind) ? 1 : 0;
+      const d = srScope !== "title" && r.seoDescription.includes(srFind) ? 1 : 0;
+      return n + (t || d ? 1 : 0);
+    }, 0);
+  }, [rows, srFind, srScope]);
+  function applyReplace() {
+    if (!srFind) return;
+    setEdits((prev) => {
+      const next = { ...prev };
+      for (const r of rows) {
+        const patch: Partial<SeoLocaleMeta> = {};
+        if (srScope !== "description" && r.seoTitle.includes(srFind)) patch.title = r.seoTitle.split(srFind).join(srReplace);
+        if (srScope !== "title" && r.seoDescription.includes(srFind)) patch.description = r.seoDescription.split(srFind).join(srReplace);
+        if (Object.keys(patch).length) next[r.key] = { ...next[r.key], [locale]: { ...next[r.key]?.[locale], ...patch } };
+      }
+      return next;
+    });
+    setNotice(`Replaced in ${srMatches} row${srMatches === 1 ? "" : "s"} (${locale.toUpperCase()}). Not in the CMS yet: Save drafts or Publish edited.`);
   }
 
   const selectedParam = selectedIds.join(",");
@@ -320,7 +358,8 @@ export default function SeoStudioPage() {
       <h1 style={{ marginBottom: 4 }}>SEO Studio</h1>
       <p style={{ opacity: 0.6, fontSize: 13, marginTop: 0, marginBottom: 16 }}>
         Staging only. Reads and writes go straight to Payload, never to the Google Sheet. Click a title to open it in
-        the CMS, type into SEO Title / Description to edit inline, then Save drafts.
+        the CMS, type into SEO Title / Description to edit inline (or use Search &amp; replace), then Save drafts or
+        Publish edited. Claude is only needed to write new text; publishing never needs it.
       </p>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -343,14 +382,29 @@ export default function SeoStudioPage() {
           </a>
         )}
         {dirtyKeys.length > 0 && (
-          <button
-            onClick={saveDrafts}
-            disabled={saving}
-            style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "var(--fg)", fontSize: 13, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
-          >
-            {saving ? "Saving…" : `Save ${dirtyKeys.length} draft${dirtyKeys.length === 1 ? "" : "s"}`}
-          </button>
+          <>
+            <button
+              onClick={saveDrafts}
+              disabled={saving}
+              style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "var(--fg)", fontSize: 13, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? "Saving…" : `Save ${dirtyKeys.length} draft${dirtyKeys.length === 1 ? "" : "s"}`}
+            </button>
+            <button
+              onClick={() => setConfirmPublish(true)}
+              disabled={saving}
+              style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--accent)", background: "none", color: "var(--fg)", fontSize: 13, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
+            >
+              Publish edited ({dirtyKeys.length})
+            </button>
+          </>
         )}
+        <button
+          onClick={() => setSrOpen((o) => !o)}
+          style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid var(--border)", background: srOpen ? "#1b1b1d" : "none", color: "var(--fg)", fontSize: 13, cursor: "pointer" }}
+        >
+          Search &amp; replace
+        </button>
         <span style={{ fontSize: 12, opacity: 0.6 }}>
           {hasConnector
             ? "Generate opens claude.ai; Claude writes and publishes (publication date unchanged)."
@@ -363,6 +417,44 @@ export default function SeoStudioPage() {
         </span>
       </div>
 
+      {confirmPublish && (
+        <div style={{ background: "#141416", border: "1px solid var(--accent)", borderRadius: 8, padding: "12px 14px", margin: "0 0 12px", fontSize: 13 }}>
+          <div style={{ marginBottom: 8 }}>
+            Publish {dirtyKeys.length} edited doc{dirtyKeys.length === 1 ? "" : "s"} to the CMS now? Publication dates stay untouched. Texts that
+            break a hard brand rule are skipped and listed.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => writeEdits("publish")} style={{ padding: "6px 12px", borderRadius: 6, background: "var(--accent)", border: "none", color: "#fff", fontSize: 12, cursor: "pointer" }}>
+              Publish all edited
+            </button>
+            <button onClick={() => setConfirmPublish(false)} style={{ padding: "6px 12px", borderRadius: 6, background: "none", border: "1px solid var(--border)", color: "var(--fg)", fontSize: 12, cursor: "pointer" }}>
+              Keep editing
+            </button>
+          </div>
+        </div>
+      )}
+      {srOpen && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", background: "#141416", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", margin: "0 0 12px", fontSize: 13 }}>
+          <input value={srFind} onChange={(e) => setSrFind(e.target.value)} placeholder="Find" style={{ ...input, padding: "6px 10px", width: 220 }} />
+          <span style={{ opacity: 0.5 }}>→</span>
+          <input value={srReplace} onChange={(e) => setSrReplace(e.target.value)} placeholder="Replace with" style={{ ...input, padding: "6px 10px", width: 220 }} />
+          <select value={srScope} onChange={(e) => setSrScope(e.target.value as typeof srScope)} style={{ ...input, padding: "6px 10px" }}>
+            <option value="both">Title + Description</option>
+            <option value="title">SEO Title only</option>
+            <option value="description">SEO Description only</option>
+          </select>
+          <span style={{ opacity: 0.6, fontSize: 12 }}>
+            {srFind ? `${srMatches} of ${rows.length} visible rows match (${locale.toUpperCase()})` : "Matches the visible rows in the current language"}
+          </span>
+          <button
+            onClick={applyReplace}
+            disabled={!srFind || srMatches === 0}
+            style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--accent)", background: "none", color: "var(--fg)", fontSize: 12, cursor: srMatches ? "pointer" : "default", opacity: srMatches ? 1 : 0.5 }}
+          >
+            Replace in {srMatches} row{srMatches === 1 ? "" : "s"}
+          </button>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, slug, SEO title/description…" style={{ ...input, flex: 1 }} />
         <select value={collectionFilter} onChange={(e) => setCollectionFilter(e.target.value as typeof collectionFilter)} style={{ ...input, padding: "8px 10px" }}>
