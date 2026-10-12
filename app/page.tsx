@@ -3,7 +3,7 @@
 import Link from "next/link";
 import HomeBackground, { useBackgroundChoice } from "./components/HomeBackground";
 import HomeFooter from "./components/HomeFooter";
-import { TOOL_ICONS } from "./components/ToolIcons";
+import MorphIcon, { MORPH_PRESETS } from "./components/MorphIcon";
 
 type Status = "working" | "staging" | "planned";
 
@@ -15,37 +15,49 @@ const STATUS: Record<Status, { label: string; bg: string; fg: string; border: st
   planned: { label: "planned", bg: "rgba(112,86,167,0.16)", fg: "var(--vapor-lilac)", border: "rgba(112,86,167,0.45)" },
 };
 
-const TILES: { title: string; href: string; external?: boolean; status: Status; text: string }[] = [
-  {
-    title: "UTM Studio",
-    href: "https://utm-studio-two.vercel.app",
-    external: true,
-    status: "working",
-    text: "Campaign links with UTM tags. Opens in its own tab for now.",
-  },
+const TILES: { title: string; href: string; key: string; external?: boolean; status: Status; text: string }[] = [
   {
     title: "SEO Studio",
     href: "/seo",
+    key: "/seo",
     status: "staging",
     text: "Meta titles and descriptions for news and pages, EN and DE. Your Claude writes, the tool publishes.",
   },
   {
     title: "Asset Uploader",
     href: "/assets",
-    status: "planned",
+    key: "/assets",
+    status: "working",
     text: "Drop photos, compress, name, alt text, upload to the right CMS folder.",
   },
   {
     title: "CRM Images",
     href: "/images",
+    key: "/images",
     status: "planned",
     text: "Cropped, rounded variants for the CRM email templates.",
   },
   {
+    title: "UTM Studio",
+    href: "https://af1-utm-studio.vercel.app/",
+    key: "/utm",
+    external: true,
+    status: "working",
+    text: "Campaign links with UTM tags. Opens in its own tab for now.",
+  },
+  {
     title: "Claude connector",
     href: "/connector",
+    key: "/connector",
     status: "working",
     text: "Let your own Claude use these tools directly. One-minute setup, once.",
+  },
+  {
+    title: "Suggestion box",
+    href: "/suggest",
+    key: "/suggest",
+    status: "working",
+    text: "A feature, a bug, a tool that should exist. Lands on the admin message board.",
   },
 ];
 
@@ -68,23 +80,26 @@ export default function Home() {
         />
       </div>
 
-      {/* Typographic logo */}
-      <h1
-        aria-label="AF1 Ktulu"
-        style={{
-          textAlign: "center",
-          fontFamily: "ui-monospace, Menlo, Consolas, monospace",
-          fontSize: "clamp(40px, 7.5vw, 84px)",
-          fontWeight: 600,
-          color: "#fff",
-          lineHeight: 1,
-          letterSpacing: "0.14em",
-          margin: "28px 0 10px",
-          textShadow: "0 2px 24px rgba(0,0,0,0.8), 0 0 40px rgba(239,162,214,0.25)",
-        }}
-      >
-        AF1<span style={{ color: "var(--accent)" }}>-</span>KTULU
-        <sup style={{ fontSize: "0.35em", color: "var(--vapor-rose)", marginLeft: 4, letterSpacing: 0 }}>*</sup>
+      {/* Typographic logo, exactly as wide as the tile grid below */}
+      <h1 aria-label="AF1 Ktulu" style={{ margin: "26px 0 6px" }}>
+        <svg viewBox="0 0 1000 150" width="100%" height="auto" style={{ display: "block", overflow: "visible" }}>
+          <text
+            x="0"
+            y="118"
+            textLength="960"
+            lengthAdjust="spacingAndGlyphs"
+            fontFamily="ui-monospace, Menlo, Consolas, monospace"
+            fontWeight="600"
+            fontSize="150"
+            fill="#fff"
+            style={{ filter: "drop-shadow(0 2px 24px rgba(0,0,0,0.8))" }}
+          >
+            AF1<tspan fill="var(--accent)">-</tspan>KTULU
+          </text>
+          <text x="975" y="60" fontFamily="ui-monospace, Menlo, Consolas, monospace" fontSize="56" fill="var(--vapor-rose)">
+            *
+          </text>
+        </svg>
       </h1>
       <div
         aria-hidden
@@ -105,15 +120,15 @@ export default function Home() {
         Internal tools for audif1.com
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12, marginTop: 36 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 30 }}>
         {TILES.map((t) => {
           const s = STATUS[t.status];
-          const Icon = TOOL_ICONS[t.href];
+          const preset = MORPH_PRESETS[t.key] ?? {};
           const inner = (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <span style={{ fontWeight: 600, fontSize: 15, display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-heading)" }}>
-                  {Icon && <Icon size={28} className="tool-icon" />}
+                  <MorphIcon size={40} {...preset} />
                   {t.title}
                   {t.external && <span style={{ opacity: 0.5, fontSize: 12, marginLeft: 2 }}>↗</span>}
                 </span>

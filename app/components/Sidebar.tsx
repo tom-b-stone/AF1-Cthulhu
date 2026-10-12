@@ -52,7 +52,16 @@ const SIDEBARS: Record<string, Section[]> = {
   ],
   "/images": [{ title: "CRM Images", entries: [{ href: "/images", label: "Overview", exact: true }] }],
   "/connector": [{ title: "Claude connector", entries: [{ href: "/connector", label: "Setup", exact: true }] }],
-  "/admin": [{ title: "Admin", entries: [{ href: "/admin/credentials", label: "CMS credentials" }] }],
+  "/suggest": [{ title: "Suggestion box", entries: [{ href: "/suggest", label: "Write a suggestion", exact: true }] }],
+  "/admin": [
+    {
+      title: "Admin",
+      entries: [
+        { href: "/admin/messages", label: "Message board", note: "suggestions" },
+        { href: "/admin/credentials", label: "CMS credentials" },
+      ],
+    },
+  ],
 };
 
 export default function Sidebar() {
@@ -61,7 +70,7 @@ export default function Sidebar() {
   if (pathname === "/login" || pathname === "/" || !session) return null;
 
   const tool = currentTool(pathname);
-  const sections = (tool && SIDEBARS[tool.href]) ?? [];
+  const sections = (tool && SIDEBARS[tool.key]) ?? [];
   if (sections.length === 0) return null;
 
   return (
@@ -95,7 +104,7 @@ export default function Sidebar() {
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 2 }}>
             {sec.entries.map((e) => {
               const external = e.href.startsWith("http") || e.href.startsWith("/api/");
-              const active = e.exact ? pathname === e.href : !external && pathname.startsWith(e.href.split("?")[0]) && e.href.split("?")[0] !== tool?.href;
+              const active = e.exact ? pathname === e.href : !external && pathname.startsWith(e.href.split("?")[0]) && e.href.split("?")[0] !== tool?.key;
               const style = {
                 display: "flex",
                 justifyContent: "space-between",

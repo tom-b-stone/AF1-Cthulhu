@@ -10,8 +10,16 @@ DM Sans body, Fahkwang headings, loaded as a Google Fonts stylesheet so builds n
 AF1 lava red as the accent. `app/components/ToolHeader.tsx` is the sticky header: wordmark on the
 ASCII strip, a **Tools** menu that switches tools (Neuron's blurred rounded sub-menu), environment +
 account on the right. `app/components/Sidebar.tsx` is in-tool navigation only (views, generate,
-help per tool; entries registered in `SIDEBARS`). `app/components/ToolIcons.tsx`: one geometric
-gradient icon per tool (pills, split square, quatrefoil, rings, zig-zag; pure SVG).
+help per tool; entries registered in `SIDEBARS`). `app/components/MorphIcon.tsx`: the tool icons are
+small three.js canvases — a sphere displaced by animated simplex noise with an iridescent
+thin-film shader (after the "Rainbow Blend Glass" look of Tom's reference .blend), one preset per
+tool (seed, frequency, amplitude, palette offset; `MORPH_PRESETS`). The header shows them as a row
+of rotating icons; hover (or the active tool) extends the pill with the name. Paused off-screen,
+static under prefers-reduced-motion. `ToolIcons.tsx` (flat gradient SVGs) is kept as a fallback set.
+
+**Suggestion box → admin message board.** `/suggest` (any signed-in user) posts to
+`app/api/suggestions/route.ts` (one JSON list in KV, `suggestions:v1`); `/admin/messages`
+(admins) lists them with new / seen / done. Non-admins see only their own on `/suggest`.
 
 ## Navigation structure
 
