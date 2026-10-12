@@ -61,7 +61,7 @@ a { color: inherit; }
 
 /* Compact variant for dense data tables: tighter cell padding, column
    drag grips only on hover (they cost 24px per header otherwise). */
-.beui-compact th .px-4, .beui-compact td .px-4 { padding-left: 8px; padding-right: 8px; }
+.beui-compact th .px-4, .beui-compact td .px-4, .beui-compact td.px-4 { padding-left: 8px; padding-right: 8px; }
 .beui-compact th { position: sticky; }
 .beui-compact th button[aria-label^="Reorder"] { position: absolute; left: 0; top: 0; width: 14px; opacity: 0; }
 .beui-compact th:hover button[aria-label^="Reorder"] { opacity: 1; }
