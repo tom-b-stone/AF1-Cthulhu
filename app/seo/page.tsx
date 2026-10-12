@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Table, type TableColumn } from "@/components/ui/table-editable";
 import { validateSeoField } from "@/lib/seoBrand";
@@ -36,12 +37,24 @@ type Row = {
 type Edits = Record<string, { en?: Partial<SeoLocaleMeta>; de?: Partial<SeoLocaleMeta> }>;
 
 export default function SeoStudioPage() {
+  return (
+    <Suspense fallback={null}>
+      <SeoStudio />
+    </Suspense>
+  );
+}
+
+function SeoStudio() {
   const [items, setItems] = useState<SeoListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [locale, setLocale] = useState<Locale>("en");
   const [collectionFilter, setCollectionFilter] = useState<"all" | "news" | "pages">("all");
+  const searchParams = useSearchParams();
   const [onlyMissing, setOnlyMissing] = useState(false);
+  useEffect(() => {
+    setOnlyMissing(searchParams?.get("missing") === "1");
+  }, [searchParams]);
   const [selected, setSelected] = useState<SeoListItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [edits, setEdits] = useState<Edits>({});

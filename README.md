@@ -4,6 +4,15 @@ Internal tool shell for audif1.com, built alongside UTM Studio. One Next.js app,
 in the sidebar, deployed at https://af1-ktulu.vercel.app (repo tom-b-stone/AF1-Ktulu; was "AF1-Cthulhu" until 2026-10-12), tested against `staging.audif1team.com` (the staging CMS
 domain — note it's `audif1team.com`, not `audif1.com`) before anything touches production.
 
+## Shell (Neuron-style)
+Dark surfaces and type after alithemes' Neuron template (#0C0D0E / #171819 / #1E2022 / #393939,
+DM Sans body, Fahkwang headings, loaded as a Google Fonts stylesheet so builds never fetch fonts),
+AF1 lava red as the accent. `app/components/ToolHeader.tsx` is the sticky header: wordmark on the
+ASCII strip, a **Tools** menu that switches tools (Neuron's blurred rounded sub-menu), environment +
+account on the right. `app/components/Sidebar.tsx` is in-tool navigation only (views, generate,
+help per tool; entries registered in `SIDEBARS`). `app/components/ToolIcons.tsx`: one geometric
+gradient icon per tool (pills, split square, quatrefoil, rings, zig-zag; pure SVG).
+
 ## Navigation structure
 
 ```
@@ -122,11 +131,27 @@ email. The hand-off prompt tells Claude: if you have `seo_publish`, call it and 
 answer with the Publish link — so users without the connector lose nothing. Meant to grow: tools
 for the Asset Uploader / CRM Images go in the same file under the same connector.
 
-### Asset Uploader
-Compresses an uploaded image, lets the user pick an existing Payload media folder (or create a
-new one — the folder structure already exists in the CMS, this just reads/writes it) and uploads
-to the `media` collection, then writes English alt text. Build and test this against
-`staging.audif1team.com` first since folder creation is a real write.
+### Asset Uploader (in progress)
+Flow: drop photos → compress in the browser (`lib/imageCompress.ts`: WebP q80, longest edge
+2560/1920/1600/original; Safari can't encode WebP → JPEG with a warning) → batch saved in the
+browser (IndexedDB, `lib/batchStore.ts`, survives reloads) → batch page: naming, alt text, checks,
+export → upload. Nothing reaches a CMS until "Upload".
+
+Rules (`lib/assetNaming.ts`, also on `/assets/rules`): folder
+`10_Media-Galleries/{year}_R{nn}_{LOC}-GP/{SESSION}`; file
+`audif1_{year}_{LOC}_GP_{context}_{descriptor}_{nn}.webp`; descriptor 2–6 lowercase hyphen words,
+ASCII (Hulkenberg); alt text English < 125 chars, "<subject> of the Audi Revolut F1® Team <action>
+at the <race> Grand Prix". Camera names are parsed for round/LOC/date (`R14_MAD_ARF1T_2026_09_12_…`
+and `T02_MONZ_ARF1T04_17_26_…`, US date order in the second). Taken from the live CMS media library
+(Oct 2026) and the team's Asset Desk rules.
+
+Built: `/assets` (new batch), `/assets/batch/[id]` (editable table: context, descriptor, alt, checks;
+ZIP export with alt-texts.csv + .md), `/assets/batches`, `/assets/rules`, `/assets/knowledge`.
+Next: server-side batch store (Vercel Blob) so the connector can read previews; connector tools
+`asset_list_batch` / `asset_get_image` / `asset_set_meta` + claude.ai hand-off for descriptor + alt;
+folder picker + create; upload to staging (`POST /media` multipart with alt + folder, numbering per
+folder); production toggle (second CMS login in /admin); SlashLens intake (`/assets/intake`, Drive
+file ids, link-sharing is on).
 
 ### CRM Images
 Generates cropped, rounded-corner image variants matched to the CRM template library

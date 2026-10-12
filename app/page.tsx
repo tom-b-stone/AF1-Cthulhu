@@ -3,6 +3,7 @@
 import Link from "next/link";
 import HomeBackground, { useBackgroundChoice } from "./components/HomeBackground";
 import HomeFooter from "./components/HomeFooter";
+import { TOOL_ICONS } from "./components/ToolIcons";
 
 type Status = "working" | "staging" | "planned";
 
@@ -107,12 +108,14 @@ export default function Home() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12, marginTop: 36 }}>
         {TILES.map((t) => {
           const s = STATUS[t.status];
+          const Icon = TOOL_ICONS[t.href];
           const inner = (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontWeight: 600, fontSize: 15 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <span style={{ fontWeight: 600, fontSize: 15, display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-heading)" }}>
+                  {Icon && <Icon size={28} className="tool-icon" />}
                   {t.title}
-                  {t.external && <span style={{ opacity: 0.5, fontSize: 12, marginLeft: 6 }}>↗</span>}
+                  {t.external && <span style={{ opacity: 0.5, fontSize: 12, marginLeft: 2 }}>↗</span>}
                 </span>
                 <span
                   style={{

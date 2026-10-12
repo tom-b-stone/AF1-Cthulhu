@@ -4,6 +4,11 @@ import ToolHeader from "./components/ToolHeader";
 import SessionProviderWrapper from "./components/SessionProviderWrapper";
 import "./globals.css";
 
+// Neuron-style type: Fahkwang for headings/buttons, DM Sans for body.
+// Loaded as a stylesheet (not next/font) so the build never depends on
+// reaching Google Fonts; globals.css maps the names onto the font tokens.
+const FONTS_HREF = "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fahkwang:wght@400;500;600;700&display=swap";
+
 export const metadata: Metadata = {
   title: "AF1 Ktulu",
   description: "Internal tools for audif1.com: UTM Studio, SEO Studio, Asset Uploader, CRM Images",
@@ -12,14 +17,19 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={FONTS_HREF} />
+      </head>
       <body>
         <SessionProviderWrapper>
-          <div style={{ display: "flex" }}>
+          {/* Header spans the full width; the sidebar is in-tool navigation
+              under it, the main column takes the rest. */}
+          <ToolHeader />
+          <div style={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
             <Sidebar />
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-              <ToolHeader />
-              <main style={{ flex: 1, minWidth: 0, padding: "28px 40px" }}>{children}</main>
-            </div>
+            <main style={{ flex: 1, minWidth: 0, padding: "28px 36px" }}>{children}</main>
           </div>
         </SessionProviderWrapper>
       </body>

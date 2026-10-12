@@ -2,23 +2,67 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { currentTool } from "./ToolHeader";
 
-const TOOLS = [
-  { href: "/utm", label: "UTM Studio", note: "external" },
-  { href: "/seo", label: "SEO Studio", note: "staging" },
-  { href: "/assets", label: "Asset Uploader", note: "planned" },
-  { href: "/images", label: "CRM Images", note: "planned" },
-];
+// In-tool navigation. Switching between tools happens in the header's Tools
+// menu; this column only knows about the tool you're in: its views, its
+// settings, its help. Each tool registers its entries here.
+type Entry = { href: string; label: string; note?: string; exact?: boolean };
+type Section = { title: string; entries: Entry[] };
+
+const SIDEBARS: Record<string, Section[]> = {
+  "/seo": [
+    {
+      title: "SEO Studio",
+      entries: [
+        { href: "/seo", label: "Table", note: "news + pages", exact: true },
+        { href: "/seo?missing=1", label: "Missing SEO", note: "filter" },
+      ],
+    },
+    {
+      title: "Generate",
+      entries: [
+        { href: "/api/seo/handoff?missing=1", label: "Generate missing", note: "claude.ai" },
+        { href: "/connector", label: "Claude connector", note: "setup" },
+      ],
+    },
+    {
+      title: "Help",
+      entries: [
+        { href: "https://staging.audif1team.com/cms/admin/collections/news", label: "CMS: News", note: "↗" },
+        { href: "https://staging.audif1team.com/cms/admin/collections/pages", label: "CMS: Pages", note: "↗" },
+      ],
+    },
+  ],
+  "/assets": [
+    {
+      title: "Asset Uploader",
+      entries: [
+        { href: "/assets", label: "New batch", exact: true },
+        { href: "/assets/batches", label: "Batches", note: "7 days" },
+        { href: "/assets/rules", label: "Naming + alt rules" },
+        { href: "/assets/knowledge", label: "Team knowledge", note: "people, cues" },
+      ],
+    },
+    {
+      title: "Help",
+      entries: [{ href: "https://staging.audif1team.com/cms/admin/collections/media/payload-folders", label: "CMS: Media folders", note: "↗" }],
+    },
+  ],
+  "/images": [{ title: "CRM Images", entries: [{ href: "/images", label: "Overview", exact: true }] }],
+  "/connector": [{ title: "Claude connector", entries: [{ href: "/connector", label: "Setup", exact: true }] }],
+  "/admin": [{ title: "Admin", entries: [{ href: "/admin/credentials", label: "CMS credentials" }] }],
+};
 
 export default function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
   const { data: session } = useSession();
-
-  // The home page is a full-width, centred launcher — no sidebar there.
   if (pathname === "/login" || pathname === "/" || !session) return null;
 
-  const isAdmin = (session.user as { role?: string } | undefined)?.role === "admin";
+  const tool = currentTool(pathname);
+  const sections = (tool && SIDEBARS[tool.href]) ?? [];
+  if (sections.length === 0) return null;
 
   return (
     <nav
@@ -26,64 +70,69 @@ export default function Sidebar() {
         width: 220,
         flexShrink: 0,
         borderRight: "1px solid var(--border)",
-        padding: "24px 16px",
-        minHeight: "100vh",
+        padding: "22px 14px",
+        background: "var(--bg)",
         display: "flex",
         flexDirection: "column",
+        gap: 22,
       }}
     >
-      <Link href="/" style={{ fontWeight: 600, marginBottom: 24, textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontFamily: "ui-monospace, Menlo, Consolas, monospace", color: "var(--accent)", fontSize: 13 }}>^(;,;)^</span>
-        AF1 Ktulu
-      </Link>
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
-        {TOOLS.map((tool) => (
-          <li key={tool.href}>
-            <Link
-              href={tool.href}
-              style={{
+      {sections.map((sec) => (
+        <div key={sec.title}>
+          <div
+            style={{
+              fontFamily: "var(--font-heading)",
+              fontSize: 11,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--muted)",
+              padding: "0 10px",
+              marginBottom: 6,
+            }}
+          >
+            {sec.title}
+          </div>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 2 }}>
+            {sec.entries.map((e) => {
+              const external = e.href.startsWith("http") || e.href.startsWith("/api/");
+              const active = e.exact ? pathname === e.href : !external && pathname.startsWith(e.href.split("?")[0]) && e.href.split("?")[0] !== tool?.href;
+              const style = {
                 display: "flex",
                 justifyContent: "space-between",
-                padding: "8px 10px",
-                borderRadius: 6,
+                alignItems: "center",
+                padding: "7px 10px",
+                borderRadius: 8,
                 textDecoration: "none",
-                fontSize: 14,
-              }}
-            >
-              <span>{tool.label}</span>
-              <span style={{ opacity: 0.4, fontSize: 11 }}>{tool.note}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-
-      <div style={{ marginTop: "auto", paddingTop: 24, fontSize: 11, opacity: 0.6 }}>
-        <div style={{ marginBottom: 6 }}>{session.user?.email}</div>
-        <Link href="/connector" style={{ display: "block", marginBottom: 6, textDecoration: "none" }}>
-          Claude connector
-        </Link>
-        {isAdmin && (
-          <Link href="/admin/credentials" style={{ display: "block", marginBottom: 6, textDecoration: "none" }}>
-            Admin
-          </Link>
-        )}
-        <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          style={{
-            background: "none",
-            border: "none",
-            color: "inherit",
-            opacity: 0.7,
-            cursor: "pointer",
-            padding: 0,
-            fontSize: 11,
-          }}
-        >
-          Sign out
-        </button>
-        <div style={{ marginTop: 10, opacity: 0.5 }}>
-          env: {process.env.NEXT_PUBLIC_APP_ENV ?? "unset"}
+                fontSize: 13,
+                color: active ? "#fff" : "var(--fg)",
+                background: active ? "var(--surface)" : "transparent",
+                border: `1px solid ${active ? "var(--border-2)" : "transparent"}`,
+              } as const;
+              const inner = (
+                <>
+                  <span>{e.label}</span>
+                  {e.note && <span style={{ color: "var(--muted)", fontSize: 11 }}>{e.note}</span>}
+                </>
+              );
+              return (
+                <li key={e.href + e.label}>
+                  {external ? (
+                    <a href={e.href} target="_blank" rel="noreferrer" style={style}>
+                      {inner}
+                    </a>
+                  ) : (
+                    <Link href={e.href} style={style}>
+                      {inner}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
+      ))}
+      <div style={{ marginTop: "auto", fontSize: 11, color: "var(--muted)", padding: "0 10px" }}>
+        env: {process.env.NEXT_PUBLIC_APP_ENV ?? "staging"}
       </div>
     </nav>
   );
