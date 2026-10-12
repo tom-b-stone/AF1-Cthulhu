@@ -39,14 +39,16 @@ a { color: inherit; }
 
 /* Scoped reset for the beui table (Tailwind preflight is off so the
    inline-styled pages keep their look; the component expects it). */
-.beui, .beui *, .beui *::before, .beui *::after { box-sizing: border-box; }
-.beui button, .beui input, .beui select, .beui textarea {
-  background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; line-height: inherit;
+/* :where() keeps these at zero specificity so Tailwind utilities
+   (border-2, bg-muted, px-4 …) still win, as they would with preflight. */
+:where(.beui, .beui *, .beui *::before, .beui *::after) { box-sizing: border-box; border-width: 0; border-style: solid; border-color: hsl(var(--border-hsl)); }
+:where(.beui button, .beui input, .beui select, .beui textarea) {
+  background: none; margin: 0; padding: 0; font: inherit; color: inherit; line-height: inherit;
 }
-.beui button { cursor: pointer; }
-.beui table { border-collapse: collapse; border-spacing: 0; font-size: 13px; }
-.beui th, .beui td { text-align: left; }
-.beui svg { display: inline-block; vertical-align: middle; }
+:where(.beui button) { cursor: pointer; }
+:where(.beui table) { border-collapse: collapse; border-spacing: 0; font-size: 13px; text-indent: 0; }
+:where(.beui th, .beui td) { text-align: left; }
+:where(.beui svg) { display: inline-block; vertical-align: middle; }
 
 /* Team logo as a mask so it takes any colour via background */
 .af1-logo {

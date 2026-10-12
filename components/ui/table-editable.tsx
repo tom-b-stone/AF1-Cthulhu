@@ -268,6 +268,11 @@ export function Table<T>({
           className={cn("border-collapse", sized ? "w-max" : undefined)}
           style={{
             tableLayout: "fixed",
+            // AF1: fixed layout only kicks in with an explicit width; without
+            // it the browser falls back to auto layout and long titles blow
+            // the columns up. 100% + the min keeps px columns exact and lets
+            // the unsized ones share the remainder.
+            width: "100%",
             minWidth: `max(100%, ${minTableWidth}px)`,
           }}
         >
@@ -280,8 +285,9 @@ export function Table<T>({
                 <col key={column.key} style={width ? { width } : undefined} />
               );
             })}
-            {/* Empty filler owns the leftover space — no gap, content unpinned. */}
-            <col />
+            {/* Empty filler owns the leftover space — no gap, content unpinned.
+                AF1: width 0 so the flexible columns get the remainder first. */}
+            <col style={{ width: 0 }} />
           </colgroup>
 
           <TableHeader

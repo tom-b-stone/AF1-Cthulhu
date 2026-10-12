@@ -188,7 +188,7 @@ export default function SeoStudioPage() {
       {
         key: "status",
         header: "Status",
-        width: "104px",
+        width: "96px",
         sortable: true,
         cell: (r) => (
           <span
@@ -199,11 +199,11 @@ export default function SeoStudioPage() {
           </span>
         ),
       },
-      { key: "publishedDate", header: "Published", width: "100px", sortable: true, cell: (r) => <span className="tabular-nums">{r.publishedDate || "—"}</span> },
+      { key: "publishedDate", header: "Published", width: "96px", sortable: true, cell: (r) => <span className="tabular-nums">{r.publishedDate || "—"}</span> },
       {
         key: "internalTitle",
         header: "Title",
-        width: "220px",
+        width: "200px",
         sortable: true,
         cell: (r) => (
           <a
@@ -242,7 +242,7 @@ export default function SeoStudioPage() {
       {
         key: "actions",
         header: "",
-        width: "150px",
+        width: "140px",
         cell: (r) => (
           <span className="flex items-center gap-2">
             <button
