@@ -113,3 +113,19 @@ export function validateAlt(alt: string): string[] {
   if (/Hülkenberg|Huelkenberg/.test(alt)) issues.push('Use "Nico Hulkenberg" (no umlaut in English alt text)');
   return issues;
 }
+
+// Spelling checks driven by team knowledge: an alias that is a known wrong
+// form (multi-word, or with non-ASCII letters) found in the alt text while
+// the official name is absent. Single-word nicknames ("Nico") are left alone.
+export function knowledgeIssues(alt: string, entries: { name: string; aliases?: string[]; active: boolean; kind: string }[]): string[] {
+  const out: string[] = [];
+  for (const e of entries) {
+    if (!e.active || !e.aliases) continue;
+    for (const a of e.aliases) {
+      const suspicious = a.includes(" ") || /[^\x00-\x7f]/.test(a);
+      if (!suspicious || a === e.name) continue;
+      if (alt.includes(a) && !alt.includes(e.name)) out.push(`Use "${e.name}" not "${a}"`);
+    }
+  }
+  return out;
+}

@@ -50,12 +50,13 @@ async function getToken(forceRefresh = false): Promise<string> {
 
 async function payloadFetch(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const token = await getToken();
+  const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
   const res = await fetch(`${baseUrl()}${path}`, {
     ...init,
     headers: {
       ...(init.headers ?? {}),
       Authorization: `JWT ${token}`,
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(init.body && !isForm ? { "Content-Type": "application/json" } : {}),
     },
     cache: "no-store",
   });
@@ -371,4 +372,75 @@ export async function publishSeo(
     publishedAtAfter: after?.publishedAt ?? null,
     status: after?._status === "published" ? "published" : "draft",
   };
+}
+
+
+// ---------------------------------------------------------------------
+// Media folders + uploads (Asset Uploader). Payload's folders feature:
+// collection `payload-folders` (name, folder = parent id, folderType), and
+// `media` docs carry `folder` (id). Upload = multipart POST /media with
+// `file` + `_payload` (JSON of the other fields).
+
+export type MediaFolder = { id: string; name: string; parent: string | null; path: string };
+
+export async function listMediaFolders(): Promise<MediaFolder[]> {
+  const out: { id: string; name: string; folder: string | null }[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await payloadFetch(`/payload-folders?limit=500&page=${page}&depth=0&sort=name`);
+    if (!res.ok) throw new Error(`Folders failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    const json = (await res.json()) as { docs: { id: string; name: string; folder?: string | { id: string } | null }[]; hasNextPage: boolean };
+    for (const d of json.docs) out.push({ id: d.id, name: d.name, folder: typeof d.folder === "object" && d.folder ? d.folder.id : (d.folder as string | null) ?? null });
+    if (!json.hasNextPage) break;
+    page++;
+  }
+  const byId = new Map(out.map((f) => [f.id, f]));
+  const pathOf = (f: { id: string; name: string; folder: string | null }): string => {
+    const parts = [f.name];
+    let p = f.folder;
+    let guard = 0;
+    while (p && byId.has(p) && guard++ < 12) {
+      const pf = byId.get(p)!;
+      parts.unshift(pf.name);
+      p = pf.folder;
+    }
+    return parts.join("/");
+  };
+  return out.map((f) => ({ id: f.id, name: f.name, parent: f.folder, path: pathOf(f) })).sort((a, b) => a.path.localeCompare(b.path));
+}
+
+export async function createMediaFolder(name: string, parent: string | null): Promise<MediaFolder> {
+  const res = await payloadFetch(`/payload-folders`, {
+    method: "POST",
+    body: JSON.stringify({ name, folder: parent, folderType: ["media"] }),
+  });
+  if (!res.ok) throw new Error(`Create folder failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  const json = (await res.json()) as { doc: { id: string; name: string; folder?: string | null } };
+  return { id: json.doc.id, name: json.doc.name, parent: json.doc.folder ?? parent, path: name };
+}
+
+// Highest trailing _NN among files in a folder that start with `prefix`
+// (e.g. audif1_2026_ESP_GP_gallery), so numbering continues per folder.
+export async function nextNumberInFolder(folderId: string, prefix: string): Promise<number> {
+  const res = await payloadFetch(`/media?limit=500&depth=0&where[folder][equals]=${encodeURIComponent(folderId)}`);
+  if (!res.ok) return 1;
+  const json = (await res.json()) as { docs: { filename?: string }[] };
+  let max = 0;
+  for (const d of json.docs) {
+    const f = d.filename ?? "";
+    if (!f.startsWith(prefix)) continue;
+    const m = f.match(/_(\d{2,3})\.[a-z0-9]+$/i);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return max + 1;
+}
+
+export async function uploadMedia(file: Blob, filename: string, alt: string, folderId: string | null): Promise<{ id: string; url: string; filename: string }> {
+  const form = new FormData();
+  form.append("file", file, filename);
+  form.append("_payload", JSON.stringify({ alt, ...(folderId ? { folder: folderId } : {}) }));
+  const res = await payloadFetch(`/media`, { method: "POST", body: form });
+  if (!res.ok) throw new Error(`Upload failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  const json = (await res.json()) as { doc: { id: string; url: string; filename: string } };
+  return { id: json.doc.id, url: json.doc.url, filename: json.doc.filename };
 }

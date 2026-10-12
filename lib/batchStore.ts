@@ -26,6 +26,9 @@ export type AssetRow = {
   fileName: string;
   status: "ready" | "uploaded" | "error";
   note?: string;
+  cmsId?: string; // media doc id after upload
+  cmsUrl?: string;
+  uploadedName?: string; // final file name with the per-folder number
   // extras (SlashLens intake)
   driveId?: string;
   people?: string[];
@@ -41,6 +44,8 @@ export type Batch = {
   test?: number;
   session: string;
   folderPath: string; // proposed Payload folder path (under 10_Media-Galleries)
+  targetFolderId?: string | null; // chosen CMS folder (staging)
+  targetFolderPath?: string;
   edge: number;
   rows: AssetRow[];
 };
