@@ -71,7 +71,7 @@ export default function Home() {
           role="img"
           aria-label="Audi Revolut F1 Team"
           className="af1-logo"
-          style={{ width: 96, height: 88, margin: "0 auto", background: "var(--accent)" }}
+          style={{ width: 48, height: 44, margin: "0 auto", background: "var(--accent)" }}
         />
       </div>
 
@@ -95,11 +95,19 @@ export default function Home() {
         Internal tools for audif1.com
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "1fr", gap: 22, marginTop: 44 }}>
-        {TILES.map((t) => (
-          <HomeTile key={t.key} title={t.title} href={t.href} tileKey={t.key} external={t.external} status={STATUS[t.status]} text={t.text} />
+      <div className="section-label reveal" style={{ marginTop: 52, marginBottom: 14, display: "flex", justifyContent: "space-between" }}>
+        <span>Tools</span>
+        <span>{TILES.length} + suggestion box</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: "1fr", gap: 26, rowGap: 34 }}>
+        {TILES.map((t, i) => (
+          <div key={t.key} className={`reveal reveal-d${(i % 6) + 1}`} style={{ display: "flex" }}>
+            <HomeTile title={t.title} href={t.href} tileKey={t.key} external={t.external} status={STATUS[t.status]} text={t.text} />
+          </div>
         ))}
-        <SuggestionTile />
+        <div className="reveal reveal-d6" style={{ display: "flex" }}>
+          <SuggestionTile />
+        </div>
       </div>
 
       <p

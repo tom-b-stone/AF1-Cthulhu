@@ -59,11 +59,12 @@ export default function Wordmark() {
       style={{
         display: "flex",
         justifyContent: "space-between",
-        alignItems: "baseline",
         width: "100%",
-        margin: "26px 0 6px",
+        height: "clamp(64px, 9.5vw, 112px)",
+        margin: "22px 0 4px",
         lineHeight: 1,
-        fontSize: "clamp(44px, 9.5vw, 104px)",
+        fontSize: "clamp(44px, 8.6vw, 96px)",
+        alignItems: "center",
         fontWeight: 400,
         color: "#fff",
         textShadow: "0 2px 24px rgba(0,0,0,0.8)",
@@ -81,6 +82,10 @@ export default function Wordmark() {
             flex: "0 0 auto",
             minWidth: "0.6em",
             textAlign: "center",
+            display: "inline-block",
+            height: "1em",
+            lineHeight: 1,
+            overflow: "visible",
           }}
         >
           {ch}

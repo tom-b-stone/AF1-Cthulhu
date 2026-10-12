@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Sidebar from "./components/Sidebar";
 import ToolHeader from "./components/ToolHeader";
+import NeuronFx from "./components/NeuronFx";
 import SessionProviderWrapper from "./components/SessionProviderWrapper";
 import "./globals.css";
 import { wordmarkFontsHref } from "@/lib/wordmarkFonts";
@@ -8,7 +9,9 @@ import { wordmarkFontsHref } from "@/lib/wordmarkFonts";
 // Neuron-style type: Fahkwang for headings/buttons, DM Sans for body.
 // Loaded as a stylesheet (not next/font) so the build never depends on
 // reaching Google Fonts; globals.css maps the names onto the font tokens.
-const FONTS_HREF = "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fahkwang:wght@400;500;600;700&display=swap";
+// Archivo is the AF1 web stand-in for Audi TRN (af1-brand skill); Fahkwang
+// stays for the Neuron-style small caps labels.
+const FONTS_HREF = "https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Fahkwang:wght@400;500;600&display=swap";
 
 export const metadata: Metadata = {
   title: "AF1 Ktulu",
@@ -28,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SessionProviderWrapper>
           {/* Header spans the full width; the sidebar is in-tool navigation
               under it, the main column takes the rest. */}
+          <NeuronFx />
           <ToolHeader />
           <div style={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
             <Sidebar />

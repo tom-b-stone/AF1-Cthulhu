@@ -43,10 +43,12 @@ export default function HomeTile({
     position: "relative",
     display: "flex",
     flexDirection: "column",
-    minHeight: 168,
+    flex: 1,
+    width: "100%",
+    minHeight: 196,
     border: `1px solid ${tilt.hover ? "var(--vapor-purple)" : "var(--border)"}`,
     borderRadius: 12,
-    padding: "18px 18px 16px 18px",
+    padding: "22px 20px 18px 20px",
     background: "rgba(8,8,14,0.82)",
     backdropFilter: "blur(2px)",
     textDecoration: "none",
@@ -60,22 +62,38 @@ export default function HomeTile({
   const inner = (
     <>
       {preset && (
-        <div style={{ position: "absolute", top: -22, left: -16, pointerEvents: "none", filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.6))" }}>
-          <MorphIcon size={72} {...preset} pointer={pointer} />
+        // canvas is larger than the shape so nothing clips while it turns
+        <div style={{ position: "absolute", top: -34, left: -30, pointerEvents: "none", filter: "drop-shadow(0 12px 20px rgba(0,0,0,0.65))" }}>
+          <MorphIcon size={104} {...preset} pointer={pointer} />
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, paddingLeft: preset ? 44 : 0 }}>
-        <span style={{ fontWeight: 600, fontSize: 15, fontFamily: "var(--font-heading)" }}>
-          {title}
-          {external && <span style={{ opacity: 0.5, fontSize: 12, marginLeft: 6 }}>↗</span>}
-        </span>
+      {/* header row: status top-right, title block below with room for two lines */}
+      <div style={{ display: "flex", justifyContent: "flex-end", minHeight: 18 }}>
         {status && (
-          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: status.bg, color: status.fg, border: `1px solid ${status.border}`, whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: status.bg, color: status.fg, border: `1px solid ${status.border}`, whiteSpace: "nowrap", fontFamily: "var(--font-label)", letterSpacing: "0.04em" }}>
             {status.label}
           </span>
         )}
       </div>
-      {text && <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.55, marginTop: 10 }}>{text}</div>}
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: 19,
+          lineHeight: 1.15,
+          fontFamily: "var(--font-heading)",
+          letterSpacing: "-0.01em",
+          marginTop: 22,
+          minHeight: "2.3em",
+          display: "flex",
+          alignItems: "flex-end",
+        }}
+      >
+        <span>
+          {title}
+          {external && <span style={{ opacity: 0.5, fontSize: 13, marginLeft: 6 }}>↗</span>}
+        </span>
+      </div>
+      {text && <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.55, marginTop: "auto", paddingTop: 14 }}>{text}</div>}
       {children}
     </>
   );

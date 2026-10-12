@@ -27,7 +27,7 @@ export default function SuggestionTile() {
 
   return (
     <HomeTile title="Suggestion box" tileKey="/suggest" status={{ label: "→ admin board", bg: "transparent", fg: "var(--muted)", border: "transparent" }}>
-      <div style={{ display: "grid", gap: 8, marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ display: "grid", gap: 8, marginTop: "auto", paddingTop: 14 }} onClick={(e) => e.stopPropagation()}>
       <input
         className="input"
         value={title}

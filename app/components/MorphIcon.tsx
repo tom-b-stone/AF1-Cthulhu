@@ -174,7 +174,9 @@ export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq 
     } catch {
       return;
     }
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // supersample: render at up to 3x and let CSS scale down, so the
+    // silhouette is smooth even where MSAA on an alpha canvas isn't
+    const dpr = Math.min(3, (window.devicePixelRatio || 1) * 1.5);
     renderer.setPixelRatio(dpr);
     renderer.setSize(size, size, false);
     renderer.setClearColor(0x000000, 0);
@@ -182,7 +184,7 @@ export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq 
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 10);
-    camera.position.set(0, 0, 4.2);
+    camera.position.set(0, 0, 5.4); // room for the knot/torus to turn without clipping
 
     const geo = makeGeometry(shape, size > 64);
     // the box ships flat normals per face; smooth them so the displacement
