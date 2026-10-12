@@ -199,62 +199,50 @@ export default function SeoStudioPage() {
           </span>
         ),
       },
-      { key: "publishedDate", header: "Published", width: "108px", sortable: true, cell: (r) => <span className="tabular-nums">{r.publishedDate || "—"}</span> },
+      { key: "publishedDate", header: "Published", width: "100px", sortable: true, cell: (r) => <span className="tabular-nums">{r.publishedDate || "—"}</span> },
       {
         key: "internalTitle",
         header: "Title",
-        width: "1.3fr",
+        width: "220px",
         sortable: true,
         cell: (r) => (
-          <span className="font-medium" title={r.internalTitle}>
+          <a
+            href={r.url}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate font-medium hover:underline"
+            title={`${r.internalTitle} — open in CMS`}
+            onClick={(e) => e.stopPropagation()}
+          >
             {r.dirty ? <span style={{ color: "var(--accent)" }}>● </span> : null}
             {r.internalTitle}
-          </span>
+          </a>
         ),
       },
-      {
-        key: "url",
-        header: "URL",
-        width: "0.9fr",
-        cell: (r) => {
-          let display = r.url;
-          try {
-            display = new URL(r.url).pathname;
-          } catch {
-            /* keep */
-          }
-          return (
-            <a href={r.url} target="_blank" rel="noreferrer" className="underline opacity-80" title={r.url}>
-              {display}
-            </a>
-          );
-        },
-      },
-      { key: "seoTitle", header: "SEO Title", width: "1.5fr", editable: true },
+      { key: "seoTitle", header: "SEO Title", width: "1fr", editable: true },
       {
         key: "seoTitleCount",
         header: "#",
-        width: "56px",
+        width: "48px",
         align: "right",
         sortable: true,
         sortValue: (r) => r.seoTitle.length,
         cell: (r) => <Count n={r.seoTitle.length} kind="title" />,
       },
-      { key: "seoDescription", header: "SEO Description", width: "2fr", editable: true },
+      { key: "seoDescription", header: "SEO Description", width: "1.6fr", editable: true },
       {
         key: "seoDescriptionCount",
         header: "#",
-        width: "56px",
+        width: "48px",
         align: "right",
         sortable: true,
         sortValue: (r) => r.seoDescription.length,
         cell: (r) => <Count n={r.seoDescription.length} kind="description" />,
       },
-      { key: "language", header: "Lang", width: "60px" },
       {
         key: "actions",
         header: "",
-        width: "190px",
+        width: "150px",
         cell: (r) => (
           <span className="flex items-center gap-2">
             <button
@@ -294,8 +282,8 @@ export default function SeoStudioPage() {
     <div>
       <h1 style={{ marginBottom: 4 }}>SEO Studio</h1>
       <p style={{ opacity: 0.6, fontSize: 13, marginTop: 0, marginBottom: 16 }}>
-        Staging only (staging.audif1team.com). Reads and writes go straight to Payload — this trial doesn&apos;t
-        touch the AF1-SEO Google Sheet. Type into the SEO Title / Description cells to edit inline, then Save drafts.
+        Staging only. Reads and writes go straight to Payload, never to the Google Sheet. Click a title to open it in
+        the CMS, type into SEO Title / Description to edit inline, then Save drafts.
       </p>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -379,6 +367,7 @@ export default function SeoStudioPage() {
         </p>
       )}
 
+      <div className="beui">
       <Table<Row>
         data={rows}
         columns={columns}
@@ -390,12 +379,13 @@ export default function SeoStudioPage() {
         reorderable
         defaultSort={{ key: "publishedDate", direction: "desc" }}
         onCellEdit={onCellEdit}
-        height={Math.max(360, typeof window !== "undefined" ? window.innerHeight - 300 : 600)}
-        rowHeight={48}
+        height={Math.max(360, typeof window !== "undefined" ? window.innerHeight - 280 : 600)}
+        rowHeight={36}
         loading={!items && !error}
         emptyState="Nothing matches."
-        className="rounded-lg"
+        className="rounded-lg border border-border"
       />
+      </div>
 
       {selected && (
         <EditPanel

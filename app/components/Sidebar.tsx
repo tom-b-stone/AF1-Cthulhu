@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 
 const TOOLS = [
-  { href: "/utm", label: "UTM Studio", note: "existing" },
-  { href: "/seo", label: "SEO Studio", note: "new" },
-  { href: "/assets", label: "Asset Uploader", note: "new" },
-  { href: "/images", label: "CRM Images", note: "new" },
+  { href: "/utm", label: "UTM Studio", note: "external" },
+  { href: "/seo", label: "SEO Studio", note: "staging" },
+  { href: "/assets", label: "Asset Uploader", note: "planned" },
+  { href: "/images", label: "CRM Images", note: "planned" },
 ];
 
 export default function Sidebar() {

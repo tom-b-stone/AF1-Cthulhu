@@ -45,7 +45,12 @@ async function handle(req: RpcRequest, actor: string): Promise<unknown | undefin
       return rpcResult(req.id, {});
     case "tools/list":
       return rpcResult(req.id, {
-        tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
+        tools: TOOLS.map(({ name, description, inputSchema, annotations }) => ({
+          name,
+          description,
+          inputSchema,
+          ...(annotations ? { annotations } : {}),
+        })),
       });
     case "tools/call": {
       const name = typeof params.name === "string" ? params.name : "";

@@ -121,8 +121,10 @@ export default function ConnectorPage() {
       <h2 style={{ fontSize: 15, marginTop: 28 }}>3. Use it</h2>
       <p style={{ fontSize: 13, lineHeight: 1.7 }}>
         In SEO Studio, click <strong>Generate SEO title</strong> as before. Claude opens, writes the text and publishes it itself —
-        the chat says &quot;Published&quot;. If Claude asks to allow &quot;AF1 Tools&quot; the first time, allow it. People without
-        the connector keep getting the Publish link instead; nothing breaks for them.
+        the chat says &quot;Done. SEO written to …&quot;. The first time, claude.ai asks whether to allow &quot;AF1 Tools&quot;:
+        choose <strong>Always allow</strong>, not &quot;Allow once&quot;, otherwise every single page needs a click in bulk
+        runs. You can change that later under Settings → Connectors → AF1 Tools. People without the connector keep getting
+        the Publish link instead; nothing breaks for them.
       </p>
       <p style={{ fontSize: 12, opacity: 0.6 }}>
         What Claude can do through it: list pages missing SEO, read a page&apos;s content, publish SEO text (same brand-rule

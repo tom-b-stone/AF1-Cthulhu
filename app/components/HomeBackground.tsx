@@ -5,16 +5,16 @@ import KtuluLogo, { type AsciiSource } from "./KtuluLogo";
 
 // The home page background: one of a few images rendered as a living
 // ASCII/halftone grid. The choice is a per-browser convenience kept in
-// localStorage; the default is the Ktulu illustration.
+// localStorage; the default is the Vapor image.
 export const BACKGROUNDS: Record<string, { label: string; source: AsciiSource; opacity: number }> = {
+  vapor: { label: "Vapor", source: { src: "/bg/vapor.jpg", gamma: 1.5, gain: 1.15, fit: "cover" }, opacity: 0.7 },
   ktulu: { label: "Ktulu", source: { src: "/bg/ktulu.jpg", gamma: 1.5, gain: 1.0, fit: "contain" }, opacity: 0.6 },
-  vapor: { label: "Vapor", source: { src: "/bg/vapor.jpg", gamma: 2.2, gain: 0.9, fit: "cover" }, opacity: 0.5 },
 };
 
 const KEY = "ktulu:bg";
 
 export function useBackgroundChoice(): [string, (k: string) => void] {
-  const [choice, setChoice] = useState("ktulu");
+  const [choice, setChoice] = useState("vapor");
   useEffect(() => {
     try {
       const saved = localStorage.getItem(KEY);
@@ -35,7 +35,7 @@ export function useBackgroundChoice(): [string, (k: string) => void] {
 }
 
 export default function HomeBackground({ choice }: { choice: string }) {
-  const bg = BACKGROUNDS[choice] ?? BACKGROUNDS.ktulu;
+  const bg = BACKGROUNDS[choice] ?? BACKGROUNDS.vapor;
   return <KtuluLogo background source={bg.source} opacity={bg.opacity} />;
 }
 

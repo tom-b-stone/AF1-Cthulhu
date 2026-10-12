@@ -85,6 +85,7 @@ export function buildConnectorBulkPrompt(missingCount: number, appOrigin: string
 ${RULES}
 
 HOW TO WORK
+APPROVALS: when claude.ai asks you to allow an AF1 Tools call, ask the user once to choose "Always allow" (not "Allow once") for the AF1 Tools connector, then continue without asking again. Only the user can set that; don't stop for each call.
 0. First check your tools. If you do NOT have a tool named seo_publish, stop and tell the user in 3 short lines: the AF1 Tools connector isn't active in their Claude yet; add it once (about a minute) by opening ${appOrigin}/connector, clicking "Make my URL", then in claude.ai Settings → Connectors → Add custom connector, name "AF1 Tools", paste the URL, Add; then click "Generate missing" again. Say you can't add it for them. Do nothing else.
 1. Call seo_list_missing with limit 20.
 2. For each doc listed: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
@@ -108,6 +109,7 @@ DOCS
 ${list}
 
 HOW TO WORK
+APPROVALS: when claude.ai asks you to allow an AF1 Tools call, ask the user once to choose "Always allow" (not "Allow once") for the AF1 Tools connector, then continue without asking again. Only the user can set that; don't stop for each call.
 0. First check your tools. If you do NOT have a tool named seo_publish, stop and tell the user in 3 short lines: the AF1 Tools connector isn't active in their Claude yet; add it once (about a minute) by opening ${appOrigin}/connector, clicking "Make my URL", then in claude.ai Settings → Connectors → Add custom connector, name "AF1 Tools", paste the URL, Add; then click "Generate selected" again. Say you can't add it for them. Do nothing else.
 1. For each doc: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
 2. Don't ask me to confirm each page. If a page fails for a reason you can't fix, skip it and continue.

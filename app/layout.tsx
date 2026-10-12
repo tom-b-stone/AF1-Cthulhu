@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SessionProviderWrapper>
           <div style={{ display: "flex" }}>
             <Sidebar />
-            <main style={{ flex: 1, padding: "32px 40px" }}>{children}</main>
+            <main style={{ flex: 1, minWidth: 0, padding: "32px 40px" }}>{children}</main>
           </div>
         </SessionProviderWrapper>
       </body>

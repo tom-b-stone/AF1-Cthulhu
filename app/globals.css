@@ -7,13 +7,20 @@
   --bg: #0b0b0c;
   --fg: #f5f5f5;
   --border: #2a2a2d;
-  --accent: #e33e1a;
+  --accent: #ff2d00; /* AF1 lava red, same as audif1.com */
+  /* Vapor palette, pulled from the home background image */
+  --vapor-navy: #040d1a;
+  --vapor-indigo: #222458;
+  --vapor-purple: #454086;
+  --vapor-lilac: #a08fd6;
+  --vapor-pink: #c875b5;
+  --vapor-rose: #efa2d6;
 
   /* HSL triplets of the same palette for Tailwind's token colours */
   --bg-hsl: 240 4% 4%;
   --fg-hsl: 0 0% 96%;
   --border-hsl: 240 3% 17%;
-  --accent-hsl: 11 79% 50%;
+  --accent-hsl: 11 100% 50%;
   --muted-hsl: 240 3% 11%;
   --muted-fg-hsl: 0 0% 62%;
   --popover-hsl: 240 4% 8%;
@@ -29,3 +36,23 @@ body {
 }
 
 a { color: inherit; }
+
+/* Scoped reset for the beui table (Tailwind preflight is off so the
+   inline-styled pages keep their look; the component expects it). */
+.beui, .beui *, .beui *::before, .beui *::after { box-sizing: border-box; }
+.beui button, .beui input, .beui select, .beui textarea {
+  background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; line-height: inherit;
+}
+.beui button { cursor: pointer; }
+.beui table { border-collapse: collapse; border-spacing: 0; font-size: 13px; }
+.beui th, .beui td { text-align: left; }
+.beui svg { display: inline-block; vertical-align: middle; }
+
+/* Team logo as a mask so it takes any colour via background */
+.af1-logo {
+  -webkit-mask: url("/af1-logo.svg") center / contain no-repeat;
+  mask: url("/af1-logo.svg") center / contain no-repeat;
+  filter: drop-shadow(0 0 18px rgba(255, 45, 0, 0.35));
+}
+.home-tile { transition: border-color 0.15s, box-shadow 0.15s; }
+.home-tile:hover { border-color: var(--vapor-purple) !important; box-shadow: 0 0 0 1px var(--vapor-purple), 0 8px 30px rgba(69, 64, 134, 0.25); }

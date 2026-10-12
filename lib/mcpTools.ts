@@ -16,10 +16,24 @@ export type ToolResult = { content: { type: "text"; text: string }[]; isError?: 
 
 type JsonSchema = Record<string, unknown>;
 
+// MCP tool annotations (2025-03-26 spec). Clients use them to decide how
+// much to ask: a read-only tool can run without a per-call approval, a
+// non-destructive, idempotent write is a lower bar than a destructive one.
+// claude.ai still shows its own "Allow once / Always allow" prompt for the
+// first call; "Always allow" is what removes the clicks for the user.
+export type ToolAnnotations = {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+};
+
 export type ToolDef = {
   name: string;
   description: string;
   inputSchema: JsonSchema;
+  annotations?: ToolAnnotations;
   run: (args: Record<string, unknown>, actor: string) => Promise<ToolResult>;
 };
 
@@ -44,6 +58,7 @@ const collectionProp = { type: "string", enum: ["news", "pages"], description: "
 export const TOOLS: ToolDef[] = [
   {
     name: "seo_list_missing",
+    annotations: { title: "List docs missing SEO", readOnlyHint: true, openWorldHint: false },
     description:
       "List audif1.com news/pages that are missing an EN or DE SEO title/description. Returns collection, id and internal title for each, oldest first. Use before generating in bulk.",
     inputSchema: {
@@ -60,6 +75,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "seo_get_page",
+    annotations: { title: "Read page content", readOnlyHint: true, openWorldHint: false },
     description:
       "Get the real content of one audif1.com news article or page (EN and DE) to write SEO meta from. Returns internal title, CMS admin link, and the page text in both languages. Never invent facts beyond this.",
     inputSchema: {
@@ -79,6 +95,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "seo_publish",
+    annotations: { title: "Publish SEO meta", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     description:
       "Publish SEO meta title + description (EN and DE) for one audif1.com news article or page. Validates the brand rules first (title 50-60 chars ending '| Audi Revolut F1® Team', description 100-150, no em-dash, ® marks). Publishes immediately; the publication date is preserved, and a doc without a meta image gets the home page's meta image. If validation fails, fix the text and call again — only pass force=true when the user explicitly says to publish anyway.",
     inputSchema: {
