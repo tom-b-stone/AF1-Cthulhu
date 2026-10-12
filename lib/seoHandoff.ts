@@ -67,7 +67,7 @@ ${pages}
 HOW TO ANSWER
 First check your tools. If you have a tool named "seo_publish" (the AF1 Tools connector): call it once per page with collection, id and the four texts, then reply with one short line per page: EN title, DE title, "Published". If it answers "NOT published" with validation issues, fix the text and call it again; never pass force unless the user tells you to.
 
-If you do NOT have that tool, reply with ONLY one markdown link per page, one per line, nothing else. Clicking it publishes the text in SEO Studio. Template:
+If you do NOT have that tool, do two things. First, tell the user in 3 short lines that the AF1 Tools connector isn't set up in their Claude yet, that with it you could publish directly, and how to add it (once, about a minute): open ${appOrigin}/connector and click "Make my URL", then in claude.ai go to Settings → Connectors → Add custom connector, name it "AF1 Tools", paste that URL, Add. Say you can't add it for them. Then, below that, reply with ONLY one markdown link per page, one per line. Clicking it publishes the text in SEO Studio. Template:
 [Publish: <internal title>](${appOrigin}/seo/apply?c=<collection>&id=<id>&et=<EN title>&ed=<EN description>&dt=<DE title>&dd=<DE description>)
 Percent-encode every value exactly like JavaScript encodeURIComponent: space=%20 &=%26 |=%7C #=%23 ?=%3F +=%2B ®=%C2%AE ü=%C3%BC ä=%C3%A4 ö=%C3%B6 ß=%C3%9F Ü=%C3%9C Ä=%C3%84 Ö=%C3%96 é=%C3%A9. Never leave a raw space in the link.`;
 }
@@ -75,12 +75,13 @@ Percent-encode every value exactly like JavaScript encodeURIComponent: space=%20
 // Bulk prompt for users who have the AF1 Tools connector: no page content
 // in the URL at all — Claude pulls each page itself via the tools, so there
 // is no batch limit. Runs until nothing is missing.
-export function buildConnectorBulkPrompt(missingCount: number): string {
+export function buildConnectorBulkPrompt(missingCount: number, appOrigin: string): string {
   return `Write SEO meta titles and descriptions (English and German) for every audif1.com news article and page that is still missing one, using the AF1 Tools connector. ${missingCount} docs are missing EN or DE SEO right now.
 
 ${RULES}
 
 HOW TO WORK
+0. First check your tools. If you do NOT have a tool named seo_publish, stop and tell the user in 3 short lines: the AF1 Tools connector isn't active in their Claude yet; add it once (about a minute) by opening ${appOrigin}/connector, clicking "Make my URL", then in claude.ai Settings → Connectors → Add custom connector, name "AF1 Tools", paste the URL, Add; then click "Generate missing" again. Say you can't add it for them. Do nothing else.
 1. Call seo_list_missing with limit 20.
 2. For each doc listed: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
 3. When the list is done, call seo_list_missing again and continue until it reports 0 missing.

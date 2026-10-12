@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       const email = session.user?.email ?? "";
       const { active } = email ? await connectorStatus(email) : { active: false };
       if (active) {
-        return NextResponse.redirect(claudeUrlFor(buildConnectorBulkPrompt(allMissing.length)), 307);
+        return NextResponse.redirect(claudeUrlFor(buildConnectorBulkPrompt(allMissing.length, appOrigin(req))), 307);
       }
       const targets = allMissing.slice(0, MISSING_BATCH_NO_CONNECTOR);
       items = await Promise.all(targets.map((t) => toHandoffItem(t.collection, t.id)));
