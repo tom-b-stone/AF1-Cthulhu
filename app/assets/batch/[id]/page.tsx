@@ -364,31 +364,13 @@ export default function BatchPage() {
 
   const readyCount = batch ? batch.rows.filter((r) => r.status !== "uploaded" && r.alt.trim()).length : 0;
   useSidebarContent(
-    <>
-      <SideSection title="Batch">
-        <SideButton primary onClick={generateAltText} disabled={Boolean(gen) || Boolean(busy)} note={gen ? (gen.phase === "sync" ? `${gen.done}/${gen.total}` : `${gen.got}/${gen.total}`) : batch?.rows.filter((r) => !r.alt.trim()).length || ""}>
-          {gen ? (gen.phase === "sync" ? "Sending to Claude…" : "Waiting for Claude…") : "Generate alt text"}
-        </SideButton>
-        {gen?.phase === "waiting" && (
-          <button onClick={() => setGen(null)} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 11, cursor: "pointer", textAlign: "left", padding: "0 10px" }}>
-            stop waiting
-          </button>
-        )}
-        <SideButton onClick={() => setPickFolder(true)} note={batch?.targetFolderId ? "set" : ""}>
-          {batch?.targetFolderId ? "Change folder" : "Choose CMS folder"}
-        </SideButton>
-        <SideButton onClick={() => setConfirmUpload(true)} disabled={!batch?.targetFolderId || readyCount === 0 || Boolean(busy)} note={readyCount || ""}>
-          Upload to staging
-        </SideButton>
-        <SideButton onClick={exportZip} disabled={Boolean(busy)}>
-          Export ZIP + CSV
-        </SideButton>
-      </SideSection>
-      <SideSection title="Danger">
-        <SideButton onClick={remove}>Delete batch</SideButton>
-      </SideSection>
-    </>,
-    [batch?.id, batch?.targetFolderId, readyCount, busy, gen, batch?.rows]
+    <SideSection title="This batch">
+      <SideButton onClick={exportZip} disabled={Boolean(busy)}>
+        Export ZIP + CSV
+      </SideButton>
+      <SideButton onClick={remove}>Delete batch</SideButton>
+    </SideSection>,
+    [batch?.id, busy]
   );
 
   if (batch === undefined) return <p style={{ color: "var(--muted)" }}>Loading batch…</p>;
@@ -420,15 +402,46 @@ export default function BatchPage() {
         ))}
       </section>
 
-      <section className="reveal reveal-d2 card" style={{ padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 12, color: "var(--muted)" }}>Target folder (staging)</div>
-        <code style={{ fontSize: 13 }}>{batch.targetFolderPath ?? "— not chosen —"}</code>
-        <button className="btn" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setPickFolder(true)}>
-          {batch.targetFolderId ? "Change" : "Choose folder"}
-        </button>
-        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>
-          Step 3: &quot;Generate alt text&quot; sends previews to your Claude, which writes descriptor + alt text per photo; results appear here. Click a row&apos;s check to review or edit. Step 4: Upload.
-        </span>
+      <section className="reveal reveal-d2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
+          <div className="section-label">Step 3 · Alt text</div>
+          <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+            {batch.rows.filter((r) => !r.alt.trim()).length === 0
+              ? "Every image has an alt text. Review a few by clicking a row's check."
+              : `${batch.rows.filter((r) => !r.alt.trim()).length} of ${batch.rows.length} images still need an alt text. Your Claude writes them from the pictures and the team rules; results land here while you wait.`}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={generateAltText} disabled={Boolean(gen) || Boolean(busy) || batch.rows.filter((r) => !r.alt.trim()).length === 0}>
+              {gen ? (gen.phase === "sync" ? `Sending ${gen.done}/${gen.total}…` : `Waiting for Claude ${gen.got}/${gen.total}…`) : "Generate alt text"}
+            </button>
+            {gen?.phase === "waiting" && (
+              <button className="btn" onClick={() => setGen(null)}>
+                Stop waiting
+              </button>
+            )}
+            {hasConnector === false && <span style={{ fontSize: 12, color: "#e9c46a" }}>Needs the AF1 Tools connector (home page shows the setup).</span>}
+          </div>
+        </div>
+        <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
+          <div className="section-label">Step 4 · Upload</div>
+          <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+            Target: <code>{batch.targetFolderPath ?? "— no folder chosen —"}</code>{" "}
+            <button className="btn" onClick={() => setPickFolder(true)} style={{ padding: "3px 10px", fontSize: 12, marginLeft: 6 }}>
+              {batch.targetFolderId ? "Change" : "Choose folder"}
+            </button>
+            <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 4 }}>
+              {batch.rows.filter((r) => r.status === "uploaded").length} uploaded · {readyCount} ready · {batch.rows.filter((r) => !r.alt.trim()).length} without alt text (stay here)
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="btn btn-primary" onClick={() => setConfirmUpload(true)} disabled={!batch.targetFolderId || readyCount === 0 || Boolean(busy) || Boolean(gen)}>
+              Upload {readyCount || ""} to staging
+            </button>
+            <button className="btn" onClick={exportZip} disabled={Boolean(busy)}>
+              Export ZIP
+            </button>
+          </div>
+        </div>
       </section>
       {gen && (
         <div role="status" style={{ background: "#141416", border: "1px solid var(--vapor-purple)", borderRadius: 8, padding: "10px 14px", margin: "0 0 12px", fontSize: 13 }}>

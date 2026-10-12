@@ -1,8 +1,9 @@
 import type { KnowledgeEntry } from "./teamKnowledge";
+import type { AltExample } from "./examplesStore";
 
 // The alt-text rulebook as Claude sees it: internal rules + patterns from
 // the seed, people and terms from the editable knowledge store.
-export function rulebook(entries: KnowledgeEntry[]): string {
+export function rulebook(entries: KnowledgeEntry[], examples: AltExample[] = []): string {
   const active = entries.filter((e) => e.active);
   const people = active.filter((e) => e.kind === "person").map((e) => `- ${e.name}${e.de && e.de !== e.name ? ` (DE: ${e.de})` : ""}${e.role ? `, ${e.role}` : ""}${e.aliases?.length ? `; also written: ${e.aliases.join(", ")} → always use "${e.name}"` : ""}${e.cue ? `; cue: ${e.cue}` : ""}`);
   const terms = active.filter((e) => e.kind === "term").map((e) => `- ${e.name}${e.aliases?.length ? ` (never: ${e.aliases.join(", ")})` : ""}${e.note ? ` — ${e.note}` : ""}`);
@@ -19,7 +20,10 @@ ${rules.join("\n")}
 
 PATTERNS
 ${patterns.join("\n")}
-
+${examples.length ? `
+GOOD EXAMPLES (from the live library, match this voice)
+${examples.slice(0, 30).map((e) => `- [${e.subject}] ${e.alt}`).join("\n")}
+` : ""}
 DESCRIPTOR: 2–6 lowercase words joined with hyphens, ASCII only (hulkenberg, no umlauts), what the picture shows, no team name in it. Examples: bortoleto-garage-close-up, r26-pit-lane-night, mechanics-grid-floodlights.`;
 }
 
@@ -40,4 +44,25 @@ Done.
 Alt texts written: <n> of ${count}
 Then one line per photo: ✓ <descriptor> — <alt text>
 If any failed: "Not written: <m>" and one line each with the reason.`;
+}
+
+// Learning session: Claude reads photos from the production library that
+// already have an alt text, and writes back what it learns: visual cues
+// per person and good alt-text examples per subject.
+export function buildLearnPrompt(appOrigin: string): string {
+  return `Learning session for the Audi Revolut F1® Team Asset Uploader: look at photos in the live media library that already have good alt texts, and teach the tool what it needs to recognise people and match the house style. Use the AF1 Tools connector.
+
+APPROVALS: when claude.ai asks you to allow an AF1 Tools call, ask the user once to choose "Always allow" for the AF1 Tools connector, then continue without asking again.
+
+HOW TO WORK
+0. Check your tools. If you do NOT have library_search: if you have seo_publish, tell the user to remove and re-add the AF1 Tools connector in claude.ai (Settings → Connectors) with the same URL from ${appOrigin}/connector, then start a new chat; otherwise tell them to set the connector up once on ${appOrigin}. Do nothing else.
+1. Call asset_rulebook to see what is known already.
+2. For each of these subjects, call library_search with the query and look at 6 to 8 photos with library_get_image: "Nico Hulkenberg", "Gabriel Bortoleto", "Mattia Binotto", "Allan McNish", "James Key", "Paul Aron", "R26", "garage", "pit wall", "fans".
+3. From what you SEE (not from the alt text alone), write cues with knowledge_update for each person: car number and where it is visible, helmet colours and markings, race suit details, face and build, typical places. Keep each cue under 400 characters, concrete, in English. Only write what you saw in at least two photos.
+4. Pick the alt texts that follow the rules best (under 125 characters, full team name with ®, one sentence, only what is visible) and save 2 or 3 per subject with knowledge_add_example (subject = driver name, car, garage, pit wall, fans, portrait, partner).
+5. Do not ask the user to confirm each step. When done, reply with one summary, one fact per line:
+Done.
+Cues updated: <names>
+Examples saved: <n>
+Then one line per cue you wrote.`;
 }

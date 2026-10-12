@@ -12,7 +12,10 @@ import {
 } from "./payloadClient";
 import { validateSeoField } from "./seoBrand";
 import { readBatch, readPreview, writeBatch } from "./assetBatchStore";
-import { readKnowledge } from "./knowledgeStore";
+import { readKnowledge, KNOWLEDGE_KEY } from "./knowledgeStore";
+import { kvSet } from "./kv";
+import { searchLibrary, fetchLibraryImage } from "./library";
+import { addExample, readExamples } from "./examplesStore";
 import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 
@@ -157,7 +160,7 @@ export const TOOLS: ToolDef[] = [
     description: "The rules for audif1.com image alt texts and file-name descriptors: people (official spellings), terms, rules, patterns. Call once before writing alt texts.",
     inputSchema: { type: "object", properties: {} },
     async run() {
-      return text(rulebook(await readKnowledge()));
+      return text(rulebook(await readKnowledge(), await readExamples()));
     },
   },
   {
@@ -209,6 +212,63 @@ export const TOOLS: ToolDef[] = [
       await writeBatch(b);
       console.log(`[connector] ${actor} wrote alt for ${b.id}/${row.id}`);
       return text(`Written. ${row.originalName} → ${descriptor} · "${alt}" (${alt.length} chars)`);
+    },
+  },
+  // ---- Learning session (production library, read-only) ---------------
+  {
+    name: "library_search",
+    annotations: { title: "Search the live media library", readOnlyHint: true, openWorldHint: false },
+    description: "Search the production audif1.com media library by alt text (e.g. 'Nico Hulkenberg', 'R26', 'garage'). Returns id, file name, alt text and date, newest first. Read-only.",
+    inputSchema: { type: "object", required: ["query"], properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 50 }, page: { type: "integer", minimum: 1 } } },
+    async run(args) {
+      const r = await searchLibrary(String(args.query ?? ""), Number(args.limit ?? 12), Number(args.page ?? 1));
+      return text(`${r.total} photos match.\n${r.items.map((i) => `${i.id} · ${i.filename} · ${i.createdAt.slice(0, 10)} · "${i.alt}"`).join("\n")}`);
+    },
+  },
+  {
+    name: "library_get_image",
+    annotations: { title: "See a library photo", readOnlyHint: true, openWorldHint: false },
+    description: "Returns a preview of one production library photo plus its alt text, so you can compare what is in the picture with how it was described.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    async run(args) {
+      const p = await fetchLibraryImage(String(args.id ?? ""));
+      if (!p) return text("Photo not available.", true);
+      return { content: [{ type: "image", data: p.data, mimeType: p.mime }, { type: "text", text: `${p.filename}\nalt: "${p.alt}"` }] };
+    },
+  },
+  {
+    name: "knowledge_update",
+    annotations: { title: "Update a person's cue", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: "Write or replace the visual cue (and optionally a note or extra alias) of a person or term in Team knowledge. Match by exact name as listed in asset_rulebook.",
+    inputSchema: {
+      type: "object",
+      required: ["name"],
+      properties: { name: { type: "string" }, cue: { type: "string", description: "How to recognise them in a photo, under 400 chars" }, note: { type: "string" }, add_alias: { type: "string" } },
+    },
+    async run(args, actor) {
+      const entries = await readKnowledge();
+      const e = entries.find((x) => x.name.toLowerCase() === String(args.name ?? "").toLowerCase());
+      if (!e) return text(`No entry named "${args.name}". Names in the rulebook: ${entries.filter((x) => x.kind === "person").map((x) => x.name).join(", ")}`, true);
+      if (typeof args.cue === "string" && args.cue.trim()) e.cue = args.cue.trim().slice(0, 400);
+      if (typeof args.note === "string" && args.note.trim()) e.note = args.note.trim().slice(0, 800);
+      if (typeof args.add_alias === "string" && args.add_alias.trim()) e.aliases = Array.from(new Set([...(e.aliases ?? []), args.add_alias.trim()])).slice(0, 12);
+      await kvSet(KNOWLEDGE_KEY, JSON.stringify(entries));
+      console.log(`[connector] ${actor} updated knowledge for ${e.name}`);
+      return text(`Updated ${e.name}.${e.cue ? ` Cue: ${e.cue}` : ""}`);
+    },
+  },
+  {
+    name: "knowledge_add_example",
+    annotations: { title: "Save a good alt text example", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: "Save an alt text from the library as a style example (subject: driver name, car, garage, pit wall, fans, portrait, partner). Validated against the rules first.",
+    inputSchema: { type: "object", required: ["subject", "alt"], properties: { subject: { type: "string" }, alt: { type: "string" }, source: { type: "string", description: "library photo id or file name" } } },
+    async run(args, actor) {
+      const alt = String(args.alt ?? "").trim();
+      const issues = [...validateAlt(alt), ...knowledgeIssues(alt, await readKnowledge())];
+      if (issues.length) return text(`Not saved, it breaks the rules: ${issues.join("; ")}`, true);
+      const all = await addExample({ subject: String(args.subject ?? "general").slice(0, 40), alt, source: typeof args.source === "string" ? args.source : undefined });
+      console.log(`[connector] ${actor} saved example (${all.length} total)`);
+      return text(`Saved. ${all.length} examples in the rulebook.`);
     },
   },
 ];
