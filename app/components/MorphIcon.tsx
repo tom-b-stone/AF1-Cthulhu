@@ -58,8 +58,8 @@ float snoise(vec3 v){
 float field(vec3 p){
   // two octaves, slow drift; the seed moves the whole field so icons differ
   vec3 q = p * uFreq + vec3(uSeed);
-  float n = snoise(q + uTime * 0.35);
-  n += 0.5 * snoise(q * 2.1 - uTime * 0.22);
+  float n = snoise(q + uTime * 0.3);
+  n += 0.25 * snoise(q * 1.9 - uTime * 0.18);
   return n;
 }
 
@@ -124,7 +124,9 @@ void main(){
   float diff = max(dot(n, l), 0.0);
   vec3 h = normalize(l + v);
   float spec = pow(max(dot(n, h), 0.0), 48.0);
-  col = col * (0.45 + 0.7 * diff) + vec3(1.0) * spec * 0.9 + base * fres * 0.6;
+  col = col * (0.7 + 0.6 * diff) + vec3(1.0) * spec * 1.0 + base * fres * 0.8;
+  // glassy lift: brighten overall, keep saturation
+  col = pow(col, vec3(0.85));
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -151,7 +153,7 @@ export default function MorphIcon({ size = 48, seed = 0, freq = 1.6, amp = 0.22,
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 10);
     camera.position.set(0, 0, 4.2);
 
-    const geo = new THREE.IcosahedronGeometry(1, size > 64 ? 64 : 32);
+    const geo = new THREE.IcosahedronGeometry(1, size > 64 ? 48 : 24);
     const mat = new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -199,10 +201,10 @@ export default function MorphIcon({ size = 48, seed = 0, freq = 1.6, amp = 0.22,
 
 // One shape per tool. Same component, different field.
 export const MORPH_PRESETS: Record<string, Omit<MorphProps, "size">> = {
-  "/seo": { seed: 1.3, freq: 1.4, amp: 0.2, hue: 0.02 }, // lava, soft lumps
-  "/assets": { seed: 4.1, freq: 2.2, amp: 0.26, hue: 0.22 }, // pink → lilac, more facets
-  "/images": { seed: 7.7, freq: 1.1, amp: 0.3, hue: 0.42 }, // lilac → blue, big slow waves
-  "/utm": { seed: 2.6, freq: 2.8, amp: 0.16, hue: 0.62 }, // blue → teal, fine ripple
-  "/connector": { seed: 9.2, freq: 1.8, amp: 0.24, hue: 0.8 }, // teal → lava
-  "/suggest": { seed: 5.5, freq: 1.6, amp: 0.2, hue: 0.12 }, // pink
+  "/seo": { seed: 1.3, freq: 0.9, amp: 0.28, hue: 0.02 }, // lava, soft lumps
+  "/assets": { seed: 4.1, freq: 1.3, amp: 0.32, hue: 0.22 }, // pink → lilac
+  "/images": { seed: 7.7, freq: 0.8, amp: 0.38, hue: 0.42 }, // lilac → blue, big slow waves
+  "/utm": { seed: 2.6, freq: 1.5, amp: 0.22, hue: 0.62 }, // blue → teal, finer
+  "/connector": { seed: 9.2, freq: 1.1, amp: 0.3, hue: 0.8 }, // teal → lava
+  "/suggest": { seed: 5.5, freq: 1.0, amp: 0.26, hue: 0.12 }, // pink
 };
