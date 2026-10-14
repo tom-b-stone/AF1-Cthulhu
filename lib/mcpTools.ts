@@ -3,14 +3,9 @@
 // SEO Studio UI uses, so nothing the connector can do is a new capability —
 // it just removes a click. New tools for other apps (asset uploader, CRM
 // images) belong in this file too, prefixed by tool name.
-import {
-  cmsAdminUrlFor,
-  getSeoGenerationSource,
-  listSeoItems,
-  publishSeo,
-  type Collection,
-} from "./payloadClient";
+import { getHomeMetaImageId } from "./payloadClient";
 import { validateSeoField } from "./seoBrand";
+import { SEO_RULES, SEO_WRITE_RECIPE } from "./seoHandoff";
 import { SCENE_TAGS, type Scene } from "./contentTags";
 import { readBatch, readPreview, writeBatch } from "./assetBatchStore";
 import { readKnowledge, KNOWLEDGE_KEY } from "./knowledgeStore";
@@ -60,101 +55,65 @@ export function describeDate(r: { publishedAtBefore: string | null; publishedAtA
 
 const text = (t: string, isError = false): ToolResult => ({ content: [{ type: "text", text: t }], isError });
 
-function isCollection(v: unknown): v is Collection {
-  return v === "news" || v === "pages";
-}
-
-const collectionProp = { type: "string", enum: ["news", "pages"], description: "news or pages" };
 
 export const TOOLS: ToolDef[] = [
+  // ---- SEO Studio -----------------------------------------------------
+  // Reads and writes now go through the team's "AF1 Payload Staging MCP"
+  // (per-user CMS login). This connector keeps what that one doesn't have:
+  // the brand rules, the check, and the home meta-image fallback.
   {
-    name: "seo_list_missing",
-    annotations: { title: "List docs missing SEO", readOnlyHint: true, openWorldHint: false },
+    name: "seo_rules",
+    annotations: { title: "SEO rules + write recipe", readOnlyHint: true, openWorldHint: false },
     description:
-      "List audif1.com news/pages that are missing an EN or DE SEO title/description. Returns collection, id and internal title for each, oldest first. Use before generating in bulk.",
-    inputSchema: {
-      type: "object",
-      properties: { limit: { type: "integer", minimum: 1, maximum: 20, description: "How many to return (default 5)" } },
-    },
-    async run(args) {
-      const limit = Math.min(20, Math.max(1, Number(args.limit ?? 5)));
-      const all = await listSeoItems();
-      const missing = all.filter((i) => !i.en.title || !i.en.description || !i.de.title || !i.de.description);
-      const rows = missing.slice(0, limit).map((i) => `${i.collection} ${i.id} — ${i.internalTitle} (${i.status})`);
-      return text(`${missing.length} of ${all.length} docs are missing EN or DE SEO.\n${rows.join("\n")}`);
+      "The audif1.com SEO meta rules (lengths, title patterns, brand spellings), the home page meta image ids to use when a doc has none, and the exact recipe for writing meta with the AF1 Payload Staging MCP without changing the publication date. Call once before writing SEO.",
+    inputSchema: { type: "object", properties: {} },
+    async run() {
+      const [en, de] = await Promise.all([getHomeMetaImageId("en").catch(() => null), getHomeMetaImageId("de").catch(() => null)]);
+      return text(`${SEO_RULES}
+
+HOME META IMAGE (use when the doc's meta.image is empty in that locale)
+en: ${en ?? "(none found)"}
+de: ${de ?? en ?? "(none found)"}
+
+${SEO_WRITE_RECIPE}`);
     },
   },
   {
-    name: "seo_get_page",
-    annotations: { title: "Read page content", readOnlyHint: true, openWorldHint: false },
+    name: "seo_check",
+    annotations: { title: "Check SEO texts", readOnlyHint: true, openWorldHint: false },
     description:
-      "Get the real content of one audif1.com news article or page (EN and DE) to write SEO meta from. Returns internal title, CMS admin link, and the page text in both languages. Never invent facts beyond this.",
+      "Check EN and DE SEO title + description against the audif1.com brand rules before writing them with the Payload MCP. Returns OK or the issues to fix. Does not write anything.",
     inputSchema: {
       type: "object",
-      required: ["collection", "id"],
-      properties: { collection: collectionProp, id: { type: "string", description: "Payload document id" } },
-    },
-    async run(args) {
-      if (!isCollection(args.collection) || typeof args.id !== "string") {
-        return text("collection must be news|pages and id is required", true);
-      }
-      const s = await getSeoGenerationSource(args.collection, args.id);
-      return text(
-        `Internal title: ${s.internalTitle}\nCMS: ${cmsAdminUrlFor(args.collection, args.id, "en")}\n\nContent EN:\n${s.contentText.en.slice(0, 4000) || "(none)"}\n\nContent DE:\n${s.contentText.de.slice(0, 4000) || "(none)"}`
-      );
-    },
-  },
-  {
-    name: "seo_publish",
-    annotations: { title: "Publish SEO meta", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    description:
-      "Publish SEO meta title + description (EN and DE) for one audif1.com news article or page. Validates the brand rules first (title 50-60 chars ending '| Audi Revolut F1® Team', description 100-150, no em-dash, ® marks). Publishes immediately; the publication date is preserved, and a doc without a meta image gets the home page's meta image. If validation fails, fix the text and call again — only pass force=true when the user explicitly says to publish anyway.",
-    inputSchema: {
-      type: "object",
-      required: ["collection", "id", "en_title", "en_description", "de_title", "de_description"],
+      required: ["en_title", "en_description"],
       properties: {
-        collection: collectionProp,
-        id: { type: "string" },
         en_title: { type: "string" },
         en_description: { type: "string" },
         de_title: { type: "string" },
         de_description: { type: "string" },
-        force: { type: "boolean", description: "Publish even if a hard brand rule fails. Default false." },
       },
     },
-    async run(args, actor) {
-      if (!isCollection(args.collection) || typeof args.id !== "string") {
-        return text("collection must be news|pages and id is required", true);
-      }
+    async run(args) {
       const str = (k: string) => (typeof args[k] === "string" ? (args[k] as string).trim() : "");
-      const en = { title: str("en_title"), description: str("en_description") };
-      const de = { title: str("de_title"), description: str("de_description") };
-      if (!en.title || !en.description) return text("en_title and en_description are required", true);
-
       const errors: string[] = [];
       const warnings: string[] = [];
-      for (const [label, kind, value] of [
-        ["EN title", "title", en.title],
-        ["EN description", "description", en.description],
-        ["DE title", "title", de.title],
-        ["DE description", "description", de.description],
+      for (const [label, kind, key] of [
+        ["EN title", "title", "en_title"],
+        ["EN description", "description", "en_description"],
+        ["DE title", "title", "de_title"],
+        ["DE description", "description", "de_description"],
       ] as const) {
-        if (!value) continue;
-        const r = validateSeoField(kind, value);
+        const v = str(key);
+        if (!v) {
+          if (key.startsWith("en")) errors.push(`${label}: empty`);
+          continue;
+        }
+        const r = validateSeoField(kind, v);
         errors.push(...r.errors.map((e) => `${label}: ${e}`));
         warnings.push(...r.warnings.map((w) => `${label}: ${w}`));
       }
-      if (errors.length && args.force !== true) {
-        return text(`NOT published — fix these and call again:\n${errors.join("\n")}`, true);
-      }
-
-      const r = await publishSeo(args.collection, args.id, { en, de });
-      console.log(`[connector] ${actor} published SEO for ${args.collection}/${args.id}`);
-      const warn = warnings.length ? `\nWarnings (published anyway): ${warnings.join("; ")}` : "";
-      const dateLine = describeDate(r);
-      return text(
-        `Done.\nSEO written to: ${r.internalTitle}\nCMS: ${r.cmsUrl}\n${dateLine}\nEN title: ${en.title} (${en.title.length} chars, description ${en.description.length})\nDE title: ${de.title || "(none)"} (${de.title.length} chars, description ${de.description.length})${warn}`
-      );
+      if (errors.length) return text(`NOT OK — fix and check again:\n${errors.join("\n")}`, true);
+      return text(`OK${warnings.length ? ` (warnings: ${warnings.join("; ")})` : ""}`);
     },
   },
   // ---- Asset Uploader -------------------------------------------------

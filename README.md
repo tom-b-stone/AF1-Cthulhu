@@ -119,11 +119,15 @@ before/after instead, and the prompts tell Claude to quote it verbatim. Bulk pro
 one summary at the end ("Done. SEO written for n docs, publication dates untouched") plus a list of
 failures with title, link and reason, not a page-by-page log.
 
-"Generate missing" above the table: with a connector token (see below) it opens one claude.ai
-prompt with no page content at all — Claude lists the missing docs itself (`seo_list_missing`),
-reads each (`seo_get_page`), publishes (`seo_publish`) and loops until nothing is missing, no
-limit. Without the connector the content has to travel in the URL, so it goes 5 docs per round
-and Claude answers with 5 links.
+"Generate missing" / "Generate selected" (since 2026-10-14): Claude reads and writes through the
+team's **AF1 Payload Staging MCP** (`af1-staging-mcp.vercel.app/mcp`, per-user OAuth with the
+user's own CMS login; production MCP is read-only). AF1 Tools only adds `seo_rules` (rules, home
+meta image ids, write recipe) and `seo_check` (validation, no write). Missing docs are found with
+`find_documents` per locale (`meta.title` exists false / equals ""); the filter checks the real
+locale even though returned values show the English fallback. **Payload MCP gotcha:** its publish
+sets `publishedAt` to now; passing the original `publishedAt` in the same `update_document` call
+with `publish: true` keeps it (tested on staging, test-news, 2026-10-14). Without the Payload MCP
+Claude answers with `/seo/apply` links (5 docs per round), which publish through Ktulu's server.
 
 This replaced an earlier in-app Anthropic API call (removed): the key saved for it had no
 credits, and Tom wanted no API billing — the user's own Claude account does the work instead.
@@ -137,11 +141,11 @@ one live token per user, revocable), pastes `https://<app>/api/mcp/<token>` into
 Settings → Connectors → Add custom connector, done. No OAuth server to run; the URL is the secret,
 treated like a password. `middleware.ts` lets `/api/mcp` through without a session for that reason.
 
-Tools (`lib/mcpTools.ts`): `seo_list_missing`, `seo_get_page`, `seo_publish`. `seo_publish` runs the
-same `validateSeoField` checks as the UI and the same `publishSeo` two-step publish (date
-preserved); it refuses on hard errors unless `force: true`. Every call is logged with the owning
-email. The hand-off prompt tells Claude: if you have `seo_publish`, call it and confirm; if not,
-answer with the Publish link — so users without the connector lose nothing. Meant to grow: tools
+Tools (`lib/mcpTools.ts`): SEO `seo_rules`, `seo_check` (CMS reads/writes moved to the Payload
+MCP, see above; `seo_list_missing`, `seo_get_page`, `seo_publish` were removed 2026-10-14), plus the
+Asset Uploader / learning tools. Every call is logged with the owning email. Ktulu's own web UI
+(SEO table, uploads) keeps using the stored staging CMS login, because Ktulu sign-in is Google
+OAuth and not every user has a CMS account. Meant to grow: tools
 for the Asset Uploader / CRM Images go in the same file under the same connector.
 
 ### Asset Uploader (in progress)

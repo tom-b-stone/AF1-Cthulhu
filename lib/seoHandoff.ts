@@ -1,12 +1,9 @@
-// Builds the prompt that SEO Studio hands to claude.ai when someone clicks
-// "Generate" on a row. No LLM is called from this app: the button opens
-// claude.ai with this prompt pre-filled (https://claude.ai/new?q=...), the
-// user presses send in their own Claude account, and Claude answers with a
-// link back to /seo/apply that carries the finished EN/DE copy. That page
-// publishes it through the stored staging CMS login (publishedAt preserved).
-//
-// Brand rules are the same ones lib/seoBrand.ts validates on the way back
-// in, and the same ones the audif1-seo-sync skill works from.
+// Prompts SEO Studio hands to claude.ai (https://claude.ai/new?q=...).
+// Since 2026-10-14 Claude reads and writes the CMS through the team's
+// "AF1 Payload Staging MCP" (each user's own CMS login); the AF1 Tools
+// connector only supplies the rules (seo_rules) and the check (seo_check).
+// Without the Payload MCP, Claude answers with /seo/apply links instead,
+// which publish through Ktulu's server (publishedAt preserved there).
 import type { Collection } from "./payloadClient";
 
 export type HandoffItem = {
@@ -17,7 +14,7 @@ export type HandoffItem = {
   contentText: { en: string; de: string };
 };
 
-const RULES = `RULES (checked by code when you answer, so follow them exactly):
+export const SEO_RULES = `RULES (checked by code when you answer, so follow them exactly):
 - Title: 50-60 characters (45-49 is fine only for legal/utility pages). Must end with "| Audi Revolut F1® Team" (close variants like "| Audi Revolut F1® Team Insights" are fine).
 - Description: 100-150 characters.
 - Always "Audi Revolut F1® Team" and "F1®" / "Formula 1®" with the ® mark. Never "Audi F1 Team", "AF1 Team", "Audi-F1", "F1@", "Teamng".
@@ -37,6 +34,24 @@ Galleries: "{Location} {Year} Galleries | Audi Revolut F1® Team in {Country}"
 Interview: "{Name} Interview | Audi Revolut F1® Team {Role}"
 Activation: "{City} {Year} Activations | Audi Revolut F1® Team"
 Legal/utility: "{Document} | Audi Revolut F1® Team"`;
+
+// How to write meta with the Payload MCP without moving the publication
+// date: its publish sets publishedAt to "now" unless the original is passed
+// in the same update (tested on staging 2026-10-14).
+export const SEO_WRITE_RECIPE = `WRITE RECIPE (AF1 Payload Staging MCP, per doc)
+1. Read: get_document(collection, id, locale "en", fields ["title","slug","teaserTitle","shortSummary","longSummary","sections","meta","publishedAt","_status"]) and the same with locale "de". Note publishedAt and _status. German values may come back filled with the English fallback: if DE equals EN word for word, treat DE as missing.
+2. Write the four texts from that content only, then call seo_check (AF1 Tools). Fix until it says OK.
+3. Write EN: update_document(collection, id, locale "en", data {"publishedAt": <the publishedAt from step 1>, "meta": {"title": ..., "description": ..., "image": <the doc's own EN meta.image id, or the EN home meta image from seo_rules if it has none>, "schemaMarkupList": <exactly as read in step 1>}}, publish: <true only if _status was "published", else false>).
+4. Write DE the same way with locale "de" (DE image: own DE image, else the DE home image).
+5. Read publishedAt again. If it differs from step 1, call update_document once more with only {"publishedAt": <original>} and the same publish flag, and report it.
+Never publish a doc that was a draft. Never touch fields other than meta and publishedAt.`;
+
+const TOOLS_CHECK = (appOrigin: string, again: string) => `0. Check your tools.
+   - You need "AF1 Payload Staging MCP" (tools get_document, find_documents, update_document) to read and write, and "AF1 Tools" (tools seo_rules, seo_check) for the rules.
+   - If the Payload MCP is missing: tell the user in 2 lines that "AF1 Payload Staging MCP" isn't connected in their Claude (claude.ai → Customize → Connectors → AF1 Payload Staging MCP → Connect, with their CMS login), then click "${again}" again. Do nothing else.
+   - If AF1 Tools is missing or has no seo_rules: say the AF1 Tools connector needs adding or refreshing (${appOrigin}/connector; in claude.ai remove and re-add it), then click "${again}" again. Do nothing else.
+APPROVALS: when claude.ai asks to allow a tool call, ask the user once to choose "Always allow" for both connectors, then continue without asking again.
+1. Call seo_rules once and follow it, including its WRITE RECIPE.`;
 
 function section(item: HandoffItem, index: number, total: number, maxChars: number): string {
   const en = item.contentText.en.slice(0, maxChars) || "(no body content, use the internal title only)";
@@ -60,22 +75,21 @@ export function buildHandoffPrompt(items: HandoffItem[], appOrigin: string): str
 
   return `Write SEO meta titles and descriptions (English and German) for audif1.com, the Audi Revolut F1® Team website.
 
-${RULES}
+${SEO_RULES}
 
 ${pages}
 
 HOW TO ANSWER
-First check your tools. If you have a tool named "seo_publish" (the AF1 Tools connector): call it once per page with collection, id and the four texts. Then reply with the tool's result, one fact per line, nothing else:
+First check your tools. If you have "AF1 Payload Staging MCP" (update_document) and "AF1 Tools" (seo_rules, seo_check): call seo_rules once, then for each page follow its WRITE RECIPE (the content above is enough, you don't need to re-read the body; still read meta, publishedAt and _status). Then reply one fact per line, nothing else:
 Done.
 SEO written to: <internal title>
-CMS: <CMS link from the tool>
-Publication date: untouched, <date>, still published
+CMS: <CMS link>
+Publication date: untouched, <date>, still <published|draft>
 EN title: <title>
 DE title: <title>
-If it answers "NOT published" with validation issues, fix the text and call it again; never pass force unless the user tells you to.
 Last line, exactly: Back to SEO Studio: ${appOrigin}/seo
 
-If you do NOT have that tool, do two things. First, tell the user in 3 short lines that the AF1 Tools connector isn't set up in their Claude yet, that with it you could publish directly, and how to add it (once, about a minute): open ${appOrigin}/connector and click "Make my URL", then in claude.ai go to Settings → Connectors → Add custom connector, name it "AF1 Tools", paste that URL, Add. Say you can't add it for them. Then, below that, reply with ONLY one markdown link per page, one per line. Clicking it publishes the text in SEO Studio. Template:
+If you do NOT have those tools, do two things. First, tell the user in 2 short lines that with the "AF1 Payload Staging MCP" connector (claude.ai → Customize → Connectors, their CMS login) you could write it directly. Then, below that, reply with ONLY one markdown link per page, one per line. Clicking it publishes the text in SEO Studio. Template:
 [Publish: <internal title>](${appOrigin}/seo/apply?c=<collection>&id=<id>&et=<EN title>&ed=<EN description>&dt=<DE title>&dd=<DE description>)
 Percent-encode every value exactly like JavaScript encodeURIComponent: space=%20 &=%26 |=%7C #=%23 ?=%3F +=%2B ®=%C2%AE ü=%C3%BC ä=%C3%A4 ö=%C3%B6 ß=%C3%9F Ü=%C3%9C Ä=%C3%84 Ö=%C3%96 é=%C3%A9. Never leave a raw space in the link.`;
 }
@@ -84,24 +98,22 @@ Percent-encode every value exactly like JavaScript encodeURIComponent: space=%20
 // in the URL at all — Claude pulls each page itself via the tools, so there
 // is no batch limit. Runs until nothing is missing.
 export function buildConnectorBulkPrompt(missingCount: number, appOrigin: string): string {
-  return `Write SEO meta titles and descriptions (English and German) for every audif1.com news article and page that is still missing one, using the AF1 Tools connector. ${missingCount} docs are missing EN or DE SEO right now.
+  return `Write SEO meta titles and descriptions (English and German) for every audif1.com staging news article and page that is still missing one. About ${missingCount} docs are missing EN or DE SEO right now.
 
-${RULES}
+${SEO_RULES}
 
 HOW TO WORK
-APPROVALS: when claude.ai asks you to allow an AF1 Tools call, ask the user once to choose "Always allow" (not "Allow once") for the AF1 Tools connector, then continue without asking again. Only the user can set that; don't stop for each call.
-0. First check your tools. If you do NOT have a tool named seo_publish, stop and tell the user in 3 short lines: the AF1 Tools connector isn't active in their Claude yet; add it once (about a minute) by opening ${appOrigin}/connector, clicking "Make my URL", then in claude.ai Settings → Connectors → Add custom connector, name "AF1 Tools", paste the URL, Add; then click "Generate missing" again. Say you can't add it for them. Do nothing else.
-1. Call seo_list_missing with limit 20.
-2. For each doc listed: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
-3. When the list is done, call seo_list_missing again and continue until it reports 0 missing.
-4. Don't ask me to confirm each page; just work through them. If a page fails to publish for a reason you can't fix (e.g. "One or more children are invalid"), skip it and continue.
+${TOOLS_CHECK(appOrigin, "Generate missing")}
+2. Find what's missing, per collection (news, then pages) and per locale (en, then de): find_documents(collection, locale, where {"or":[{"meta.title":{"exists":false}},{"meta.title":{"equals":""}},{"meta.description":{"exists":false}},{"meta.description":{"equals":""}}]}, fields ["title","slug"], limit 50, page 1, 2, …). The filter checks the real locale even when the returned fields show English fallback. Skip docs whose title starts with "[MCP-TEST]" or contains "copy" or "test" (QA clutter) and list them as skipped.
+3. For each remaining doc: read it (get_document, both locales; content is in teaserTitle, shortSummary, longSummary and sections), write EN + DE from that content only, seo_check until OK, then write with the WRITE RECIPE.
+4. Don't ask me to confirm each page. If a write fails for a reason you can't fix (e.g. "One or more children are invalid"), skip it and continue.
 5. When everything is done, reply with ONE summary, one fact per line, no prose and no table:
 Done.
 SEO written: <n> docs
-Publication dates: untouched, still published
-Then one line per doc: ✓ <internal title> — <CMS link>
-Then, only if any failed: "Not published: <m>" and one line per doc: ✗ <internal title> — <reason> — <CMS link>
-If the tool ever reports a WARNING about a changed publication date, quote that line verbatim as the first line.
+Publication dates: untouched
+Then one line per doc: ✓ <title> — https://staging.audif1team.com/cms/admin/collections/<collection>/<id>
+Then "Skipped (test/QA): <k>" and, only if any failed, "Not written: <m>" with one line per doc: ✗ <title> — <reason> — <CMS link>
+If a publication date moved and you had to restore it, say so as the first line.
 Last line, exactly: Back to SEO Studio: ${appOrigin}/seo`;
 }
 
@@ -110,25 +122,24 @@ Last line, exactly: Back to SEO Studio: ${appOrigin}/seo`;
 // the tools, no content in the URL.
 export function buildConnectorSelectedPrompt(pairs: [Collection, string][], appOrigin: string): string {
   const list = pairs.map(([c, id], i) => `${i + 1}. collection: ${c}, id: ${id}`).join("\n");
-  return `Write SEO meta titles and descriptions (English and German) for these ${pairs.length} audif1.com docs and publish them with the AF1 Tools connector.
+  return `Write SEO meta titles and descriptions (English and German) for these ${pairs.length} audif1.com staging docs.
 
-${RULES}
+${SEO_RULES}
 
 DOCS
 ${list}
 
 HOW TO WORK
-APPROVALS: when claude.ai asks you to allow an AF1 Tools call, ask the user once to choose "Always allow" (not "Allow once") for the AF1 Tools connector, then continue without asking again. Only the user can set that; don't stop for each call.
-0. First check your tools. If you do NOT have a tool named seo_publish, stop and tell the user in 3 short lines: the AF1 Tools connector isn't active in their Claude yet; add it once (about a minute) by opening ${appOrigin}/connector, clicking "Make my URL", then in claude.ai Settings → Connectors → Add custom connector, name "AF1 Tools", paste the URL, Add; then click "Generate selected" again. Say you can't add it for them. Do nothing else.
-1. For each doc: call seo_get_page, write the EN and DE title + description from that content only, then call seo_publish with collection, id and the four texts. If seo_publish answers "NOT published" with validation issues, fix the text and call it again. Never pass force unless I tell you to.
-2. Don't ask me to confirm each page. If a page fails for a reason you can't fix, skip it and continue.
-3. When done, reply with ONE summary, one fact per line, no prose and no table:
+${TOOLS_CHECK(appOrigin, "Generate selected")}
+2. For each doc: read it (get_document, both locales; content is in teaserTitle, shortSummary, longSummary and sections), write EN + DE from that content only, seo_check until OK, then write with the WRITE RECIPE.
+3. Don't ask me to confirm each page. If a write fails for a reason you can't fix, skip it and continue.
+4. When done, reply with ONE summary, one fact per line, no prose and no table:
 Done.
 SEO written: <n> of <total> docs
-Publication dates: untouched, still published
-Then one line per doc: ✓ <internal title> — <CMS link>
-Then, only if any failed: "Not published: <m>" and one line per doc: ✗ <internal title> — <reason> — <CMS link>
-If the tool ever reports a WARNING about a changed publication date, quote it verbatim as the first line.
+Publication dates: untouched
+Then one line per doc: ✓ <title> — https://staging.audif1team.com/cms/admin/collections/<collection>/<id>
+Then, only if any failed: "Not written: <m>" and one line per doc: ✗ <title> — <reason> — <CMS link>
+If a publication date moved and you had to restore it, say so as the first line.
 Last line, exactly: Back to SEO Studio: ${appOrigin}/seo`;
 }
 
