@@ -152,7 +152,7 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
     const blob = content.photoId ? await getPhoto(content.photoId) : undefined;
     if (blob) {
       const img = await bitmap(blob);
-      const art = lineArt(img, { width: W - 2 * FRAME, height: bottom - top, color: line, coverage: 0.065, detail: 0.85 });
+      const art = lineArt(img, { width: W - 2 * FRAME, height: bottom - top, color: line, detail: 1, pen: 3 });
       img.close();
       // soft fade at top and bottom so the drawing floats instead of being boxed in
       const m = document.createElement("canvas");
@@ -287,7 +287,7 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
     const img = await bitmap(blob);
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(FRAME, top, W - 2 * FRAME, H - top - bottomBar);
-    ctx.drawImage(lineArt(img, { width: W - 2 * FRAME, height: H - top - bottomBar, color: "#3A3737", coverage: 0.06, detail: 0.9 }), FRAME, top);
+    ctx.drawImage(lineArt(img, { width: W - 2 * FRAME, height: H - top - bottomBar, color: "#3A3737", detail: 1, pen: 3 }), FRAME, top);
     ctx.strokeStyle = LIGHT_LINE;
     ctx.lineWidth = 2;
     ctx.strokeRect(FRAME, top, W - 2 * FRAME, H - top - bottomBar);

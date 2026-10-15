@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import JSZip from "jszip";
 import { signIn } from "next-auth/react";
 import Modal from "@/app/components/Modal";
+import ZineFlip from "../ZineFlip";
 import { bookStore } from "@/lib/photobookStore";
 import { BOOK_PAGES, INSIDE_PHOTOS, SHEETS, gpHashtag, pageContent, shareUrl, slugFor, zinePageUrl, type Book, type BookPhoto } from "@/lib/photobook";
 import { ZINE_VARIANTS, buildPdf, renderPage, type ZineVariant } from "@/lib/photobookRender";
@@ -65,6 +66,7 @@ export default function PhotobookEditor() {
   const pdf = pdfs.photo ?? null;
   const [building, setBuilding] = useState<{ done: number; total: number } | null>(null);
   const [preview, setPreview] = useState<{ title: string; url: string } | null>(null);
+  const [flip, setFlip] = useState<{ variant: ZineVariant; pages: string[] | null } | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [notice, setNotice] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -254,6 +256,14 @@ export default function PhotobookEditor() {
     if (!book) return;
     const c = await renderPage(book, n, getPhoto, origin);
     setPreview({ title: `Page ${n}`, url: c.toDataURL("image/jpeg", 0.85) });
+  }
+
+  async function openFlip(variant: ZineVariant) {
+    if (!book) return;
+    setFlip({ variant, pages: null });
+    const pages: string[] = [];
+    for (let n = 1; n <= BOOK_PAGES; n++) pages.push((await renderPage(book, n, getPhoto, origin, variant)).toDataURL("image/jpeg", 0.8));
+    setFlip({ variant, pages });
   }
 
   // ---- step 3: PDFs (three editions) -------------------------------------
@@ -571,6 +581,9 @@ export default function PhotobookEditor() {
               <button className="btn" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => void previewPage(1)}>
                 Preview cover
               </button>
+              <button className="btn btn-primary" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => void openFlip(book.coverStyle === "photo" ? "photo" : "diy")}>
+                ▶ Flip through
+              </button>
               {(book.coverStyle ?? "outline") === "outline" && (
                 <span style={{ fontSize: 12, color: "var(--muted)" }}>Clear shapes work best: a helmet, a driver portrait, a car side-on. Busy crowd shots get messy.</span>
               )}
@@ -662,7 +675,12 @@ export default function PhotobookEditor() {
             <div style={{ display: "flex", gap: 6 }}>
               {ZINE_VARIANTS.map((v) => (
                 <button key={v.key} className={`btn ${pdfView === v.key ? "btn-primary" : ""}`} style={{ padding: "3px 10px", fontSize: 12 }} onClick={() => setPdfView(v.key)}>
-                  Preview: {v.label}
+                  PDF: {v.label}
+                </button>
+              ))}
+              {ZINE_VARIANTS.map((v) => (
+                <button key={`f-${v.key}`} className="btn" style={{ padding: "3px 10px", fontSize: 12 }} onClick={() => void openFlip(v.key)}>
+                  ▶ Flip: {v.label}
                 </button>
               ))}
             </div>
@@ -703,6 +721,19 @@ export default function PhotobookEditor() {
             </div>
           </div>
         </div>
+      )}
+
+      {flip && (
+        <Modal title={`Flip through: ${ZINE_VARIANTS.find((v) => v.key === flip.variant)?.label}`} onClose={() => setFlip(null)} width={760}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            {ZINE_VARIANTS.map((v) => (
+              <button key={v.key} className={`btn ${flip.variant === v.key ? "btn-primary" : ""}`} style={{ padding: "3px 10px", fontSize: 12 }} onClick={() => void openFlip(v.key)}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+          {flip.pages ? <ZineFlip key={flip.variant} pages={flip.pages} height={440} /> : <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Rendering the 16 pages…</div>}
+        </Modal>
       )}
 
       {preview && (
