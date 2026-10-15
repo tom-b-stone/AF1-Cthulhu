@@ -6,7 +6,7 @@
 import { getHomeMetaImageId } from "./payloadClient";
 import { validateSeoField } from "./seoBrand";
 import { SEO_RULES, SEO_WRITE_RECIPE } from "./seoHandoff";
-import { SCENE_TAGS, type Scene } from "./contentTags";
+import { SCENE_TAGS, peopleInText, uniqueTags, type Scene } from "./contentTags";
 import { readBatch, readPreview, writeBatch } from "./assetBatchStore";
 import { readKnowledge, KNOWLEDGE_KEY } from "./knowledgeStore";
 import { kvSet } from "./kv";
@@ -179,6 +179,8 @@ ${SEO_WRITE_RECIPE}`);
       row.alt = alt;
       row.descriptor = descriptor;
       if (Array.isArray(args.people)) row.people = (args.people as unknown[]).map(String).filter(Boolean);
+      // a driver named in the alt text (or by car number) counts too
+      row.people = uniqueTags(row.people, peopleInText(`${alt} ${descriptor}`, await readKnowledge()));
       if (typeof args.scene === "string" && SCENE_TAGS.includes(args.scene as Scene)) row.scene = args.scene;
       b.updatedAt = new Date().toISOString();
       await writeBatch(b);

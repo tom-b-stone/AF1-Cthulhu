@@ -40,6 +40,13 @@ const TILES: { title: string; href: string; key: string; external?: boolean; sta
     text: "GP Mini-Zine: print, fold, colour in, share via QR. Prototype.",
   },
   {
+    title: "Team Card Configurator",
+    href: "/teamcards",
+    key: "/teamcards",
+    status: "planned",
+    text: "Briefing and status for Team Cards: assets, copy along the fan journey, previews, then publish and set up.",
+  },
+  {
     title: "CRM Images",
     href: "/images",
     key: "/images",

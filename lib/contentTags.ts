@@ -205,6 +205,46 @@ export function proposeBatchTags(opts: { year: number; loc?: string; race?: stri
   return out;
 }
 
+// People named in an alt text or descriptor, even when Claude left the
+// "people" list empty: official names, surnames, longer aliases from team
+// knowledge, and the car numbers of the two race drivers.
+const CAR_NUMBERS: Record<string, string> = { "27": "Nico Hulkenberg", "5": "Gabriel Bortoleto" };
+export function peopleInText(text: string, entries: { name: string; aliases?: string[]; active: boolean; kind: string }[]): string[] {
+  const out: string[] = [];
+  if (!text) return out;
+  const plain = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const low = ` ${plain.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+  // case-sensitive in prose ("Key" the person, not "key"); descriptors are
+  // lowercase, so names of 5+ letters also match there
+  const hit = (word: string) => {
+    const w = word.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const esc = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(^|[^A-Za-z])${esc}([^A-Za-z]|$)`).test(plain)) return true;
+    return w.length >= 5 && low.includes(` ${w.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `);
+  };
+  for (const e of entries) {
+    if (!e.active || e.kind !== "person") continue;
+    const surname = e.name.split(" ").pop() ?? "";
+    // short or everyday words ("Key", "Nico", "HUL") are too ambiguous on their own
+    const cues = [e.name, ...(surname.length >= 5 ? [surname] : []), ...(e.aliases ?? []).filter((a) => a.length >= 4 && a !== "Gabriel" && a !== "Nico")];
+    if (cues.some(hit) && !out.includes(e.name)) out.push(e.name);
+  }
+  const car = plain.match(/(?:car|#|car number)\s*(27|5)\b/i);
+  if (car && !out.includes(CAR_NUMBERS[car[1]])) out.push(CAR_NUMBERS[car[1]]);
+  return out;
+}
+
+// Descriptors read better with the driver in them ("hulkenberg-pit-stop"):
+// put the surname of up to two recognised people in front when missing.
+export function withPeople(descriptor: string, people: string[] | undefined): string {
+  const words = descriptor.split("-").filter(Boolean);
+  const names = (people ?? [])
+    .slice(0, 2)
+    .map((p) => (p.split(" ").pop() ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, ""))
+    .filter((n) => n && !words.includes(n));
+  return [...names, ...words].slice(0, 6).join("-");
+}
+
 // Per-photo proposal from what Claude saw: people → their tags, scene → tag.
 export function proposeRowTags(opts: { people?: string[]; scene?: string }, available: string[]): string[] {
   const out: string[] = [];
@@ -242,6 +282,16 @@ export function tagIssues(batchTags: string[], rowTags: string[], opts: { isGp: 
 }
 
 const PERSON_WORDS = ["nico hulkenberg", "gabriel bortoleto", "mattia binotto", "allan mcnish", "james key", "jonathan wheatley", "emma felbermayr", "freddie slater", "carrie schreiner", "paul aron"];
+// Team people whose tag is not in the vocabulary yet ("gabriel bortoleto"
+// on a fresh staging): the batch page creates them so the tag can be set.
+export function missingPersonTags(people: string[] | undefined, available: string[]): string[] {
+  const out: string[] = [];
+  for (const p of people ?? []) {
+    const t = p.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (PERSON_WORDS.includes(t) && !personTag(p, available) && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
 export function isPersonTag(t: string): boolean {
   return PERSON_WORDS.includes(t);
 }

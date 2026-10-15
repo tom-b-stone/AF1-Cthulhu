@@ -44,6 +44,7 @@ const SIDEBARS: Record<string, Section[]> = {
       ],
     },
   ],
+  "/teamcards": [{ title: "Team Card Configurator", entries: [{ href: "/teamcards", label: "Overview", note: "planned", exact: true }, { href: "/suggest", label: "Add an idea" }] }],
   "/images": [{ title: "CRM Images", entries: [{ href: "/images", label: "Overview", exact: true }] }],
   "/connector": [{ title: "Claude connector", entries: [{ href: "/connector", label: "Setup", exact: true }] }],
   "/suggest": [{ title: "Suggestion box", entries: [{ href: "/suggest", label: "Write a suggestion", exact: true }] }],

@@ -13,10 +13,33 @@ import Modal from "@/app/components/Modal";
 import { SideButton, SideSection, useSidebarContent } from "@/app/components/SidebarSlot";
 import Steps from "@/app/components/Steps";
 import TagPicker from "@/app/components/TagPicker";
-import { SCENE_TAGS, isPersonTag, proposeBatchTags, proposeRowTags, tagIssues, uniqueTags, type ContentTag } from "@/lib/contentTags";
+import { SCENE_TAGS, isPersonTag, missingPersonTags, peopleInText, proposeBatchTags, proposeRowTags, tagIssues, uniqueTags, withPeople, type ContentTag } from "@/lib/contentTags";
 import { compressImage } from "@/lib/imageCompress";
 
 type Row = AssetRow & { key: string; thumb?: string; issues: string[]; nn: number };
+type Described = { alt: string; descriptor?: string; people?: string[]; scene?: string };
+
+// What comes back from Claude (claude.ai via the connector, or the in-tool
+// API) lands on a row here: people also from the alt text (car number,
+// name), the descriptor with the driver in front, a descriptive file name
+// right away (number set at upload), and the people + scene content tags.
+function applyDescribed(b: Batch, r: AssetRow, out: Described, knowledge: KnowledgeEntry[], tagTitles: string[]): AssetRow {
+  const alt = out.alt;
+  const base = cleanDescriptor(out.descriptor || "") || r.descriptor || descriptorFromAlt(alt);
+  const people = uniqueTags(out.people, peopleInText(`${alt} ${base}`, knowledge));
+  const descriptor = withPeople(base, people);
+  const proposed = proposeRowTags({ people, scene: out.scene ?? r.scene }, tagTitles);
+  return {
+    ...r,
+    alt,
+    descriptor,
+    fileName: proposeFileName({ year: b.year, loc: b.loc, context: r.context as Context | "", descriptor, nn: 0, ext: r.mime === "image/webp" ? "webp" : "jpg" }),
+    people,
+    scene: out.scene ?? r.scene,
+    tags: uniqueTags(r.tags, proposed),
+    ai: { people, scene: out.scene ?? r.scene, tags: proposed },
+  };
+}
 
 export default function BatchPage() {
   const params = useParams<{ id: string }>();
@@ -70,15 +93,15 @@ export default function BatchPage() {
         const srv = await fetch(`/api/assets/batch/${batch.id}`).then((r) => r.json());
         if (!srv?.rows) return;
         let n = 0;
-        const rows = batch.rows.map((r) => {
+        const fresh = (await batchStore.get(batch.id)) ?? batch;
+        const rows = fresh.rows.map((r) => {
           const sr = srv.rows.find((x: { id: string }) => x.id === r.id);
-          if (!sr?.alt || r.alt.trim()) return r;
+          if (!sr?.alt || r.alt.trim() || r.status === "uploaded") return r;
           n++;
-          const proposed = proposeRowTags({ people: sr.people, scene: sr.scene }, tagTitles);
-          return { ...r, alt: sr.alt, descriptor: sr.descriptor || r.descriptor, people: sr.people ?? r.people, scene: sr.scene ?? r.scene, tags: uniqueTags(r.tags, proposed), ai: { people: sr.people ?? [], scene: sr.scene, tags: proposed } };
+          return applyDescribed(fresh, r, sr, knowledge, tagTitles);
         });
         if (n) {
-          await save({ ...batch, rows });
+          await save({ ...fresh, rows });
           setNotice(`Picked up ${n} alt text${n === 1 ? "" : "s"} written by Claude. Check them, then upload.`);
         }
         document.getElementById("batch-steps")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -88,6 +111,52 @@ export default function BatchPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batch?.id, tags]);
+  // Rows that already have an alt text (older batches, typed by hand):
+  // name the file after it and add the tags of the people in it. A person
+  // tag the team removed once is not added again (it stays in row.ai).
+  const backfillKey = useRef("");
+  const triedCreate = useRef(new Set<string>());
+  useEffect(() => {
+    if (!batch || tags === null || knowledge.length === 0) return;
+    const key = `${batch.id}:${tags.length}:${knowledge.length}`;
+    if (backfillKey.current === key) return;
+    backfillKey.current = key;
+    (async () => {
+      const b = (await batchStore.get(batch.id)) ?? batch;
+      const found = b.rows.map((r) => (r.alt.trim() ? uniqueTags(r.people, peopleInText(`${r.alt} ${r.descriptor}`, knowledge)) : []));
+      // driver / team tags that staging does not have yet: create them once
+      const missing = uniqueTags(...found.map((p) => missingPersonTags(p, tagTitles))).filter((t) => !triedCreate.current.has(t));
+      if (missing.length) {
+        for (const t of missing) {
+          triedCreate.current.add(t);
+          await createTag(t);
+        }
+        return; // runs again with the new vocabulary
+      }
+      let changed = 0;
+      const rows = b.rows.map((r, i) => {
+        if (!r.alt.trim() || r.status === "uploaded") return r;
+        const people = found[i];
+        const descriptor = r.descriptor || withPeople(descriptorFromAlt(r.alt), people);
+        const fileName = proposeFileName({ year: b.year, loc: b.loc, context: r.context as Context | "", descriptor, nn: 0, ext: r.mime === "image/webp" ? "webp" : "jpg" });
+        const seen = r.ai?.tags ?? [];
+        const add = proposeRowTags({ people }, tagTitles).filter((t) => !seen.includes(t) && !(r.tags ?? []).includes(t));
+        const peopleChanged = people.length !== (r.people ?? []).length;
+        if (descriptor === r.descriptor && fileName.replace(/_\d+\./, ".") === r.fileName.replace(/_\d+\./, ".") && !add.length && !peopleChanged) return r;
+        changed++;
+        return {
+          ...r,
+          descriptor,
+          fileName,
+          people,
+          tags: uniqueTags(r.tags, add),
+          ai: { people: r.ai?.people ?? people, scene: r.ai?.scene ?? r.scene, tags: uniqueTags(seen, add) },
+        };
+      });
+      if (changed) await save({ ...b, rows });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch?.id, batch?.rows, tags, knowledge]);
   useEffect(() => {
     fetch("/api/assets/tags")
       .then((r) => r.json())
@@ -152,12 +221,12 @@ export default function BatchPage() {
     const rows = batch.rows.map((r, i) => {
       if (r.id !== id) return r;
       const merged = { ...r, ...patch };
-      if (patch.descriptor !== undefined || patch.context !== undefined) {
+      if (patch.descriptor !== undefined || patch.context !== undefined || (patch.alt !== undefined && !merged.descriptor)) {
         merged.fileName = proposeFileName({
           year: batch.year,
           loc: batch.loc,
           context: merged.context as Context | "",
-          descriptor: merged.descriptor,
+          descriptor: merged.descriptor || descriptorFromAlt(merged.alt),
           nn: i + 1,
           ext: merged.mime === "image/webp" ? "webp" : "jpg",
         });
@@ -225,7 +294,7 @@ export default function BatchPage() {
         header: "File name",
         width: "260px",
         cell: (r) => (
-          r.descriptor ? (
+          r.descriptor || r.alt ? (
             <span className="block truncate" title={`${r.fileName} · final number set at upload`} style={{ fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12 }}>
               {r.fileName.replace(/_\d{2,3}(\.[a-z0-9]+)$/i, "_nn$1")}
             </span>
@@ -501,10 +570,9 @@ export default function BatchPage() {
               throw new Error(msg);
             }
             const out = j.result as { descriptor: string; alt: string; people: string[]; scene: string };
-            const proposed = proposeRowTags({ people: out.people, scene: out.scene }, tagTitles);
             const current = await batchStore.get(batch.id);
             if (current) {
-              const rows = current.rows.map((x) => (x.id === r.id ? { ...x, alt: out.alt, descriptor: out.descriptor || x.descriptor, people: out.people, scene: out.scene, tags: uniqueTags(x.tags, proposed), ai: { people: out.people, scene: out.scene, tags: proposed } } : x));
+              const rows = current.rows.map((x) => (x.id === r.id ? applyDescribed(current, x, out, knowledge, tagTitles) : x));
               const next = { ...current, rows };
               setBatch(next);
               await batchStore.put(next);
@@ -719,7 +787,7 @@ export default function BatchPage() {
                 <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 8 }}>
                   {r.width}×{r.height} · {fmtBytes(r.bytes)}
                   <br />
-                  <code style={{ fontSize: 11 }}>{r.fileName}</code>
+                  <code style={{ fontSize: 11 }}>{r.fileName.replace(/_\d{2,3}(\.[a-z0-9]+)$/i, "_nn$1")}</code>
                 </div>
               </div>
               <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
