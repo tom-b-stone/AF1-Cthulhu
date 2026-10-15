@@ -27,6 +27,18 @@ const TEAM = "Audi Revolut F1® Team";
 
 type PhotoSource = (photoId: string) => Promise<Blob | undefined>;
 
+// Three editions of the same zine:
+//  photo     – photo cover, photo pages
+//  diy       – cover as a light grey line drawing to colour in, photo pages
+//  colouring – the whole zine as a colouring book (all pages line drawings)
+export type ZineVariant = "photo" | "diy" | "colouring";
+export const ZINE_VARIANTS: { key: ZineVariant; label: string; file: string }[] = [
+  { key: "photo", label: "Photo zine", file: "photo" },
+  { key: "diy", label: "DIY cover", file: "diy" },
+  { key: "colouring", label: "Colouring book", file: "colouring" },
+];
+const LIGHT_LINE = "#B9B4B4";
+
 async function bitmap(blob: Blob): Promise<ImageBitmap> {
   return createImageBitmap(blob);
 }
@@ -93,7 +105,8 @@ export async function ensureFonts() {
 const F = (weight: number, px: number) => `${weight} ${px}px "Archivo", "Helvetica Neue", Arial, sans-serif`;
 
 // One book page as a 300 dpi canvas (upright).
-export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSource, origin: string): Promise<HTMLCanvasElement> {
+export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSource, origin: string, variant?: ZineVariant): Promise<HTMLCanvasElement> {
+  const v: ZineVariant = variant ?? (book.coverStyle === "photo" ? "photo" : "diy");
   const c = document.createElement("canvas");
   c.width = PANEL_PX_W;
   c.height = PANEL_PX_H;
@@ -103,7 +116,8 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
   const content = pageContent(book, bookPage);
   const city = book.city.toUpperCase();
 
-  if (content.kind === "cover" && (book.coverStyle ?? "outline") === "outline") {
+  if (content.kind === "cover" && v !== "photo") {
+    const line = v === "diy" ? LIGHT_LINE : GRAPHITE;
     // Colour-in cover: logo, outlined type and a line drawing of the cover
     // photo on chalk. Layout borrows from the Team Cards (round pill top
     // left, big location code top right) so it looks finished as it is.
@@ -114,7 +128,7 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
     const pill = book.round ? `R${String(book.round).padStart(2, "0")}` : String(book.year);
     ctx.font = F(600, 34);
     const pw = ctx.measureText(pill).width + 44;
-    ctx.strokeStyle = GRAPHITE;
+    ctx.strokeStyle = line;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.roundRect(pad, pad, pw, 58, 29);
@@ -129,7 +143,7 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
     ctx.textAlign = "right";
     ctx.lineJoin = "round";
     ctx.lineWidth = 5;
-    ctx.strokeStyle = LAVA;
+    ctx.strokeStyle = v === "diy" ? LIGHT_LINE : LAVA;
     ctx.strokeText(code, W - pad + 6, pad + 172);
     ctx.textAlign = "left";
     // line drawing
@@ -138,7 +152,7 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
     const blob = content.photoId ? await getPhoto(content.photoId) : undefined;
     if (blob) {
       const img = await bitmap(blob);
-      const art = lineArt(img, { width: W - 2 * FRAME, height: bottom - top, color: GRAPHITE, coverage: 0.065, detail: 0.85 });
+      const art = lineArt(img, { width: W - 2 * FRAME, height: bottom - top, color: line, coverage: 0.065, detail: 0.85 });
       img.close();
       // soft fade at top and bottom so the drawing floats instead of being boxed in
       const m = document.createElement("canvas");
@@ -200,11 +214,12 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
   }
 
   if (content.kind === "intro") {
-    ctx.fillStyle = GRAPHITE;
+    const ink = v === "colouring" ? GRAPHITE : CHALK;
+    ctx.fillStyle = v === "colouring" ? CHALK : GRAPHITE;
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = LAVA;
     ctx.fillRect(FRAME + 44, FRAME + 90, 90, 10);
-    ctx.fillStyle = CHALK;
+    ctx.fillStyle = ink;
     ctx.font = F(800, 70);
     let y = wrap(ctx, `Your weekend in ${book.city}.`, FRAME + 44, FRAME + 210, W - 2 * FRAME - 88, 80);
     ctx.font = F(400, 32);
@@ -218,17 +233,25 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
       46
     );
     ctx.globalAlpha = 1;
-    await drawLogo(ctx, FRAME + 44, H - FRAME - 140, 56, CHALK);
+    await drawLogo(ctx, FRAME + 44, H - FRAME - 140, 56, ink);
     ctx.font = F(500, 26);
-    ctx.fillStyle = CHALK;
+    ctx.fillStyle = ink;
     ctx.fillText(TEAM, FRAME + 44, H - FRAME - 50);
     return c;
   }
 
   if (content.kind === "back") {
-    ctx.fillStyle = LAVA;
+    // colouring book: no full-bleed lava (ink), a lava frame instead
+    const light = v === "colouring";
+    const ink = light ? GRAPHITE : CHALK;
+    ctx.fillStyle = light ? CHALK : LAVA;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = CHALK;
+    if (light) {
+      ctx.strokeStyle = LAVA;
+      ctx.lineWidth = 6;
+      ctx.strokeRect(FRAME + 14, FRAME + 14, W - 2 * FRAME - 28, H - 2 * FRAME - 28);
+    }
+    ctx.fillStyle = ink;
     ctx.font = F(800, 66);
     ctx.fillText("Share your zine.", FRAME + 44, FRAME + 150);
     // QR on a chalk tile
@@ -245,12 +268,12 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
       color: { dark: GRAPHITE, light: CHALK },
     });
     ctx.drawImage(qr, qx, qy, qrSize, qrSize);
-    ctx.fillStyle = CHALK;
+    ctx.fillStyle = ink;
     ctx.font = F(500, 30);
     let y = wrap(ctx, `Scan, post a photo of your zine and tag @${book.instagram}.`, FRAME + 44, qy + qrSize + 110, W - 2 * FRAME - 88, 42);
     ctx.font = F(800, 34);
     wrap(ctx, book.hashtags.join(" "), FRAME + 44, y + 10, W - 2 * FRAME - 88, 44);
-    await drawLogo(ctx, FRAME + 44, H - FRAME - 110, 52, CHALK);
+    await drawLogo(ctx, FRAME + 44, H - FRAME - 110, 52, ink);
     return c;
   }
 
@@ -260,7 +283,16 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
   const blob = content.photoId ? await getPhoto(content.photoId) : undefined;
   const top = FRAME;
   const bottomBar = 120;
-  if (blob) {
+  if (blob && v === "colouring") {
+    const img = await bitmap(blob);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(FRAME, top, W - 2 * FRAME, H - top - bottomBar);
+    ctx.drawImage(lineArt(img, { width: W - 2 * FRAME, height: H - top - bottomBar, color: "#3A3737", coverage: 0.06, detail: 0.9 }), FRAME, top);
+    ctx.strokeStyle = LIGHT_LINE;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(FRAME, top, W - 2 * FRAME, H - top - bottomBar);
+    img.close();
+  } else if (blob) {
     const img = await bitmap(blob);
     cover(ctx, img, FRAME, top, W - 2 * FRAME, H - top - bottomBar);
     img.close();
@@ -297,10 +329,10 @@ async function jpeg(canvas: HTMLCanvasElement): Promise<Uint8Array> {
 
 // Builds the print PDF: sheet 1, sheet 2, folding guide. onProgress gets
 // (done, total) as pages render.
-export async function buildPdf(book: Book, getPhoto: PhotoSource, origin: string, onProgress?: (done: number, total: number) => void): Promise<Uint8Array> {
+export async function buildPdf(book: Book, getPhoto: PhotoSource, origin: string, onProgress?: (done: number, total: number) => void, variant?: ZineVariant): Promise<Uint8Array> {
   await ensureFonts();
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`${book.gpName} ${book.year} GP Mini-Zine`);
+  pdf.setTitle(`${book.gpName} ${book.year} GP Mini-Zine${variant === "colouring" ? " (colouring book)" : variant === "diy" ? " (DIY cover)" : ""}`);
   pdf.setAuthor(TEAM);
   const helv = await pdf.embedFont(StandardFonts.Helvetica);
   const helvB = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -311,7 +343,7 @@ export async function buildPdf(book: Book, getPhoto: PhotoSource, origin: string
     for (let z = 1; z <= 8; z++) {
       const bookPage = sheet.bookPages[z - 1];
       const slot = ZINE_SLOTS[z];
-      let canvas = await renderPage(book, bookPage, getPhoto, origin);
+      let canvas = await renderPage(book, bookPage, getPhoto, origin, variant);
       if (slot.rotated) canvas = rotate180(canvas);
       const img = await pdf.embedJpg(await jpeg(canvas));
       page.drawImage(img, { x: slot.col * PANEL_W, y: slot.row === "top" ? PANEL_H : 0, width: PANEL_W, height: PANEL_H });

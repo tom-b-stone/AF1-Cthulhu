@@ -6,8 +6,8 @@ import JSZip from "jszip";
 import { signIn } from "next-auth/react";
 import Modal from "@/app/components/Modal";
 import { bookStore } from "@/lib/photobookStore";
-import { BOOK_PAGES, INSIDE_PHOTOS, SHEETS, gpHashtag, pageContent, shareUrl, slugFor, type Book, type BookPhoto } from "@/lib/photobook";
-import { buildPdf, renderPage } from "@/lib/photobookRender";
+import { BOOK_PAGES, INSIDE_PHOTOS, SHEETS, gpHashtag, pageContent, shareUrl, slugFor, zinePageUrl, type Book, type BookPhoto } from "@/lib/photobook";
+import { ZINE_VARIANTS, buildPdf, renderPage, type ZineVariant } from "@/lib/photobookRender";
 import { compressImage, thumbnail } from "@/lib/imageCompress";
 import { newId } from "@/lib/batchStore";
 
@@ -59,7 +59,10 @@ export default function PhotobookEditor() {
   const [step, setStep] = useState(0);
   const [importing, setImporting] = useState<{ done: number; total: number } | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [pdf, setPdf] = useState<{ url: string; blob: Blob; size: number } | null>(null);
+  type Pdf = { url: string; blob: Blob; size: number };
+  const [pdfs, setPdfs] = useState<Partial<Record<ZineVariant, Pdf>>>({});
+  const [pdfView, setPdfView] = useState<ZineVariant>("photo");
+  const pdf = pdfs.photo ?? null;
   const [building, setBuilding] = useState<{ done: number; total: number } | null>(null);
   const [preview, setPreview] = useState<{ title: string; url: string } | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -253,56 +256,63 @@ export default function PhotobookEditor() {
     setPreview({ title: `Page ${n}`, url: c.toDataURL("image/jpeg", 0.85) });
   }
 
-  // ---- step 3: PDF ------------------------------------------------------
+  // ---- step 3: PDFs (three editions) -------------------------------------
   async function makePdf() {
     if (!book) return;
-    setBuilding({ done: 0, total: BOOK_PAGES });
+    const total = BOOK_PAGES * ZINE_VARIANTS.length;
+    setBuilding({ done: 0, total });
     setNotice(null);
     try {
-      const bytes = await buildPdf(book, getPhoto, origin, (done, total) => setBuilding({ done, total }));
-      const blob = new Blob([bytes], { type: "application/pdf" });
-      if (pdf) URL.revokeObjectURL(pdf.url);
-      setPdf({ url: URL.createObjectURL(blob), blob, size: blob.size });
+      const next: Partial<Record<ZineVariant, Pdf>> = {};
+      for (let i = 0; i < ZINE_VARIANTS.length; i++) {
+        const v = ZINE_VARIANTS[i].key;
+        const bytes = await buildPdf(book, getPhoto, origin, (done) => setBuilding({ done: i * BOOK_PAGES + done, total }), v);
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        next[v] = { url: URL.createObjectURL(blob), blob, size: blob.size };
+      }
+      Object.values(pdfs).forEach((p) => p && URL.revokeObjectURL(p.url));
+      setPdfs(next);
     } catch (e) {
       setNotice({ tone: "err", text: `PDF failed: ${e instanceof Error ? e.message : "error"}` });
     }
     setBuilding(null);
   }
 
-  // ---- step 4: microsite ------------------------------------------------
+  // ---- step 4: fan page -------------------------------------------------
+  async function upload(file: Blob, name: string, alt: string): Promise<string> {
+    const form = new FormData();
+    form.append("file", file, name);
+    form.append("name", name);
+    form.append("alt", alt);
+    const res = await fetch("/api/photobook/upload", { method: "POST", body: form });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`${name}: ${j.error ?? res.status}`);
+    return j.id as string;
+  }
   async function publish() {
-    if (!book || !pdf || !book.coverId) return;
+    if (!book || !pdfs.photo || !book.coverId) return;
     setPublishing(true);
     setNotice(null);
     try {
       const cover = await getPhoto(book.coverId);
       if (!cover) throw new Error("cover photo missing in this browser");
-      const form = new FormData();
-      form.append("pdf", pdf.blob, "photobook.pdf");
-      form.append("cover", cover, "cover.webp");
-      form.append(
-        "meta",
-        JSON.stringify({ slug: book.slug, gpName: book.gpName, city: book.city, loc: book.loc, year: book.year, dateLabel: book.dateLabel, hashtags: book.hashtags, instagram: book.instagram, shareUrl: shareUrl(origin, book) })
-      );
-      const res = await fetch("/api/photobook/publish", { method: "POST", body: form });
+      const base = `audif1_${book.year}_${book.loc.toUpperCase()}_GP_mini-zine`;
+      const coverId = await upload(cover, `${base}_cover.jpg`, `Cover of the Audi Revolut F1® Team GP Mini-Zine for the ${book.gpName} ${book.year}`);
+      const ids: Partial<Record<ZineVariant, string>> = {};
+      for (const v of ZINE_VARIANTS) {
+        const p = pdfs[v.key];
+        if (p) ids[v.key] = await upload(p.blob, `${base}_${v.file}.pdf`, `GP Mini-Zine ${book.gpName} ${book.year}, ${v.label} (print PDF)`);
+      }
+      const meta = { slug: book.slug, gpName: book.gpName, city: book.city, loc: book.loc, year: book.year, dateLabel: book.dateLabel, hashtags: book.hashtags, instagram: book.instagram };
+      const res = await fetch("/api/photobook/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ meta, coverId, pdfs: ids }) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(`${j.error ?? res.status}${j.steps?.length ? ` (done: ${j.steps.join(", ")})` : ""}`);
-      const next = { ...book, stagingPageId: j.pageId, stagingPageUrl: j.pageAdminUrl, pdfUrl: j.pdfUrl, coverUrl: j.coverUrl };
-      await save(next);
-      await saveShare(next);
-      setNotice({ tone: "ok", text: `Done. Draft page on staging, PDF and cover uploaded. Steps: ${j.steps.join(", ")}.` });
+      await save({ ...book, stagingPageId: j.pageId, stagingPageUrl: j.pageAdminUrl });
+      setNotice({ tone: "ok", text: `Done. Draft page on staging with cover and three PDFs. ${j.steps.join(", ")}.` });
     } catch (e) {
       setNotice({ tone: "err", text: `Not published: ${e instanceof Error ? e.message : "error"}` });
     }
     setPublishing(false);
-  }
-  async function saveShare(b: Book) {
-    const res = await fetch("/api/photobook/share", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug: b.slug, gpName: b.gpName, city: b.city, year: b.year, dateLabel: b.dateLabel, hashtags: b.hashtags, instagram: b.instagram, coverUrl: b.coverUrl, pdfUrl: b.pdfUrl }),
-    });
-    if (!res.ok) throw new Error("share page not saved");
   }
 
   const ready1 = Boolean(book?.slug && book.photos.length >= 2);
@@ -626,26 +636,38 @@ export default function PhotobookEditor() {
 
       {step === 2 && (
         <div className="card" style={{ padding: 16, display: "grid", gap: 12 }}>
-          <div className="section-label">Print file (PDF)</div>
+          <div className="section-label">Print files (PDF)</div>
           <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
-            Two A4 landscape sheets at 300 dpi plus a folding guide. Top rows print upside down on purpose (that&apos;s how the fold works); cut only the red dashed line.
+            Three editions, each two A4 landscape sheets at 300 dpi plus a folding guide: <b>Photo zine</b>, <b>DIY cover</b> (light grey line drawing to colour in, photos inside) and the <b>Colouring book</b> (every page a line drawing). Top rows print upside down on purpose; cut only the red dashed line.
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button className="btn btn-primary" onClick={makePdf} disabled={Boolean(building)}>
-              {building ? `Rendering page ${building.done}/${building.total}…` : pdf ? "Rebuild PDF" : "Build PDF"}
+              {building ? `Rendering ${building.done}/${building.total}…` : pdf ? "Rebuild the 3 PDFs" : "Build the 3 PDFs"}
             </button>
-            {pdf && (
-              <a className="btn" href={pdf.url} download={`${book.slug || "zine"}_gp-mini-zine.pdf`}>
-                Download ({(pdf.size / 1024 / 1024).toFixed(1)} MB)
-              </a>
-            )}
+            {ZINE_VARIANTS.map((v) => {
+              const p = pdfs[v.key];
+              return p ? (
+                <a key={v.key} className="btn" href={p.url} download={`${book.slug || "zine"}_gp-mini-zine_${v.file}.pdf`}>
+                  {v.label} ({(p.size / 1024 / 1024).toFixed(1)} MB)
+                </a>
+              ) : null;
+            })}
             {pdf && (
               <button className="btn btn-primary" onClick={() => setStep(3)} style={{ marginLeft: "auto" }}>
-                Next: Microsite
+                Next: Fan page
               </button>
             )}
           </div>
-          {pdf && <iframe title="PDF preview" src={pdf.url} style={{ width: "100%", height: 560, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }} />}
+          {pdf && (
+            <div style={{ display: "flex", gap: 6 }}>
+              {ZINE_VARIANTS.map((v) => (
+                <button key={v.key} className={`btn ${pdfView === v.key ? "btn-primary" : ""}`} style={{ padding: "3px 10px", fontSize: 12 }} onClick={() => setPdfView(v.key)}>
+                  Preview: {v.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {pdfs[pdfView] && <iframe title="PDF preview" src={pdfs[pdfView]!.url} style={{ width: "100%", height: 560, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }} />}
         </div>
       )}
 
@@ -654,43 +676,29 @@ export default function PhotobookEditor() {
           <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
             <div className="section-label">Fan page on staging (draft)</div>
             <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
-              Uploads the cover and the PDF to the staging media library (folder &quot;GP Mini-Zine&quot;) and creates a draft page <code>gp-mini-zine-{book.slug}</code>: hero, animation
-              teaser, colour-in teaser, how-to carousel with illustrations, download + Team Card block and share buttons. An editor reviews and publishes it in the CMS.
+              Uploads the cover and the three PDFs to the staging media library (folder &quot;GP Mini-Zine&quot;) and builds the draft page <code>gp-mini-zine-{book.slug}</code>: hero, download teaser with the preview video (logged out: log in / register; logged in: three download buttons), how-to slider, share buttons.
             </div>
-            {!pdf && <div style={{ fontSize: 12, color: "#e9c46a" }}>Build the PDF first (step 3).</div>}
+            {!pdf && <div style={{ fontSize: 12, color: "#e9c46a" }}>Build the PDFs first (step 3).</div>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button className="btn btn-primary" onClick={publish} disabled={!pdf || publishing}>
-                {publishing ? "Publishing to staging…" : book.stagingPageId ? "Update draft page" : "Create draft page"}
+                {publishing ? "Uploading to staging…" : book.stagingPageId ? "Update draft page" : "Create draft page"}
               </button>
               {book.stagingPageUrl && (
                 <a className="btn" href={book.stagingPageUrl} target="_blank" rel="noreferrer">
-                  Open in the CMS ↗
+                  Edit in the CMS ↗
                 </a>
               )}
             </div>
           </div>
           <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
-            <div className="section-label">Share page (QR target)</div>
+            <div className="section-label">Fan page (QR + share target)</div>
             <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
-              Public page the QR code on the back opens: how to share, tags to copy, Instagram button. Tracking: utm_source=photobook, utm_medium=print_qr.
+              The QR code on the back and the share buttons open the fan page on the website. It shows once the page is published on staging. Tracking: utm_source=gp_mini_zine, utm_medium=print_qr.
             </div>
             <code style={{ fontSize: 11, wordBreak: "break-all" }}>{shareUrl(origin, book)}</code>
             <div style={{ display: "flex", gap: 8 }}>
-              <button
-                className="btn"
-                onClick={async () => {
-                  try {
-                    await saveShare(book);
-                    setNotice({ tone: "ok", text: "Done. Share page saved." });
-                  } catch (e) {
-                    setNotice({ tone: "err", text: e instanceof Error ? e.message : "failed" });
-                  }
-                }}
-              >
-                Save share page
-              </button>
-              <a className="btn" href={`/p/${book.slug}`} target="_blank" rel="noreferrer">
-                Open ↗
+              <a className="btn" href={zinePageUrl(book)} target="_blank" rel="noreferrer">
+                Open fan page ↗
               </a>
             </div>
           </div>

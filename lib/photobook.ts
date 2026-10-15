@@ -90,15 +90,23 @@ export function slugFor(year: number, loc: string): string {
   return `${year}-${loc.toLowerCase()}`;
 }
 
-// QR target: the public share page, tagged for analytics like every link
-// from print (UTM Studio convention: source = channel, medium = format).
-export function shareUrl(origin: string, book: Pick<Book, "slug" | "year" | "loc">): string {
+// The fan page of a zine on the website (staging for now; set
+// NEXT_PUBLIC_ZINE_SITE=https://www.audif1.com/en for production).
+export const ZINE_SITE = (process.env.NEXT_PUBLIC_ZINE_SITE || "https://staging.audif1team.com/en").replace(/\/$/, "");
+export function zinePageUrl(book: Pick<Book, "slug">): string {
+  return `${ZINE_SITE}/gp-mini-zine-${book.slug}`;
+}
+
+// QR target + share link: the fan page, tagged for analytics like every
+// link from print (UTM Studio convention: source = channel, medium = format).
+// `origin` is kept for call sites; the target is always the website page.
+export function shareUrl(_origin: string, book: Pick<Book, "slug" | "year" | "loc">): string {
   const q = new URLSearchParams({
-    utm_source: "photobook",
+    utm_source: "gp_mini_zine",
     utm_medium: "print_qr",
-    utm_campaign: `${book.year}_${book.loc.toLowerCase()}_photobook`,
+    utm_campaign: `${book.year}_${book.loc.toLowerCase()}_gp_mini_zine`,
   });
-  return `${origin}/p/${book.slug}?${q.toString()}`;
+  return `${zinePageUrl(book)}?${q.toString()}`;
 }
 
 export function gpHashtag(city: string): string {
