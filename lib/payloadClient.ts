@@ -511,3 +511,7 @@ export async function upsertDraftPage(slug: string, body: Record<string, unknown
 export function stagingFileUrl(path: string): string {
   return path.startsWith("http") ? path : `${baseUrl().replace(/\/cms\/api$/, "")}${path}`;
 }
+
+// Generic authenticated staging request (Team Card copy needs badges,
+// engagements, loyalty tags and badge types, not only pages and media).
+export const stagingRequest = (path: string, init: RequestInit = {}) => payloadFetch(path, init);

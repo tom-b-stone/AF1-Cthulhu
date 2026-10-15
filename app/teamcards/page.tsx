@@ -1,3 +1,5 @@
+import CopyCard from "./CopyCard";
+
 // Team Card Configurator: placeholder. The planned flow, so the team can
 // see where it is going and add to it via the suggestion box.
 
@@ -20,6 +22,7 @@ export default function Page() {
           Briefing and status tool for Team Cards. Collect what a card needs, upload and adapt the artwork, preview the texts along the fan journey, then publish and set up the card once everything is in. Not built yet.
         </p>
       </div>
+      <CopyCard />
       <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
         {STEPS.map((s) => (
           <li key={s.n} style={{ display: "grid", gridTemplateColumns: "44px 1fr", gap: 12, padding: "14px 16px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--surface)" }}>
