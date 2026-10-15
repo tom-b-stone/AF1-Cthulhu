@@ -22,6 +22,8 @@ export type Book = {
   source: string; // where the photos came from (SlashLens collection name / link)
   photos: BookPhoto[];
   coverId?: string;
+  // "outline" = line drawing of the cover photo to colour in (default), "photo" = full-bleed photo
+  coverStyle?: "outline" | "photo";
   order: string[]; // the 13 inside photos, reading order (book pages 3–15)
   stagingPageId?: string;
   stagingPageUrl?: string;

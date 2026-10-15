@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GP Mini-Zine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&display=swap" rel="stylesheet" />
+<style>
+  /* GP Mini-Zine: an 8-second loop of the fold, sheet → cut → fold → book.
+     Brand: lava #E33E1A, chalk #F5F2F2, graphite #2B2929, Archivo. */
+  :root { --lava:#E33E1A; --chalk:#F5F2F2; --graphite:#2B2929; --grey:#E6E3E3; --t: 9s; }
+  html,body { margin:0; height:100%; background:var(--graphite); }
+  body { display:grid; place-items:center; font-family:"Archivo","Helvetica Neue",Arial,sans-serif; overflow:hidden; }
+  .stage { position:relative; width:min(92vw, 1280px); aspect-ratio:16/9; perspective:1400px; }
+  .title { position:absolute; left:6%; top:12%; max-width:32%; color:var(--chalk); }
+  .title .k { width:56px; height:6px; background:var(--lava); margin-bottom:18px; }
+  .title h1 { margin:0; font-weight:800; font-size:clamp(28px,5vw,72px); line-height:.95; letter-spacing:-.01em; text-transform:uppercase; }
+  .title p { margin:10px 0 0; font-weight:500; font-size:clamp(12px,1.4vw,20px); opacity:.75; }
+  .sheet { position:absolute; left:63%; top:52%; width:44%; aspect-ratio:297/210; transform:translate(-50%,-50%); transform-style:preserve-3d; animation:sheet var(--t) infinite cubic-bezier(.65,0,.35,1); }
+  .half { position:absolute; left:0; width:100%; height:50%; display:grid; grid-template-columns:repeat(4,1fr); gap:0; background:#fff; outline:2px solid var(--graphite); backface-visibility:hidden; }
+  .top { top:0; transform-origin:50% 100%; animation:foldtop var(--t) infinite cubic-bezier(.65,0,.35,1); }
+  .bottom { top:50%; }
+  .p { margin:6%; background:var(--grey); opacity:0; animation:pop var(--t) infinite; }
+  .p:nth-child(odd){ background:#d9d5d5 }
+  .bottom .p:last-child { background:var(--lava); }
+  .crease { position:absolute; inset:0; pointer-events:none; animation:creasefade var(--t) infinite; }
+  @keyframes creasefade { 0%,38%{opacity:1} 42%,100%{opacity:0} }
+  .crease line { stroke:#9a9797; stroke-width:2; stroke-dasharray:6 6; stroke-dashoffset:600; animation:draw var(--t) infinite; }
+  .cut { stroke:var(--lava) !important; stroke-width:5 !important; stroke-dasharray:14 10 !important; animation:cut var(--t) infinite !important; }
+  .book { position:absolute; left:63%; top:52%; width:17%; aspect-ratio:74/105; transform:translate(-50%,-50%) rotateY(-24deg) rotateX(6deg); background:var(--chalk); border-left:8px solid #d6d1d1; box-shadow:0 30px 60px rgba(0,0,0,.45); opacity:0; animation:book var(--t) infinite cubic-bezier(.2,.8,.2,1); padding:4%; box-sizing:border-box; color:var(--chalk); display:flex; flex-direction:column; justify-content:flex-end; }
+  .book .code { position:absolute; right:7%; top:5%; font-weight:800; font-size:clamp(16px,3vw,44px); line-height:1; color:transparent; -webkit-text-stroke:1.5px var(--lava); }
+  .book .pill { position:absolute; left:8%; top:7%; border:1.5px solid var(--graphite); border-radius:99px; padding:1px 6px; font-size:clamp(6px,.7vw,10px); font-weight:700; color:var(--graphite); }
+  .book svg { position:absolute; left:6%; right:6%; top:26%; width:88%; }
+  .book svg path { fill:none; stroke:var(--graphite); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:400; stroke-dashoffset:400; animation:ink var(--t) infinite; }
+  @keyframes ink { 0%,66%{stroke-dashoffset:400} 80%,100%{stroke-dashoffset:0} }
+  .book b { position:relative; font-weight:800; font-size:clamp(8px,1vw,15px); line-height:1; text-transform:uppercase; color:var(--graphite); text-align:right; }
+  .book small { position:relative; font-size:clamp(6px,.7vw,10px); opacity:.85; margin-top:3px; color:var(--graphite); text-align:right; }
+  .tag { position:absolute; right:6%; bottom:9%; color:var(--chalk); font-weight:700; font-size:clamp(11px,1.3vw,18px); opacity:0; animation:tag var(--t) infinite; }
+  .tag span { color:var(--lava); }
+  @keyframes pop { 0%,2%{opacity:0; transform:scale(.6)} 8%,92%{opacity:1; transform:none} 100%{opacity:0} }
+  .p:nth-child(2){animation-delay:.08s} .p:nth-child(3){animation-delay:.16s} .p:nth-child(4){animation-delay:.24s}
+  @keyframes draw { 0%,12%{stroke-dashoffset:600} 22%,92%{stroke-dashoffset:0} 100%{stroke-dashoffset:0; opacity:0} }
+  @keyframes cut { 0%,24%{stroke-dashoffset:600; opacity:0} 25%{opacity:1} 34%,92%{stroke-dashoffset:0; opacity:1} 100%{opacity:0} }
+  @keyframes foldtop { 0%,38%{transform:rotateX(0)} 48%,100%{transform:rotateX(-180deg)} }
+  @keyframes sheet {
+    0%,38% { transform:translate(-50%,-50%) scale(1); opacity:1 }
+    50% { transform:translate(-50%,-25%) scale(1); opacity:1 }
+    62% { transform:translate(-50%,-25%) scaleX(.28) rotateY(70deg); opacity:1 }
+    66%,100% { transform:translate(-50%,-25%) scaleX(.2) rotateY(90deg); opacity:0 }
+  }
+  @keyframes book { 0%,62%{opacity:0; transform:translate(-50%,-50%) rotateY(-90deg) scale(.9)} 72%,94%{opacity:1; transform:translate(-50%,-50%) rotateY(-24deg) rotateX(6deg) scale(1)} 100%{opacity:0; transform:translate(-50%,-50%) rotateY(-24deg) rotateX(6deg) scale(1.04)} }
+  @keyframes tag { 0%,74%{opacity:0; transform:translateY(8px)} 80%,94%{opacity:1; transform:none} 100%{opacity:0} }
+  body.square .stage { width:min(92vmin, 1080px); aspect-ratio:1/1; }
+  body.square .title { left:7%; top:7%; max-width:70%; }
+  body.square .title h1 { font-size:clamp(28px,9vmin,110px); }
+  body.square .title p { font-size:clamp(12px,2.6vmin,30px); }
+  body.square .sheet, body.square .book { left:50%; top:64%; }
+  body.square .sheet { width:80%; }
+  body.square .book { width:31%; }
+  body.square .tag { font-size:clamp(12px,2.6vmin,30px); right:7%; bottom:5%; }
+  @media (prefers-reduced-motion: reduce) { *{animation:none !important} .book,.tag{opacity:1} .sheet{opacity:0} }
+</style>
+</head>
+<body>
+  <div class="stage" aria-label="Animation: an A4 sheet of Grand Prix photos is cut, folded and turned into a mini book">
+    <div class="title"><div class="k"></div><h1>GP<br/>Mini-Zine</h1><p>Print. Cut. Fold. Your Grand Prix in your pocket.</p></div>
+    <div class="sheet">
+      <div class="half top"><i class="p"></i><i class="p"></i><i class="p"></i><i class="p"></i></div>
+      <div class="half bottom"><i class="p"></i><i class="p"></i><i class="p"></i><i class="p"></i></div>
+      <svg class="crease" viewBox="0 0 297 210" preserveAspectRatio="none">
+        <line x1="74.25" y1="0" x2="74.25" y2="210"/><line x1="148.5" y1="0" x2="148.5" y2="210"/><line x1="222.75" y1="0" x2="222.75" y2="210"/>
+        <line x1="0" y1="105" x2="297" y2="105"/>
+        <line class="cut" x1="74.25" y1="105" x2="222.75" y2="105"/>
+      </svg>
+    </div>
+    <div class="book"><span class="pill" id="round">R18</span><span class="code" id="code">SIN</span>
+      <svg viewBox="0 0 100 80" aria-hidden="true"><path d="M14 58 C10 34 26 14 52 13 C76 12 90 28 89 46 L89 56 C89 62 84 64 78 64 L22 64 C17 64 15 62 14 58 Z"/><path d="M30 34 C44 28 66 28 86 34 L88 46 C70 44 46 44 30 47 Z"/><path d="M18 64 L16 70 L80 70 L78 64"/><path d="M40 20 C46 30 46 40 44 44"/></svg>
+      <b id="city">Singapore</b><small>Grand Prix 2026</small></div>
+    <div class="tag">Share it <span>#ARF1</span></div>
+  </div>
+  <script>
+    // ?city=Monza&code=ITA&round=R16&year=2026 to retitle the book, &format=square for the 1:1 CMS video
+    const q = new URLSearchParams(location.search);
+    if (q.get("city")) document.getElementById("city").textContent = q.get("city");
+    if (q.get("year")) document.querySelector(".book small").textContent = "Grand Prix " + q.get("year");
+    if (q.get("code")) document.getElementById("code").textContent = q.get("code");
+    if (q.get("round")) document.getElementById("round").textContent = q.get("round");
+    if (q.get("format") === "square") document.body.classList.add("square");
+  </script>
+</body>
+</html>

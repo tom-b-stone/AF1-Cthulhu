@@ -17,6 +17,7 @@ import {
   shareUrl,
   type Book,
 } from "./photobook";
+import { lineArt } from "./lineArt";
 
 const LAVA = "#E33E1A";
 const CHALK = "#F5F2F2";
@@ -101,6 +102,73 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
   const H = PANEL_PX_H;
   const content = pageContent(book, bookPage);
   const city = book.city.toUpperCase();
+
+  if (content.kind === "cover" && (book.coverStyle ?? "outline") === "outline") {
+    // Colour-in cover: logo, outlined type and a line drawing of the cover
+    // photo on chalk. Layout borrows from the Team Cards (round pill top
+    // left, big location code top right) so it looks finished as it is.
+    ctx.fillStyle = CHALK;
+    ctx.fillRect(0, 0, W, H);
+    const pad = FRAME + 44;
+    // round pill
+    const pill = book.round ? `R${String(book.round).padStart(2, "0")}` : String(book.year);
+    ctx.font = F(600, 34);
+    const pw = ctx.measureText(pill).width + 44;
+    ctx.strokeStyle = GRAPHITE;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(pad, pad, pw, 58, 29);
+    ctx.stroke();
+    ctx.fillStyle = GRAPHITE;
+    ctx.fillText(pill, pad + 22, pad + 41);
+    ctx.font = F(500, 26);
+    ctx.fillText("GP MINI-ZINE", pad, pad + 104);
+    // location code, outlined so it can be coloured in
+    const code = book.loc.toUpperCase();
+    ctx.font = F(800, 210);
+    ctx.textAlign = "right";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = LAVA;
+    ctx.strokeText(code, W - pad + 6, pad + 172);
+    ctx.textAlign = "left";
+    // line drawing
+    const top = pad + 220;
+    const bottom = H - pad - 120;
+    const blob = content.photoId ? await getPhoto(content.photoId) : undefined;
+    if (blob) {
+      const img = await bitmap(blob);
+      const art = lineArt(img, { width: W - 2 * FRAME, height: bottom - top, color: GRAPHITE, coverage: 0.065, detail: 0.85 });
+      img.close();
+      // soft fade at top and bottom so the drawing floats instead of being boxed in
+      const m = document.createElement("canvas");
+      m.width = art.width;
+      m.height = art.height;
+      const mc = m.getContext("2d")!;
+      mc.drawImage(art, 0, 0);
+      mc.globalCompositeOperation = "destination-in";
+      const fade = mc.createLinearGradient(0, 0, 0, m.height);
+      fade.addColorStop(0, "rgba(0,0,0,0)");
+      fade.addColorStop(0.08, "rgba(0,0,0,1)");
+      fade.addColorStop(0.92, "rgba(0,0,0,1)");
+      fade.addColorStop(1, "rgba(0,0,0,0)");
+      mc.fillStyle = fade;
+      mc.fillRect(0, 0, m.width, m.height);
+      ctx.drawImage(m, FRAME, top);
+    }
+    // footer
+    ctx.fillStyle = LAVA;
+    ctx.fillRect(pad, H - pad - 96, 70, 8);
+    await drawLogo(ctx, pad, H - pad - 62, 56, GRAPHITE);
+    ctx.fillStyle = GRAPHITE;
+    ctx.font = F(600, 28);
+    ctx.textAlign = "right";
+    ctx.fillText(book.city.toUpperCase(), W - pad, H - pad - 34);
+    ctx.font = F(400, 24);
+    ctx.fillText(`Grand Prix ${book.year}`, W - pad, H - pad - 2);
+    ctx.textAlign = "left";
+    return c;
+  }
 
   if (content.kind === "cover") {
     ctx.fillStyle = GRAPHITE;
@@ -232,7 +300,7 @@ async function jpeg(canvas: HTMLCanvasElement): Promise<Uint8Array> {
 export async function buildPdf(book: Book, getPhoto: PhotoSource, origin: string, onProgress?: (done: number, total: number) => void): Promise<Uint8Array> {
   await ensureFonts();
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`${book.gpName} ${book.year} mini photobook`);
+  pdf.setTitle(`${book.gpName} ${book.year} GP Mini-Zine`);
   pdf.setAuthor(TEAM);
   const helv = await pdf.embedFont(StandardFonts.Helvetica);
   const helvB = await pdf.embedFont(StandardFonts.HelveticaBold);

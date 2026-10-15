@@ -1,40 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
-import { createMediaFolder, listMediaFolders, stagingFileUrl, uploadToCollection, upsertDraftPage } from "@/lib/payloadClient";
+import { stagingFileUrl, uploadToCollection, upsertDraftPage } from "@/lib/payloadClient";
+import { buildZineMeta, buildZineSections, zinePageSlug, zinePageTitle, type ZineAssets, type ZineMeta } from "@/lib/zinePage";
+import { ensureZineAssets, zineFolder } from "@/lib/zineAssets";
 
-// Builds the fan microsite as a DRAFT page on the staging CMS:
-// 1. cover image + print PDF into the media library (folder "Photobook")
-// 2. a page with a hero (cover photo) and a free-text block (how it works,
-//    download link, share link), using the blocks the site already has.
+// Builds the GP Mini-Zine fan page as a DRAFT on the staging CMS:
+// 1. cover image + print PDF into the media library (folder "GP Mini-Zine")
+// 2. how-to illustrations + teaser animation (uploaded once, lib/zineAssets)
+// 3. the page layout from lib/zinePage (hero, teasers, how-to carousel,
+//    download + Team Card CTA, share buttons).
 // Nothing is published; an editor reviews and publishes in the CMS.
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type Meta = { slug: string; gpName: string; city: string; year: number; dateLabel: string; hashtags: string[]; instagram: string; shareUrl: string };
-
-const text = (t: string, format = 0) => ({ type: "text", text: t, detail: 0, format, mode: "normal", style: "", version: 1 });
-const para = (...children: unknown[]) => ({ type: "paragraph", children, direction: null, format: "", indent: 0, version: 1, textFormat: 0, textStyle: "" });
-const link = (label: string, url: string) => ({
-  type: "link",
-  version: 3,
-  fields: { linkType: "custom", url, newTab: true },
-  children: [text(label, 1)],
-  direction: null,
-  format: "",
-  indent: 0,
-});
-
-async function photobookFolder(): Promise<string | null> {
-  try {
-    const all = await listMediaFolders();
-    const hit = all.find((f) => f.name === "Photobook" && !f.parent);
-    if (hit) return hit.id;
-    return (await createMediaFolder("Photobook", null)).id;
-  } catch {
-    return null;
-  }
-}
+type Meta = { slug: string; gpName: string; city: string; loc?: string; year: number; dateLabel: string; hashtags: string[]; instagram: string; shareUrl: string };
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -52,71 +32,38 @@ export async function POST(req: NextRequest) {
 
   const steps: string[] = [];
   try {
-    const folder = await photobookFolder();
-    const base = `audif1_${meta.year}_${meta.slug.split("-").pop()?.toUpperCase()}_GP_photobook`;
+    const folder = await zineFolder();
+    const base = `audif1_${meta.year}_${meta.slug.split("-").pop()?.toUpperCase()}_GP_mini-zine`;
     const coverDoc = await uploadToCollection("media", cover, `${base}_cover.jpg`, {
-      alt: `Cover of the Audi Revolut F1® Team mini photobook for the ${meta.gpName} ${meta.year}`,
+      alt: `Cover of the Audi Revolut F1® Team GP Mini-Zine for the ${meta.gpName} ${meta.year}`,
       ...(folder ? { folder } : {}),
     });
     steps.push("cover uploaded");
     let pdfDoc: { id: string; url: string };
     try {
-      pdfDoc = await uploadToCollection("media", pdf, `${base}_print.pdf`, { alt: `Printable mini photobook, ${meta.gpName} ${meta.year}`, ...(folder ? { folder } : {}) });
+      pdfDoc = await uploadToCollection("media", pdf, `${base}_print.pdf`, { alt: `Printable GP Mini-Zine, ${meta.gpName} ${meta.year}`, ...(folder ? { folder } : {}) });
       steps.push("PDF uploaded to media");
     } catch (e) {
       steps.push(`media refused the PDF (${e instanceof Error ? e.message.slice(0, 80) : "error"}), trying files`);
-      pdfDoc = await uploadToCollection("files", pdf, `${base}_print.pdf`, { title: `Mini photobook ${meta.gpName} ${meta.year}` });
+      pdfDoc = await uploadToCollection("files", pdf, `${base}_print.pdf`, { title: `GP Mini-Zine ${meta.gpName} ${meta.year}` });
       steps.push("PDF uploaded to files");
     }
     const pdfUrl = stagingFileUrl(pdfDoc.url);
     const coverUrl = stagingFileUrl(coverDoc.url);
 
-    const page = await upsertDraftPage(`photobook-${meta.slug}`, {
-      title: `Photobook | ${meta.gpName} ${meta.year}`,
-      sections: [
-        {
-          blockType: "hero",
-          category: "Photobook",
-          headline: `Your ${meta.city} weekend, in print.`,
-          subline: `${meta.gpName} ${meta.year}`,
-          copy: "Thirteen moments from the race weekend as a mini book to print and fold at home. Two A4 sheets, one cut each, no glue.",
-          ctas: [],
-          container: {
-            contentPosition: "bottom",
-            horizontalPosition: "left",
-            size: "large",
-            background: { type: "image", imageSettings: { media: coverDoc.id, shouldHaveOverlay: true, bgColor: "graphite" } },
-          },
-          authRequirement: "PUBLIC",
-        },
-        {
-          blockType: "free-text",
-          background: { type: "color", color: "grey-01" },
-          headline: "Print. Fold. Share.",
-          subline: meta.dateLabel || `${meta.gpName} ${meta.year}`,
-          content: {
-            root: {
-              type: "root",
-              format: "",
-              indent: 0,
-              version: 1,
-              direction: null,
-              children: [
-                para(text("Print both sheets on A4, landscape, at 100 %. Cut along the red line, fold along the guides, and slide sheet 2 into sheet 1. The last page of the PDF shows every fold.")),
-                para(link("Download the mini photobook (PDF)", pdfUrl)),
-                para(text(`Made yours? Scan the code on the back, post your book and tag @${meta.instagram} with ${meta.hashtags.join(" ")}.`)),
-                para(link("Share your book", meta.shareUrl)),
-              ],
-            },
-          },
-          authRequirement: "PUBLIC",
-        },
-      ],
-      meta: {
-        title: `${meta.gpName} ${meta.year} Photobook | Audi Revolut F1® Team`,
-        description: `Print and fold your own mini photobook of the ${meta.gpName} ${meta.year}: thirteen moments from the Audi Revolut F1® Team weekend.`,
-        image: coverDoc.id,
-      },
+    let assets: ZineAssets | null = null;
+    try {
+      assets = await ensureZineAssets(req.nextUrl.origin);
+      steps.push("how-to media ready");
+    } catch (e) {
+      steps.push(`how-to media missing (${e instanceof Error ? e.message.slice(0, 80) : "error"}), page built without them`);
+    }
+    const zm: ZineMeta = { slug: meta.slug, gpName: meta.gpName, city: meta.city, loc: meta.loc || meta.slug.split("-").pop()!.toUpperCase(), year: meta.year, dateLabel: meta.dateLabel, hashtags: meta.hashtags, instagram: meta.instagram };
+    const page = await upsertDraftPage(zinePageSlug(zm), {
+      title: zinePageTitle(zm),
+      authRequirement: "PUBLIC",
+      sections: buildZineSections(zm, assets, { coverMedia: coverDoc.id, pdfUrl, pageUrl: `https://www.audif1.com/en/${zinePageSlug(zm)}` }),
+      meta: buildZineMeta(zm, coverDoc.id),
     });
     steps.push(page.created ? "draft page created" : "draft page updated");
     console.log(`[photobook] ${session.user.email} published draft page ${page.id} for ${meta.slug}`);

@@ -13,7 +13,7 @@ import MorphIcon, { MORPH_PRESETS } from "./MorphIcon";
 export const TOOLS: { href: string; key: string; name: string; status: "working" | "staging" | "planned" | "external"; external?: boolean; text: string }[] = [
   { href: "/seo", key: "/seo", name: "SEO Studio", status: "staging", text: "Meta titles + descriptions, EN/DE" },
   { href: "/assets", key: "/assets", name: "Asset Uploader", status: "working", text: "Compress, name, alt text, upload" },
-  { href: "/photobook", key: "/photobook", name: "Photobook", status: "staging", text: "GP mini book to print + fan page" },
+  { href: "/photobook", key: "/photobook", name: "GP Mini-Zine", status: "staging", text: "GP zine to print, fold and colour in + fan page" },
   { href: "/images", key: "/images", name: "CRM Images", status: "planned", text: "Email template image variants" },
   { href: "https://af1-utm-studio.vercel.app/", key: "/utm", name: "UTM Studio", status: "external", external: true, text: "Campaign links (own app)" },
 ];

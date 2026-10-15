@@ -14,7 +14,7 @@ const GRAPHITE = "#2B2929";
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const p = await readSharePage(params.slug);
-  return { title: p ? `Share your ${p.city} photobook | Audi Revolut F1® Team` : "Photobook | Audi Revolut F1® Team" };
+  return { title: p ? `Share your ${p.city} GP Mini-Zine | Audi Revolut F1® Team` : "GP Mini-Zine | Audi Revolut F1® Team" };
 }
 
 export default async function SharePage({ params }: { params: { slug: string } }) {
@@ -31,7 +31,7 @@ export default async function SharePage({ params }: { params: { slug: string } }
         <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px 44px", display: "grid", gap: 18 }}>
           <div style={{ width: 48, height: 5, background: LAVA }} />
           <div style={{ fontSize: 13, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.75 }}>
-            {p.gpName} {p.year} · Photobook
+            {p.gpName} {p.year} · GP Mini-Zine
           </div>
           <h1 style={{ margin: 0, fontSize: "clamp(38px, 9vw, 64px)", lineHeight: 1, fontWeight: 800, letterSpacing: "-0.01em" }}>Share your book.</h1>
           <p style={{ margin: 0, fontSize: 18, lineHeight: 1.5, opacity: 0.85, maxWidth: 520 }}>
@@ -40,7 +40,7 @@ export default async function SharePage({ params }: { params: { slug: string } }
         </div>
         {p.coverUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.coverUrl} alt={`Cover of the ${p.gpName} ${p.year} mini photobook`} style={{ display: "block", width: "100%", maxHeight: 420, objectFit: "cover" }} />
+          <img src={p.coverUrl} alt={`Cover of the ${p.gpName} ${p.year} GP Mini-Zine`} style={{ display: "block", width: "100%", maxHeight: 420, objectFit: "cover" }} />
         )}
       </div>
 

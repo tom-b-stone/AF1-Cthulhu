@@ -36,7 +36,7 @@ const SIDEBARS: Record<string, Section[]> = {
   ],
   "/photobook": [
     {
-      title: "Photobook",
+      title: "GP Mini-Zine",
       entries: [
         { href: "/photobook", label: "All photobooks", exact: true },
         { href: "https://slashlens.netlify.app/", label: "SlashLens", note: "↗" },

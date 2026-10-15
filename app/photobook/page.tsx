@@ -43,8 +43,8 @@ export default function PhotobookList() {
     <div style={{ maxWidth: 960 }}>
       <section className="page-head reveal">
         <div>
-          <div className="section-label" style={{ marginBottom: 8 }}>Photobook · prototype</div>
-          <h1>Grand Prix mini photobook</h1>
+          <div className="section-label" style={{ marginBottom: 8 }}>GP Mini-Zine · prototype</div>
+          <h1>GP Mini-Zine</h1>
           <p>
             The SlashLens selection of a Grand Prix becomes a printable 16-page mini book (two A4 sheets, one cut each, no glue) with a QR
             code on the back, plus a fan page on the staging CMS to download it.
@@ -61,7 +61,7 @@ export default function PhotobookList() {
         {books?.map((b) => (
           <Link key={b.id} href={`/photobook/${b.id}`} className="card reveal" style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", textDecoration: "none", color: "inherit" }}>
             <span>
-              <strong style={{ fontFamily: "var(--font-heading)" }}>{b.gpName || "Untitled photobook"}</strong>
+              <strong style={{ fontFamily: "var(--font-heading)" }}>{b.gpName || "Untitled zine"}</strong>
               <span style={{ color: "var(--muted)", fontSize: 12, marginLeft: 10 }}>
                 {b.photos.length} photos{b.stagingPageUrl ? " · page on staging" : ""}
               </span>

@@ -33,7 +33,7 @@ const TILES: { title: string; href: string; key: string; external?: boolean; sta
     text: "Drop photos, compress, name, alt text, upload to the right CMS folder.",
   },
   {
-    title: "Photobook",
+    title: "GP Mini-Zine",
     href: "/photobook",
     key: "/photobook",
     status: "staging",

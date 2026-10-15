@@ -172,7 +172,7 @@ export default function PhotobookEditor() {
       form.append("cover", cover, "cover.webp");
       form.append(
         "meta",
-        JSON.stringify({ slug: book.slug, gpName: book.gpName, city: book.city, year: book.year, dateLabel: book.dateLabel, hashtags: book.hashtags, instagram: book.instagram, shareUrl: shareUrl(origin, book) })
+        JSON.stringify({ slug: book.slug, gpName: book.gpName, city: book.city, loc: book.loc, year: book.year, dateLabel: book.dateLabel, hashtags: book.hashtags, instagram: book.instagram, shareUrl: shareUrl(origin, book) })
       );
       const res = await fetch("/api/photobook/publish", { method: "POST", body: form });
       const j = await res.json().catch(() => ({}));
@@ -200,14 +200,14 @@ export default function PhotobookEditor() {
   const pages = useMemo(() => (book ? Array.from({ length: BOOK_PAGES }, (_, i) => ({ n: i + 1, c: pageContent(book, i + 1) })) : []), [book]);
 
   if (book === undefined) return <p style={{ color: "var(--muted)" }}>Loading…</p>;
-  if (book === null) return <p>Photobook not found in this browser.</p>;
+  if (book === null) return <p>GP Mini-Zine not found in this browser.</p>;
 
   return (
     <div style={{ maxWidth: 1080 }}>
       <section className="page-head reveal">
         <div>
-          <div className="section-label" style={{ marginBottom: 8 }}>Photobook · prototype</div>
-          <h1>{book.gpName ? `${book.gpName} ${book.year}` : "New photobook"}</h1>
+          <div className="section-label" style={{ marginBottom: 8 }}>GP Mini-Zine · prototype</div>
+          <h1>{book.gpName ? `${book.gpName} ${book.year}` : "New GP Mini-Zine"}</h1>
           <p>16 pages on two A4 sheets: cover, intro, {INSIDE_PHOTOS} photos, back with QR code to the share page.</p>
         </div>
         <button
@@ -360,7 +360,7 @@ export default function PhotobookEditor() {
                   <button key={n} onClick={() => void previewPage(n)} style={{ padding: 0, border: "1px solid var(--border)", borderRadius: 6, background: c.kind === "back" ? "#E33E1A" : c.kind === "intro" ? "#2B2929" : "#F5F2F2", aspectRatio: "74 / 105", position: "relative", overflow: "hidden", cursor: "pointer" }}>
                     {pid && thumbs[pid] && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbs[pid]} alt="" style={{ position: "absolute", inset: c.kind === "cover" ? 0 : "6% 6% 14% 6%", width: c.kind === "cover" ? "100%" : "88%", height: c.kind === "cover" ? "100%" : "80%", objectFit: "cover" }} />
+                      <img src={thumbs[pid]} alt="" style={{ position: "absolute", inset: c.kind === "cover" ? 0 : "6% 6% 14% 6%", width: c.kind === "cover" ? "100%" : "88%", height: c.kind === "cover" ? "100%" : "80%", objectFit: "cover", ...(c.kind === "cover" && (book.coverStyle ?? "outline") === "outline" ? { filter: "grayscale(1) contrast(3) brightness(1.6)", opacity: 0.5 } : {}) }} />
                     )}
                     <span style={{ position: "absolute", left: 4, bottom: 2, fontSize: 10, fontWeight: 800, color: c.kind === "photo" ? "#E33E1A" : "#F5F2F2", textShadow: c.kind === "cover" ? "0 1px 3px #000" : "none" }}>
                       {c.kind === "cover" ? "Cover" : c.kind === "intro" ? "Intro" : c.kind === "back" ? "QR" : String(n).padStart(2, "0")}
@@ -371,6 +371,23 @@ export default function PhotobookEditor() {
             </div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
               Print layout: {SHEETS.map((s) => `${s.name}: pages ${s.bookPages.join(", ")}`).join(" · ")}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <span className="section-label">Cover</span>
+              {([
+                ["outline", "Line drawing to colour in"],
+                ["photo", "Full photo"],
+              ] as const).map(([v, label]) => (
+                <button key={v} className={`btn ${(book.coverStyle ?? "outline") === v ? "btn-primary" : ""}`} style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => void save({ ...book, coverStyle: v })}>
+                  {label}
+                </button>
+              ))}
+              <button className="btn" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => void previewPage(1)}>
+                Preview cover
+              </button>
+              {(book.coverStyle ?? "outline") === "outline" && (
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>Clear shapes work best: a helmet, a driver portrait, a car side-on. Busy crowd shots get messy.</span>
+              )}
             </div>
           </div>
 
@@ -442,7 +459,7 @@ export default function PhotobookEditor() {
               {building ? `Rendering page ${building.done}/${building.total}…` : pdf ? "Rebuild PDF" : "Build PDF"}
             </button>
             {pdf && (
-              <a className="btn" href={pdf.url} download={`${book.slug || "photobook"}_photobook.pdf`}>
+              <a className="btn" href={pdf.url} download={`${book.slug || "zine"}_gp-mini-zine.pdf`}>
                 Download ({(pdf.size / 1024 / 1024).toFixed(1)} MB)
               </a>
             )}
@@ -461,8 +478,8 @@ export default function PhotobookEditor() {
           <div className="card" style={{ padding: 16, display: "grid", gap: 10, alignContent: "start" }}>
             <div className="section-label">Fan page on staging (draft)</div>
             <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
-              Uploads the cover and the PDF to the staging media library (folder &quot;Photobook&quot;) and creates a draft page <code>photobook-{book.slug}</code> with a hero and a
-              download block. An editor reviews and publishes it in the CMS.
+              Uploads the cover and the PDF to the staging media library (folder &quot;GP Mini-Zine&quot;) and creates a draft page <code>gp-mini-zine-{book.slug}</code>: hero, animation
+              teaser, colour-in teaser, how-to carousel with illustrations, download + Team Card block and share buttons. An editor reviews and publishes it in the CMS.
             </div>
             {!pdf && <div style={{ fontSize: 12, color: "#e9c46a" }}>Build the PDF first (step 3).</div>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
