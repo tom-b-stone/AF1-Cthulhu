@@ -27,6 +27,18 @@ type Race = { round: number; label: string; country: string; city: string; start
 
 const STEPS = ["Grand Prix & photos", "Arrange", "Print file", "Microsite"];
 
+// Official race names ("Japanese Grand Prix", not "Suzuka Grand Prix").
+const GP_BY_CITY: Record<string, string> = {
+  Melbourne: "Australian", Shanghai: "Chinese", Suzuka: "Japanese", Miami: "Miami", "Montréal": "Canadian", Montreal: "Canadian",
+  Jeddah: "Saudi Arabian", "Monte Carlo": "Monaco", Barcelona: "Barcelona-Catalunya", Madrid: "Spanish", Spielberg: "Austrian",
+  Silverstone: "British", Spa: "Belgian", Budapest: "Hungarian", Zandvoort: "Dutch", Monza: "Italian", Baku: "Azerbaijan",
+  "Kuala Lumpur": "Malaysian", "Marina Bay": "Singapore", Singapore: "Singapore", Austin: "United States", "Mexico City": "Mexico City",
+  "São Paulo": "São Paulo", "Las Vegas": "Las Vegas", Doha: "Qatar", Lusail: "Qatar", "Abu Dhabi": "Abu Dhabi", Sakhir: "Bahrain",
+};
+function gpTitle(r: { city: string; country: string }) {
+  return GP_BY_CITY[r.city] ?? (r.city === r.country || !r.city ? r.country : r.city);
+}
+
 function dateLabel(start?: string, end?: string): string {
   if (!start) return "";
   const s = new Date(start);
@@ -83,7 +95,7 @@ export default function PhotobookEditor() {
   // ---- step 1: race + photos -------------------------------------------
   function pickRace(r: Race) {
     if (!book) return;
-    const gpName = `${r.city === r.country || !r.city ? r.country : r.city} Grand Prix`;
+    const gpName = `${gpTitle(r)} Grand Prix`;
     void save({
       ...book,
       round: r.round,
@@ -93,7 +105,7 @@ export default function PhotobookEditor() {
       year: r.year,
       dateLabel: dateLabel(r.start, r.end),
       slug: slugFor(r.year, r.loc),
-      hashtags: ["#ARF1", gpHashtag(r.city || r.country)],
+      hashtags: ["#ARF1", gpHashtag(gpTitle(r))],
     });
   }
 
