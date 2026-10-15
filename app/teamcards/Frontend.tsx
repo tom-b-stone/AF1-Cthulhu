@@ -258,3 +258,98 @@ export function RewardView({ rewardType }: { rewardType?: string }) {
     </div>
   );
 }
+
+// ---- card popup, as in the final designs (AF1_External_Board, 261001_AF1_Badges:
+// Overlay/Badge Default · Congrats · Earned, front and back) ---------------
+export function Phone({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <div style={{ display: "grid", gap: 6, justifyItems: "center" }}>
+      <div style={{ width: 340, minHeight: 660, background: AF.graphite, borderRadius: 28, padding: "22px 22px 26px", position: "relative", color: AF.chalk, fontFamily: "var(--font-heading)", boxShadow: "0 12px 40px rgba(0,0,0,.35)", display: "flex", flexDirection: "column" }}>
+        <span style={{ position: "absolute", right: 20, top: 20, width: 28, height: 28, borderRadius: 99, border: `1px solid ${AF.chalk}`, fontSize: 13, lineHeight: "26px", textAlign: "center" }}>✕</span>
+        {children}
+      </div>
+      <div style={{ fontSize: 11, color: "#b3afaf" }}>{label}</div>
+    </div>
+  );
+}
+
+const Dots = ({ i }: { i: 0 | 1 }) => (
+  <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
+    {[0, 1].map((n) => (
+      <span key={n} style={{ width: 7, height: 7, borderRadius: 9, background: n === i ? "#fff" : "#6b6767" }} />
+    ))}
+  </div>
+);
+
+const BigBtn = ({ children }: { children: ReactNode }) => (
+  <div style={{ marginTop: 18, background: "#FF3B13", color: "#fff", borderRadius: 999, padding: "13px 18px", textAlign: "center", fontSize: 16 }}>{children}</div>
+);
+
+export function CardFront({ c, title, text, button, buttonText, label, dim = false }: { c: EditCtx; title: string; text: string; button?: string; buttonText?: string; label: string; dim?: boolean }) {
+  return (
+    <Phone label={label}>
+      <div style={{ marginTop: 44, display: "flex", justifyContent: "center" }}>
+        <CardImg src={c.imageUrl} w={260} back={dim} />
+      </div>
+      <div style={{ flex: 1 }} />
+      <E c={c} k={title} ph="Title" style={{ fontSize: 24, lineHeight: "32px", textAlign: "center", marginTop: 22 }} />
+      <E c={c} k={text} ph="Text" style={{ fontSize: 14, lineHeight: "22px", textAlign: "center", marginTop: 8, color: "#e9e6e6" }} />
+      <BigBtn>{button ? <E c={c} k={button} ph="Button" block={false} /> : buttonText}</BigBtn>
+      <Dots i={0} />
+    </Phone>
+  );
+}
+
+export function CardBack({ c, text, button, buttonText, label, typeLabel, race }: { c: EditCtx; text: string; button?: string; buttonText?: string; label: string; typeLabel?: string; race?: string }) {
+  const de = c.lang === "de";
+  const cell = (h: string, v: string) => (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 12, letterSpacing: "0.04em", color: AF.light }}>{h}</div>
+      <div style={{ fontSize: 14, marginTop: 4, minHeight: 18 }}>{v}</div>
+    </div>
+  );
+  return (
+    <Phone label={label}>
+      <div style={{ marginTop: 44, background: "#3D3A3A", borderRadius: 14, padding: "18px 14px 26px" }}>
+        <div style={{ textAlign: "center", fontSize: 19 }}>{de ? "Team Card Details" : "Team Card Details"}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+          {cell(de ? "TYP" : "CARD TYPE", typeLabel ?? "")}
+          {cell(de ? "RENNEN" : "RACE", race ?? "")}
+          {cell(de ? "EINGELÖST" : "REDEEMED", "")}
+          {cell(de ? "GESAMMELT AM" : "DATE EARNED", "")}
+        </div>
+      </div>
+      <div style={{ flex: 1 }} />
+      <E c={c} k={text} ph="Text" style={{ fontSize: 14, lineHeight: "22px", textAlign: "center", color: "#e9e6e6" }} />
+      <BigBtn>{button ? <E c={c} k={button} ph="Button" block={false} /> : buttonText}</BigBtn>
+      <Dots i={1} />
+    </Phone>
+  );
+}
+
+// trophy shelf in the profile (chalk page, graphite panel, 2-column grid)
+export function ShelfView({ c, earned }: { c: EditCtx; earned: boolean }) {
+  const de = c.lang === "de";
+  const tile = (img: ReactNode, name: ReactNode, mark: "check" | "plus") => (
+    <div>
+      <div style={{ borderRadius: 8, overflow: "hidden", background: "#3D3A3A", aspectRatio: "300/374" }}>{img}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginTop: 6, fontSize: 14 }}>
+        <div style={{ flex: 1 }}>{name}</div>
+        <span style={{ width: 18, height: 18, borderRadius: 99, flexShrink: 0, background: mark === "check" ? "#FF3B13" : "transparent", border: mark === "check" ? "none" : "1px solid #FF3B13", color: mark === "check" ? "#fff" : "#FF3B13", fontSize: 11, lineHeight: "18px", textAlign: "center" }}>{mark === "check" ? "✓" : "+"}</span>
+      </div>
+    </div>
+  );
+  // eslint-disable-next-line @next/next/no-img-element
+  const mine = <img src={earned ? c.imageUrl : BACKSIDE} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: earned ? undefined : "grayscale(1) blur(2px) opacity(.7)" }} />;
+  return (
+    <div style={{ background: AF.chalk, padding: "32px 24px", fontFamily: "var(--font-heading)", color: AF.graphite, borderRadius: 14, maxWidth: 420, margin: "0 auto" }}>
+      <div style={{ color: "#FF3B13", fontSize: 14 }}>{de ? "Sammle die Team Cards" : "Collect the Team Cards"}</div>
+      <div style={{ fontSize: 26, lineHeight: "34px", marginTop: 8 }}>{de ? "Deine Team Card Collection" : "Your Team Card collection"}</div>
+      <div style={{ background: AF.graphite, borderRadius: 18, padding: 16, marginTop: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, color: AF.chalk }}>
+        {tile(mine, <E c={c} k="publicTitle" ph="Card title" />, earned ? "check" : "plus")}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {tile(<img src={BACKSIDE} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />, <span style={{ opacity: 0.6 }}>{de ? "Nächste Team Card" : "Next Team Card"}</span>, "plus")}
+      </div>
+    </div>
+  );
+}

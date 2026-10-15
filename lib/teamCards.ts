@@ -21,6 +21,8 @@ export type CardRecord = {
   staging: { badgeId: string; engagementId?: string; pageId?: string; blockId?: string };
   imageUrl?: string; // card artwork for the previews (public file)
   engagementImageUrl?: string; // engagement background, for the previews
+  badgeTypeLabel?: string; // shown on the card's back ("Badge Details")
+  raceLabel?: string;
   mechanic?: string; // q-and-a, survey, hot-or-not, page, link
   rewardType?: string; // noReward, raffleSignup, couponCode
   placement?: string; // where the module sits, in words
@@ -41,6 +43,8 @@ const SEED: Omit<CardRecord, "values" | "updatedAt" | "log">[] = [
     imageUrl: "https://www.audif1.com/cms/api/media/file/AF1_Exclusive_Card_Monaco26_HUL_Nuvolari_Helmet-1400x1747.webp",
     engagementImageUrl: "https://www.audif1.com/cms/api/media/file/audif1_2026_MCO_qualifying_gallery_18-1441x2161.webp",
     mechanic: "q-and-a",
+    badgeTypeLabel: "Exclusive",
+    raceLabel: "Monaco",
     rewardType: "noReward",
     placement: "Production: Monaco race page, under the first widget set. Staging: end of the Badge Teaser Test Page.",
   },

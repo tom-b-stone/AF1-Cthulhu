@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FIELDS, STEPS, fieldIssues, type FieldDef, type Loc, type LocValue } from "@/lib/teamCardFields";
-import { CollectedView, CollectionView, EngagementView, ModuleView, OverlayView, PostView, RevealView, RewardView, ShareView, WysStyles, type EditCtx } from "../Frontend";
+import { CardBack, CardFront, EngagementView, ModuleView, OverlayView, PostView, RewardView, ShareView, ShelfView, WysStyles, type EditCtx } from "../Frontend";
 
 type Values = Record<string, LocValue | string | boolean | undefined>;
 type Card = {
@@ -19,6 +19,8 @@ type Card = {
   rewardType?: string;
   imageUrl?: string;
   engagementImageUrl?: string;
+  badgeTypeLabel?: string;
+  raceLabel?: string;
   values: Values;
   links: { badge: string; engagement?: string; page?: string };
   log: { at: string; by: string; summary: string }[];
@@ -47,11 +49,12 @@ const VIEWS: Record<Step, { key: string; label: string }[]> = {
     { key: "post", label: "Answered, logged in" },
     { key: "share", label: "Shared" },
   ],
-  Reveal: [{ key: "reveal", label: "Reveal popup" }],
-  Collected: [{ key: "collected", label: "Collected popup" }],
+  Reveal: [{ key: "reveal", label: "Card popup, not logged in" }],
+  Collected: [{ key: "collected", label: "Card popup, collected" }],
   Collection: [
     { key: "unearned", label: "Not collected yet" },
     { key: "earned", label: "Collected" },
+    { key: "shelf", label: "In the collection" },
   ],
   Reward: [{ key: "reward", label: "Reward" }],
   Settings: [],
@@ -167,10 +170,36 @@ export default function EditCard() {
     overlay: <OverlayView c={ctx} />,
     post: <PostView c={ctx} />,
     share: <ShareView c={ctx} />,
-    reveal: <RevealView c={ctx} />,
-    collected: <CollectedView c={ctx} />,
-    unearned: <CollectionView c={ctx} earned={false} />,
-    earned: <CollectionView c={ctx} earned />,
+    reveal: (
+      <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", padding: "28px 12px", background: "#1f1d1d" }}>
+        <CardFront c={ctx} title="revealTitle" text="revealDescription" button="revealButton" label="Front · right after the task" />
+        <CardBack c={ctx} text="rewardTeaser" button="revealButton" label="Back · swipe" typeLabel={card.badgeTypeLabel} race={card.raceLabel} />
+      </div>
+    ),
+    collected: (
+      <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", padding: "28px 12px", background: "#1f1d1d" }}>
+        <CardFront c={ctx} title="badgePopupTitle" text="rewardDescription" buttonText={lang === "de" ? "Zur Collection" : "Go to Trophy Cabinet"} label="Front · after logging in" />
+        <CardBack c={ctx} text="description" buttonText={lang === "de" ? "Zur Collection" : "Go to Trophy Cabinet"} label="Back · swipe" typeLabel={card.badgeTypeLabel} race={card.raceLabel} />
+      </div>
+    ),
+    unearned: (
+      <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", padding: "28px 12px", background: "#1f1d1d" }}>
+        <CardFront c={ctx} title="publicTitle" text="rewardTeaser" button="ctaLabel" label="Front · opened from the collection" />
+        <CardBack c={ctx} text="description" button="ctaLabel" label="Back · swipe" typeLabel={card.badgeTypeLabel} race={card.raceLabel} />
+      </div>
+    ),
+    earned: (
+      <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", padding: "28px 12px", background: "#1f1d1d" }}>
+        <CardFront c={ctx} title="publicTitle" text="description" buttonText={lang === "de" ? "Alle Team Cards ansehen" : "Check out all Team Cards"} label="Front · already collected" />
+        <CardBack c={ctx} text="rewardDescription" buttonText={lang === "de" ? "Alle Team Cards ansehen" : "Check out all Team Cards"} label="Back · swipe" typeLabel={card.badgeTypeLabel} race={card.raceLabel} />
+      </div>
+    ),
+    shelf: (
+      <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", padding: 24, background: "#e9e6e6" }}>
+        <ShelfView c={ctx} earned={false} />
+        <ShelfView c={ctx} earned />
+      </div>
+    ),
     reward: <RewardView rewardType={card.rewardType} />,
   };
 
@@ -253,7 +282,7 @@ export default function EditCard() {
           </div>
           <div className="af-frame">{screen[view]}</div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>
-            Recreated from audif1.com. Click a text to edit it; a red wavy line means a rule issue (hover for the reason).
+            Module and engagement recreated from audif1.com, card popups and collection from the final Figma designs (261001_AF1_Badges). Click a text to edit it; a red wavy line means a rule issue (hover for the reason).
             {focusField && (
               <>
                 {" "}
