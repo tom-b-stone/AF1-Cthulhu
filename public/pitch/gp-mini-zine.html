@@ -60,8 +60,8 @@
   img.pg { position:absolute; box-shadow:0 26px 60px rgba(0,0,0,.45); border-radius:4px; }
   figure.ph.vid { background:#000; }
   figure.ph iframe { position:absolute; inset:-1px; width:calc(100% + 2px); height:calc(100% + 2px); border:0; pointer-events:none; }
-  .stage3d { position:absolute; left:-110px; right:-30px; top:70px; bottom:-60px; perspective:2200px; display:grid; place-items:center; }
-  .book3d { --w:400px; --h:566px; --t:14s; position:relative; width:calc(var(--w) * 2); height:var(--h); transform-style:preserve-3d; transform:rotateX(38deg) rotateZ(-8deg) translateY(-10px); }
+  .stage3d { position:absolute; left:20px; right:60px; top:40px; bottom:180px; perspective:2200px; display:grid; place-items:center; }
+  .book3d { --w:340px; --h:481px; --t:14s; position:relative; width:calc(var(--w) * 2); height:var(--h); transform-style:preserve-3d; transform:rotateX(38deg) rotateZ(-8deg) translateY(-10px); }
   .pg3 { position:absolute; top:0; width:var(--w); height:var(--h); background:#F5F2F2 center/cover; box-shadow:0 40px 70px rgba(0,0,0,.55); }
   .base-l { left:0; background:#ECE8E8; }
   .base-r { left:var(--w); }
@@ -70,6 +70,9 @@
   .face { position:absolute; inset:0; background:#F5F2F2 center/cover; backface-visibility:hidden; }
   .face.front { box-shadow:inset 8px 0 14px -10px rgba(0,0,0,.4); }
   .face.back { transform:rotateY(180deg); box-shadow:inset -8px 0 14px -10px rgba(0,0,0,.4); }
+  figure.handmade { position:absolute; right:-40px; bottom:-30px; width:360px; margin:0; z-index:5; transform:rotate(4deg); background:#fff; padding:14px 14px 46px; box-shadow:0 30px 70px rgba(0,0,0,.6); }
+  figure.handmade img { width:100%; display:block; }
+  figure.handmade figcaption { position:absolute; left:16px; bottom:12px; font-size:17px; color:#2B2929; font-weight:600; }
   .ex { font-size:19px; line-height:1.4; opacity:.9; border-left:4px solid var(--lava); padding-left:16px; }
   .ex b { color:#fff; }
 </style>
@@ -137,6 +140,7 @@
       </div>
       <div style="position:relative">
         <div class="eyebrow" style="position:absolute;left:0;top:0">Our zine, prototype</div>
+        <figure class="handmade"><img src="/pitch/img/cover-handmade.jpg" alt="A fan's coloured-in GP Mini-Zine on a desk" /><figcaption>A fan's copy, coloured in (AI visual)</figcaption></figure>
         <div class="stage3d">
           <div class="book3d">
             <div class="pg3 base-l"></div>
