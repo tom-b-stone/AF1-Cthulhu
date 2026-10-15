@@ -16,21 +16,22 @@ export type FieldDef = {
   help?: string;
 };
 
-export const STEPS = ["Card", "Logged-out reveal", "Reward and CTA", "Engagement", "Module", "Settings"] as const;
+// in journey order: where the fan meets the card → task → reveal → collected → collection → reward
+export const STEPS = ["Module", "Engagement", "Reveal", "Collected", "Collection", "Reward", "Settings"] as const;
 
 export const FIELDS: FieldDef[] = [
-  { key: "publicTitle", label: "Public title", step: "Card", doc: "badge", path: ["publicTitle"], localized: true, kind: "text", help: "Name of the card in the collection" },
-  { key: "description", label: "Card description", step: "Card", doc: "badge", path: ["description"], localized: true, kind: "textarea", help: "One line, does not repeat the title" },
-  { key: "badgePopupTitle", label: "Popup title", step: "Card", doc: "badge", path: ["badgePopupTitle"], localized: true, kind: "text", maxWords: 6 },
-  { key: "revealTitle", label: "Reveal title", step: "Logged-out reveal", doc: "badge", path: ["loggedOutRevealTitle"], localized: true, kind: "text" },
-  { key: "revealDescription", label: "Reveal description", step: "Logged-out reveal", doc: "badge", path: ["loggedOutRevealDescription"], localized: true, kind: "textarea" },
-  { key: "revealButton", label: "Reveal button label", step: "Logged-out reveal", doc: "badge", path: ["loggedOutRevealButtonLabel"], localized: true, kind: "text" },
-  { key: "rewardDescription", label: "Reward description", step: "Reward and CTA", doc: "badge", path: ["rewardDescription"], localized: true, kind: "textarea", maxWords: 20, help: "Shown once the card is collected" },
-  { key: "rewardTeaser", label: "Reward teaser", step: "Reward and CTA", doc: "badge", path: ["rewardTeaserDescription"], localized: true, kind: "textarea", maxWords: 20, help: "Shown in the collection while not earned" },
-  { key: "ctaLabel", label: "CTA label", step: "Reward and CTA", doc: "badge", path: ["unearnedBadgeCTA", 0, "label"], localized: true, kind: "text" },
-  { key: "ctaA11y", label: "CTA accessibility label", step: "Reward and CTA", doc: "badge", path: ["unearnedBadgeCTA", 0, "a11yLabel"], localized: true, kind: "text" },
-  { key: "ctaVariant", label: "CTA variant", step: "Reward and CTA", doc: "badge", path: ["unearnedBadgeCTA", 0, "appearance", "variant"], localized: false, kind: "select", options: ["primary", "secondary", "tertiary", "quaternary"] },
-  { key: "ctaSize", label: "CTA size", step: "Reward and CTA", doc: "badge", path: ["unearnedBadgeCTA", 0, "appearance", "size"], localized: false, kind: "select", options: ["sm", "md", "lg"] },
+  { key: "publicTitle", label: "Public title", step: "Collected", doc: "badge", path: ["publicTitle"], localized: true, kind: "text", help: "Name of the card in the collection" },
+  { key: "description", label: "Card description", step: "Collection", doc: "badge", path: ["description"], localized: true, kind: "textarea", help: "One line, does not repeat the title" },
+  { key: "badgePopupTitle", label: "Popup title", step: "Collected", doc: "badge", path: ["badgePopupTitle"], localized: true, kind: "text", maxWords: 6 },
+  { key: "revealTitle", label: "Reveal title", step: "Reveal", doc: "badge", path: ["loggedOutRevealTitle"], localized: true, kind: "text" },
+  { key: "revealDescription", label: "Reveal description", step: "Reveal", doc: "badge", path: ["loggedOutRevealDescription"], localized: true, kind: "textarea" },
+  { key: "revealButton", label: "Reveal button label", step: "Reveal", doc: "badge", path: ["loggedOutRevealButtonLabel"], localized: true, kind: "text" },
+  { key: "rewardDescription", label: "Reward description", step: "Collected", doc: "badge", path: ["rewardDescription"], localized: true, kind: "textarea", maxWords: 20, help: "Shown once the card is collected" },
+  { key: "rewardTeaser", label: "Reward teaser", step: "Collection", doc: "badge", path: ["rewardTeaserDescription"], localized: true, kind: "textarea", maxWords: 20, help: "Shown in the collection while not earned" },
+  { key: "ctaLabel", label: "CTA label", step: "Collection", doc: "badge", path: ["unearnedBadgeCTA", 0, "label"], localized: true, kind: "text" },
+  { key: "ctaA11y", label: "CTA accessibility label", step: "Collection", doc: "badge", path: ["unearnedBadgeCTA", 0, "a11yLabel"], localized: true, kind: "text" },
+  { key: "ctaVariant", label: "CTA variant", step: "Collection", doc: "badge", path: ["unearnedBadgeCTA", 0, "appearance", "variant"], localized: false, kind: "select", options: ["primary", "secondary", "tertiary", "quaternary"] },
+  { key: "ctaSize", label: "CTA size", step: "Collection", doc: "badge", path: ["unearnedBadgeCTA", 0, "appearance", "size"], localized: false, kind: "select", options: ["sm", "md", "lg"] },
   { key: "engTitle", label: "Engagement title (CMS)", step: "Engagement", doc: "engagement", path: ["title"], localized: true, kind: "text", help: "Name | TC-0xx" },
   { key: "question", label: "Question", step: "Engagement", doc: "engagement", path: ["questions", 0, "text"], localized: true, kind: "textarea" },
   { key: "overlayTitle", label: "Login overlay title", step: "Engagement", doc: "engagement", path: ["overlayTitle"], localized: true, kind: "text" },

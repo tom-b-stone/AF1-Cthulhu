@@ -20,6 +20,7 @@ export type CardRecord = {
   status: string; // tracker status: Briefed … Staging … Live
   staging: { badgeId: string; engagementId?: string; pageId?: string; blockId?: string };
   imageUrl?: string; // card artwork for the previews (public file)
+  engagementImageUrl?: string; // engagement background, for the previews
   mechanic?: string; // q-and-a, survey, hot-or-not, page, link
   rewardType?: string; // noReward, raffleSignup, couponCode
   placement?: string; // where the module sits, in words
@@ -37,7 +38,8 @@ const SEED: Omit<CardRecord, "values" | "updatedAt" | "log">[] = [
     name: "Nico's Nuvolari Helmet",
     status: "Staging",
     staging: { badgeId: "6ad0c51507a2e8280072e0e5", engagementId: "6ad0c38407a2e8280072df55", pageId: "6aa965d96840acd28673c7ff", blockId: "6ad0c5176f63cb0001129801" },
-    imageUrl: "https://www.audif1.com/cms/api/media/file/AF1_Exclusive_Card_Monaco26_HUL_Nuvolari_Helmet-300x374.webp",
+    imageUrl: "https://www.audif1.com/cms/api/media/file/AF1_Exclusive_Card_Monaco26_HUL_Nuvolari_Helmet-1400x1747.webp",
+    engagementImageUrl: "https://www.audif1.com/cms/api/media/file/audif1_2026_MCO_qualifying_gallery_18-1441x2161.webp",
     mechanic: "q-and-a",
     rewardType: "noReward",
     placement: "Production: Monaco race page, under the first widget set. Staging: end of the Badge Teaser Test Page.",
@@ -84,7 +86,8 @@ export async function loadFromStaging(rec: CardRecord): Promise<CardRecord> {
 
 export async function listCards(): Promise<CardRecord[]> {
   const raw = await kvGet(KEY).catch(() => null);
-  if (raw) return JSON.parse(raw) as CardRecord[];
+  // static facts from the seed (images, mechanic) win over stored ones
+  if (raw) return (JSON.parse(raw) as CardRecord[]).map((c) => ({ ...c, ...(SEED.find((s) => s.id === c.id) ?? {}), values: c.values, log: c.log, status: c.status }));
   const seeded: CardRecord[] = [];
   for (const s of SEED) {
     const base: CardRecord = { ...s, values: {}, updatedAt: new Date().toISOString(), log: [{ at: new Date().toISOString(), by: "setup", summary: "Imported from staging (rebuilt from production)" }] };

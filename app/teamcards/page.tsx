@@ -4,9 +4,10 @@
 // edit (/teamcards/[id]) and the helper (your Claude, via the connector).
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { teamCardClaudeUrl } from "@/lib/teamCardHandoff";
+import Replace from "./Replace";
 
 type Row = {
+  values: Record<string, unknown>;
   id: string;
   name: string;
   status: string;
@@ -25,35 +26,24 @@ const REWARD: Record<string, string> = { noReward: "No reward", raffleSignup: "R
 export default function Page() {
   const [cards, setCards] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [wish, setWish] = useState("");
 
-  useEffect(() => {
+  const load = () =>
     fetch("/api/teamcards")
       .then((r) => r.json())
       .then((j) => (j.cards ? setCards(j.cards) : setError(j.error ?? "Could not load the cards")))
       .catch(() => setError("Could not load the cards"));
+  useEffect(() => {
+    void load();
   }, []);
 
   return (
     <div style={{ display: "grid", gap: 24, maxWidth: 1100 }}>
       <div>
         <h1 style={{ margin: "0 0 6px" }}>Team Cards</h1>
-        <p style={{ color: "var(--muted)", margin: 0 }}>Every card with its texts, journey and staging links. Edit a card step by step, or ask the helper for questions and changes across cards.</p>
+        <p style={{ color: "var(--muted)", margin: 0 }}>Every card with its texts, journey and staging links. Open a card to edit it step by step in the real frontend views, or change wording on many cards at once with search and replace.</p>
       </div>
 
-      <section style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 16, display: "grid", gap: 10, background: "var(--surface)" }}>
-        <div style={{ fontWeight: 600 }}>Helper</div>
-        <div style={{ color: "var(--muted)", fontSize: 13 }}>
-          Ask a question or describe a change, for one card or many (&ldquo;in all Team Card modules, change the category to …&rdquo;). Your Claude asks back (which cards, English and German?), shows a before/after table, and only writes to staging after your OK.
-        </div>
-        <textarea className="input" rows={3} placeholder="e.g. Shorten every reward teaser to one sentence" value={wish} onChange={(e) => setWish(e.target.value)} />
-        <div>
-          <a className="btn btn-primary" href={teamCardClaudeUrl(undefined, wish.trim() || undefined)} target="_blank" rel="noreferrer">
-            Ask the helper ↗
-          </a>
-          <span style={{ color: "var(--muted)", fontSize: 12, marginLeft: 10 }}>Opens your Claude with the AF1 Tools connector.</span>
-        </div>
-      </section>
+
 
       {error && <div style={{ color: "#e06c5b" }}>{error}</div>}
       {!cards && !error && <div style={{ color: "var(--muted)" }}>Loading cards…</div>}
@@ -120,6 +110,7 @@ export default function Page() {
           </table>
         </div>
       )}
+      {cards && <Replace cards={cards as never} onApplied={() => void load()} />}
     </div>
   );
 }
