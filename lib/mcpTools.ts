@@ -17,6 +17,7 @@ import { readCorrections } from "./feedbackStore";
 import { learnPerson } from "./learnRun";
 import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
+import { copyTeamCard } from "./teamCardCopy";
 
 export type ToolResult = { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[]; isError?: boolean };
 
@@ -301,6 +302,30 @@ ${SEO_WRITE_RECIPE}`);
       } catch (e) {
         return text(e instanceof Error ? e.message : "failed", true);
       }
+    },
+  },
+  // ---- Team Card Configurator --------------------------------------------
+  {
+    name: "teamcard_copy_to_staging",
+    annotations: { title: "Copy a Team Card from production to staging", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description:
+      "Copies one live Team Card from production to the STAGING CMS: card images, loyalty tags, badge type, the engagement, the badge (hidden with isDraft unless keepDraft=false) and its badge-engagement-teaser block on the linked staging page (saved as a draft version, not published). Production is only read. Running it again updates the same staging documents.",
+    inputSchema: {
+      type: "object",
+      required: ["badgeId"],
+      properties: {
+        badgeId: { type: "string", description: "Production badge id or its CMS admin link" },
+        keepDraft: { type: "boolean", description: "Keep the staging card hidden (default true)" },
+        withPageBlock: { type: "boolean", description: "Place the teaser on its staging page as a draft (default true)" },
+      },
+    },
+    async run(args, actor) {
+      const id = String(args.badgeId ?? "").match(/[a-f0-9]{24}/)?.[0];
+      if (!id) return text("badgeId missing", true);
+      const r = await copyTeamCard({ badgeId: id, keepDraft: args.keepDraft as boolean | undefined, withPageBlock: args.withPageBlock as boolean | undefined });
+      console.log(`[connector] ${actor} copied team card ${id} to staging: ${r.ok}`);
+      const lines = r.steps.map((s) => `${s.ok ? "✓" : "✗"} ${s.step}${s.detail ? ` (${s.detail})` : ""}${s.link ? ` ${s.link}` : ""}`);
+      return text(`${r.ok ? "Done" : "Finished with issues"}\n${lines.join("\n")}`, !r.ok);
     },
   },
 ];
