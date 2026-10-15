@@ -21,8 +21,15 @@ export const authOptions: NextAuthOptions = {
       if (!isAllowedEmail(user.email)) return false;
       return true;
     },
-    async jwt({ token }) {
+    async jwt({ token, account }) {
       token.role = isAdminEmail(token.email as string | undefined) ? "admin" : "editor";
+      // Google Drive read access, only for users who connected it (GP Mini-Zine:
+      // photos straight from SlashLens/Drive). Stays server-side in the JWT.
+      if (account?.provider === "google" && account.scope?.includes("drive.readonly")) {
+        token.gAccess = account.access_token;
+        token.gExp = account.expires_at;
+        if (account.refresh_token) token.gRefresh = account.refresh_token;
+      }
       return token;
     },
     async session({ session, token }) {

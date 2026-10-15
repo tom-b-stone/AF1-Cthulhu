@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import JSZip from "jszip";
+import { signIn } from "next-auth/react";
 import Modal from "@/app/components/Modal";
 import { bookStore } from "@/lib/photobookStore";
 import { BOOK_PAGES, INSIDE_PHOTOS, SHEETS, gpHashtag, pageContent, shareUrl, slugFor, type Book, type BookPhoto } from "@/lib/photobook";
@@ -21,6 +22,7 @@ type SlResult = {
   inside?: SlPick[];
   collections?: { id: string; name: string; n: number }[];
 };
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 const baseName = (n: string) => n.replace(/\.[^.]+$/, "").toLowerCase();
 
 type Race = { round: number; label: string; country: string; city: string; start?: string; end?: string; loc: string; year: number };
@@ -64,7 +66,8 @@ export default function PhotobookEditor() {
   const [notice, setNotice] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [sl, setSl] = useState<SlResult | null>(null);
-  const [slBusy, setSlBusy] = useState<"" | "pick" | "save">("");
+  const [slBusy, setSlBusy] = useState<"" | "pick" | "save" | "import">("");
+  const [driveMissing, setDriveMissing] = useState(false);
   const [slOff, setSlOff] = useState<Set<string>>(new Set());
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -109,8 +112,9 @@ export default function PhotobookEditor() {
     });
   }
 
-  async function addFiles(list: FileList | File[]) {
-    if (!book) return;
+  async function addFiles(list: FileList | File[], base?: Book) {
+    const bk = base ?? book;
+    if (!bk) return;
     let files: File[] = Array.from(list);
     // a SlashLens collection download arrives as a ZIP: unpack the images
     const zips = files.filter((f) => /\.zip$/i.test(f.name));
@@ -122,7 +126,7 @@ export default function PhotobookEditor() {
     files = files.filter((f) => !/\.zip$/i.test(f.name) && (/^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|tiff?)$/i.test(f.name)));
     if (!files.length) return;
     setImporting({ done: 0, total: files.length });
-    const photos: BookPhoto[] = [...book.photos];
+    const photos: BookPhoto[] = [...bk.photos];
     const t = { ...thumbs };
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
@@ -130,7 +134,7 @@ export default function PhotobookEditor() {
         // 2400 px long edge: enough for 300 dpi on a 74 × 105 mm page with room to crop
         const c = await compressImage(f, 2400, 0.86);
         const id = newId();
-        await bookStore.putPhoto(book.id, id, c.blob);
+        await bookStore.putPhoto(bk.id, id, c.blob);
         photos.push({ id, name: f.name, width: c.width, height: c.height });
         t[id] = await thumbnail(c.blob, 200);
       } catch {
@@ -140,17 +144,17 @@ export default function PhotobookEditor() {
     }
     setThumbs(t);
     // first import: cover = first landscape-free (portrait) shot, inside = the rest in order
-    let coverId = book.coverId ?? (photos.find((p) => p.height >= p.width) ?? photos[0])?.id;
-    let order = book.order.length ? book.order : photos.filter((p) => p.id !== coverId).slice(0, INSIDE_PHOTOS).map((p) => p.id);
+    let coverId = bk.coverId ?? (photos.find((p) => p.height >= p.width) ?? photos[0])?.id;
+    let order = bk.order.length ? bk.order : photos.filter((p) => p.id !== coverId).slice(0, INSIDE_PHOTOS).map((p) => p.id);
     // photos from a SlashLens pick: cover and reading order as picked
-    if (book.pick && !book.order.length) {
+    if (bk.pick && !bk.order.length) {
       const byName = new Map(photos.map((p) => [baseName(p.name), p.id]));
-      const cov = book.pick.coverName ? byName.get(baseName(book.pick.coverName)) : undefined;
+      const cov = bk.pick.coverName ? byName.get(baseName(bk.pick.coverName)) : undefined;
       if (cov) coverId = cov;
-      const picked = book.pick.names.map((n) => byName.get(baseName(n))).filter((x): x is string => !!x && x !== coverId);
+      const picked = bk.pick.names.map((n) => byName.get(baseName(n))).filter((x): x is string => !!x && x !== coverId);
       if (picked.length) order = picked.slice(0, INSIDE_PHOTOS);
     }
-    await save({ ...book, photos, coverId, order });
+    await save({ ...bk, photos, coverId, order });
     setImporting(null);
   }
 
@@ -170,6 +174,38 @@ export default function PhotobookEditor() {
       setSlBusy("");
     }
   }
+  async function slashlensImport() {
+    if (!book || !sl?.weekend) return;
+    const chosen = slChosen(sl);
+    const coverName = sl.cover && !slOff.has(sl.cover.id) ? sl.cover.name : undefined;
+    const next: Book = { ...book, order: [], source: `SlashLens › ${sl.weekend.replace(/_/g, " ")} › ${sl.source?.type === "collection" ? sl.source.name : "auto-select"}`, pick: { weekend: sl.weekend, coverName, names: chosen.map((p) => p.name) } };
+    await save(next);
+    setSlBusy("import");
+    setImporting({ done: 0, total: chosen.length });
+    const files: File[] = [];
+    try {
+      for (let i = 0; i < chosen.length; i++) {
+        const p = chosen[i];
+        if (next.photos.some((x) => x.name === p.name)) continue;
+        const res = await fetch(`/api/zine/slashlens/photo?id=${encodeURIComponent(p.id)}`);
+        if (res.status === 401) {
+          setDriveMissing(true);
+          throw new Error("Connect Google Drive first (button below), then import again.");
+        }
+        if (!res.ok) throw new Error(`${p.name}: ${(await res.json().catch(() => ({}))).error ?? res.status}`);
+        files.push(new File([await res.blob()], p.name, { type: "image/jpeg" }));
+        setImporting({ done: i + 1, total: chosen.length });
+      }
+      setImporting(null);
+      await addFiles(files, next);
+      setNotice({ tone: "ok", text: `${files.length} photos from SlashLens are in the zine. Cover and order as picked; change them in step 2.` });
+    } catch (e) {
+      setImporting(null);
+      setNotice({ tone: "err", text: e instanceof Error ? e.message : "Import failed" });
+    } finally {
+      setSlBusy("");
+    }
+  }
   const slChosen = (s: SlResult | null) => [...(s?.cover ? [s.cover] : []), ...(s?.inside ?? [])].filter((p) => !slOff.has(p.id));
   async function slashlensSave() {
     if (!book || !sl?.weekend) return;
@@ -184,7 +220,7 @@ export default function PhotobookEditor() {
         collectionId = j.id;
       }
       await save({ ...book, source: `SlashLens › ${sl.weekend} › GP Mini-Zine ${book.loc}`, pick: { weekend: sl.weekend, coverName: sl.cover && !slOff.has(sl.cover.id) ? sl.cover.name : undefined, names: chosen.map((p) => p.name), collectionId } });
-      setNotice({ tone: "ok", text: `Saved in SlashLens as "GP Mini-Zine ${book.loc}" under ${sl.weekend.replace(/_/g, " ")}. Open SlashLens, download the collection (↓) and drop the ZIP here: the photos land in this order.` });
+      setNotice({ tone: "ok", text: `Saved in SlashLens as "GP Mini-Zine ${book.loc}" under ${sl.weekend.replace(/_/g, " ")}.` });
     } catch (e) {
       setNotice({ tone: "err", text: `SlashLens: ${e instanceof Error ? e.message : "failed"}` });
     } finally {
@@ -420,11 +456,28 @@ export default function PhotobookEditor() {
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <button className="btn btn-primary" disabled={slBusy !== "" || !slChosen(sl).length} onClick={() => void slashlensSave()}>
-                    {slBusy === "save" ? "Saving…" : sl.source?.type === "collection" ? `Use these ${slChosen(sl).length}` : `Save ${slChosen(sl).length} as SlashLens collection`}
+                  <button className="btn btn-primary" disabled={slBusy !== "" || !slChosen(sl).length} onClick={() => void slashlensImport()}>
+                    {slBusy === "import" ? `Loading photos ${importing?.done ?? 0}/${importing?.total ?? 0}…` : `Use these ${slChosen(sl).length} in the zine`}
                   </button>
-                  <span style={{ fontSize: 12, color: "var(--muted)" }}>Then download the collection in SlashLens (↓) and drop the ZIP below.</span>
+                  {sl.source?.type === "auto" && (
+                    <button className="btn" disabled={slBusy !== "" || !slChosen(sl).length} onClick={() => void slashlensSave()}>
+                      {slBusy === "save" ? "Saving…" : "Also save as SlashLens collection"}
+                    </button>
+                  )}
+                  {driveMissing && (
+                    <button
+                      className="btn"
+                      onClick={() => void signIn("google", { callbackUrl: window.location.href }, { scope: `openid email profile ${DRIVE_SCOPE}`, access_type: "offline", prompt: "consent", include_granted_scopes: "true" })}
+                    >
+                      Connect Google Drive (read only)
+                    </button>
+                  )}
                 </div>
+                {driveMissing && (
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                    The photos are read with your own Google account, the same access you have in SlashLens. One-time permission, read only.
+                  </div>
+                )}
               </div>
             )}
             <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
