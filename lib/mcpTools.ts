@@ -309,7 +309,7 @@ ${SEO_WRITE_RECIPE}`);
     name: "teamcard_copy_to_staging",
     annotations: { title: "Copy a Team Card from production to staging", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     description:
-      "Copies one live Team Card from production to the STAGING CMS: card images, loyalty tags, badge type, the engagement, the badge (active, because a disabled badge does not link to its engagement and module; keepDraft=true disables it) and its badge-engagement-teaser block on the linked staging page (saved as a draft version, not published). Production is only read. Running it again updates the same staging documents.",
+      "ONE-OFF for the demo, not part of the regular flow (the configurator builds cards on staging from its own content, then on production after approval). Copies one live Team Card from production to the STAGING CMS: card images, loyalty tags, badge type, the engagement, the badge (active, because a disabled badge does not link to its engagement and module; keepDraft=true disables it) and its badge-engagement-teaser block on the linked staging page (saved as a draft version, not published). Production is only read. Running it again updates the same staging documents.",
     inputSchema: {
       type: "object",
       required: ["badgeId"],

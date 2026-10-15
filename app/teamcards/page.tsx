@@ -1,5 +1,3 @@
-import CopyCard from "./CopyCard";
-
 // Team Card Configurator: placeholder. The planned flow, so the team can
 // see where it is going and add to it via the suggestion box.
 
@@ -9,7 +7,7 @@ const STEPS: { n: string; title: string; text: string }[] = [
   { n: "03", title: "Assets", text: "Upload front artwork, background and badges. Checked against the formats and safe zones of the card." },
   { n: "04", title: "Copy along the journey", text: "Texts per touchpoint: teaser before unlock, unlock moment, in the profile, email and push. Claude drafts in the team voice, the tool checks length and wording." },
   { n: "05", title: "Preview", text: "The card as the fan sees it at each step of the journey, logged in and logged out, mobile and desktop." },
-  { n: "06", title: "Publish and set up", text: "When the briefing is complete: create the card in the CMS, link it to the loyalty ID and the pages, as a draft first." },
+  { n: "06", title: "Build on staging, then production", text: "When everything is in, the tool builds the card on staging: engagement, card, module on its page. After approval it publishes on staging and rebuilds the same card on production." },
 ];
 
 export default function Page() {
@@ -22,7 +20,6 @@ export default function Page() {
           Briefing and status tool for Team Cards. Collect what a card needs, upload and adapt the artwork, preview the texts along the fan journey, then publish and set up the card once everything is in. Not built yet.
         </p>
       </div>
-      <CopyCard />
       <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
         {STEPS.map((s) => (
           <li key={s.n} style={{ display: "grid", gridTemplateColumns: "44px 1fr", gap: 12, padding: "14px 16px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--surface)" }}>
