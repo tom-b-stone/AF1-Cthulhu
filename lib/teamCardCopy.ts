@@ -46,7 +46,9 @@ async function stg(path: string, init: RequestInit = {}): Promise<Json> {
 const isLoc = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0 && Object.keys(v).every((k) => k === "en" || k === "de");
 
-const DROP = new Set(["id", "createdAt", "updatedAt", "createdBy", "updatedBy", "_status", "slug", "generateSlug"]);
+// internalId is the key the loyalty backend registers a document under; a
+// copied production internalId is unknown there and makes every update fail
+const DROP = new Set(["id", "createdAt", "updatedAt", "createdBy", "updatedBy", "internalId", "sortingTime", "_status", "slug", "generateSlug"]);
 
 // One locale's view of a locale=all document: {en, de} leaves → the value
 // for `loc` (undefined drops the key), ids and system fields removed.
@@ -91,12 +93,22 @@ const hasDe = (v: Json): boolean => {
 // Create or update a document in both locales. `find` = where query for
 // an existing copy (idempotency).
 async function upsertLocalised(collection: string, all: Json, findWhere: string, steps: CopyStep[], label: string): Promise<string> {
-  const found = await stg(`/${collection}?${findWhere}&limit=1&depth=0`);
-  const existing = found.docs?.[0]?.id as string | undefined;
+  const found = await stg(`/${collection}?${findWhere}&limit=10&depth=0&sort=-createdAt`);
   const en = project(all, "en");
-  const saved = existing
-    ? (await stg(`/${collection}/${existing}?locale=en`, { method: "PATCH", body: JSON.stringify(en) })).doc
-    : (await stg(`/${collection}?locale=en`, { method: "POST", body: JSON.stringify(en) })).doc;
+  // reuse an earlier copy when it can still be updated; a broken one (unknown
+  // to the loyalty backend) is skipped and a fresh document created
+  let existing: string | undefined;
+  let saved: Json;
+  for (const d of (found.docs ?? []) as Json[]) {
+    try {
+      saved = (await stg(`/${collection}/${d.id}?locale=en`, { method: "PATCH", body: JSON.stringify(en) })).doc;
+      existing = d.id;
+      break;
+    } catch (e) {
+      steps.push({ step: `${label}: earlier copy ${d.id} cannot be updated, skipped`, ok: true, detail: e instanceof Error ? e.message.slice(0, 120) : undefined });
+    }
+  }
+  if (!existing) saved = (await stg(`/${collection}?locale=en`, { method: "POST", body: JSON.stringify(en) })).doc;
   if (hasDe(all)) {
     const de = withIds(project(all, "de"), saved);
     await stg(`/${collection}/${saved.id}?locale=de`, { method: "PATCH", body: JSON.stringify(de) });
