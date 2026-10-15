@@ -213,6 +213,28 @@ hand-off. claude.ai cannot be iframed (`frame-ancestors 'none'`), hence the API 
 Still to do: production toggle (second CMS login in /admin), SlashLens intake (`/assets/intake`,
 Drive file ids, link-sharing is on).
 
+### Photobook (prototype, 2026-10-15)
+After a Grand Prix the team turns its SlashLens selection into a printable mini book for fans.
+`/photobook` (list) → `/photobook/[id]` (editor, 4 steps):
+1. **Grand Prix & photos:** race from the CMS calendar (dates, slug `2026-sin`, hashtags `#ARF1
+   #SingaporeGP`, Instagram handle); drop the SlashLens collection download (ZIP or photos,
+   compressed to 2400 px WebP in the browser, IndexedDB `ktulu-photobook`).
+2. **Arrange:** cover (☆) + 13 inside photos in order; 16-page overview, click for a 300 dpi preview.
+3. **Print file:** `lib/photobookRender.ts` renders each page as a 300 dpi canvas (Archivo, AF1
+   lava/chalk/graphite, logo, QR via `qrcode`) and imposes with `pdf-lib`: two A4 landscape
+   sheets, each a one-cut 8-page zine (top row upside down: 5 4 3 2 / bottom: 6 7 8 1), sheet 2
+   nested in sheet 1's centre spread → pages 1–4 + 13–16 outside, 5–12 inside; red dashed cut line,
+   fold ticks, third page = folding guide. 16 pages of A7 (74 × 105 mm), 3 mm frame for home printers.
+4. **Microsite:** `/api/photobook/publish` uploads cover + PDF to staging media (folder
+   "Photobook"; falls back to the `files` collection if media refuses PDFs) and creates/updates a
+   **draft** page `photobook-<slug>` (hero + free-text with download + share links, meta). Editors
+   publish in the CMS. Share page `/p/<slug>` (public, KV `photobook:share:<slug>`) is the QR
+   target: how to share, tags to copy, Instagram button; QR carries `utm_source=photobook
+   &utm_medium=print_qr&utm_campaign=<year>_<loc>_photobook`.
+Open: SlashLens direct import (needs an export of collection → Drive file ids), confirm the
+Instagram handle, test print + fold, page blocks on staging (hero/free-text shapes copied from
+news), move the share page into audif1.com.
+
 ### CRM Images
 Generates cropped, rounded-corner image variants matched to the CRM template library
 (`08_AF1_Platform_Dev`, node 4572:2 — Image Teaser, Gallery 01/02, Statistic, Ecom). Corner radii

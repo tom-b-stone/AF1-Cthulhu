@@ -4,7 +4,8 @@ import { getToken } from "next-auth/jwt";
 // /api/mcp is the Claude connector endpoint: called by Anthropic's servers,
 // never by a browser with a session cookie. It authenticates itself with the
 // per-user token in its path (lib/connectorTokens.ts).
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/mcp"];
+// /p/<slug> is the public photobook share page (QR code on the printed book).
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/mcp", "/p"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

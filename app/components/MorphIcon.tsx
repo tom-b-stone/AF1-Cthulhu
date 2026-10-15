@@ -250,6 +250,7 @@ export default function MorphIcon({ size = 48, shape = "sphere", seed = 0, freq 
 export const MORPH_PRESETS: Record<string, Omit<MorphProps, "size">> = {
   "/seo": { shape: "torus", seed: 1.3, freq: 1.2, amp: 0.12, hue: 0.02 },
   "/assets": { shape: "box", seed: 4.1, freq: 1.0, amp: 0.14, hue: 0.22 },
+  "/photobook": { shape: "sphere", seed: 5.3, freq: 2.1, amp: 0.2, hue: 0.9 },
   "/images": { shape: "octa", seed: 7.7, freq: 0.9, amp: 0.16, hue: 0.42 },
   "/utm": { shape: "capsule", seed: 2.6, freq: 1.4, amp: 0.1, hue: 0.62 },
   "/connector": { shape: "knot", seed: 9.2, freq: 1.6, amp: 0.08, hue: 0.8 },

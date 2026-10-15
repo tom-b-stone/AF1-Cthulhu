@@ -33,6 +33,13 @@ const TILES: { title: string; href: string; key: string; external?: boolean; sta
     text: "Drop photos, compress, name, alt text, upload to the right CMS folder.",
   },
   {
+    title: "Photobook",
+    href: "/photobook",
+    key: "/photobook",
+    status: "staging",
+    text: "Grand Prix mini book to print and fold, with a QR to share it. Prototype.",
+  },
+  {
     title: "CRM Images",
     href: "/images",
     key: "/images",

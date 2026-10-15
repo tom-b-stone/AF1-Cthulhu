@@ -34,6 +34,15 @@ const SIDEBARS: Record<string, Section[]> = {
       entries: [{ href: "https://staging.audif1team.com/cms/admin/collections/media/payload-folders", label: "CMS: Media folders", note: "↗" }],
     },
   ],
+  "/photobook": [
+    {
+      title: "Photobook",
+      entries: [
+        { href: "/photobook", label: "All photobooks", exact: true },
+        { href: "https://slashlens.netlify.app/", label: "SlashLens", note: "↗" },
+      ],
+    },
+  ],
   "/images": [{ title: "CRM Images", entries: [{ href: "/images", label: "Overview", exact: true }] }],
   "/connector": [{ title: "Claude connector", entries: [{ href: "/connector", label: "Setup", exact: true }] }],
   "/suggest": [{ title: "Suggestion box", entries: [{ href: "/suggest", label: "Write a suggestion", exact: true }] }],

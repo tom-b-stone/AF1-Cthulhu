@@ -476,3 +476,38 @@ export async function uploadMedia(file: Blob, filename: string, alt: string, fol
   const json = (await res.json()) as { doc: { id: string; url: string; filename: string } };
   return { id: json.doc.id, url: json.doc.url, filename: json.doc.filename };
 }
+
+// ---- Photobook (staging) --------------------------------------------------
+// Upload any file into an upload collection (media first; PDFs may need the
+// `files` collection depending on the CMS's mime rules).
+export async function uploadToCollection(
+  collection: "media" | "files",
+  file: Blob,
+  filename: string,
+  data: Record<string, unknown>
+): Promise<{ id: string; url: string; filename: string }> {
+  const form = new FormData();
+  form.append("file", file, filename);
+  form.append("_payload", JSON.stringify(data));
+  const res = await payloadFetch(`/${collection}`, { method: "POST", body: form });
+  if (!res.ok) throw new Error(`${collection} upload failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  const json = (await res.json()) as { doc: { id: string; url: string; filename: string } };
+  return { id: json.doc.id, url: json.doc.url, filename: json.doc.filename };
+}
+
+// Creates (or updates, by slug) a draft page on staging. Returns id + admin link.
+export async function upsertDraftPage(slug: string, body: Record<string, unknown>): Promise<{ id: string; adminUrl: string; created: boolean }> {
+  const found = await payloadFetch(`/pages?where[slug][equals]=${encodeURIComponent(slug)}&depth=0&draft=true&limit=1`);
+  const existing = found.ok ? ((await found.json()) as { docs: { id: string }[] }).docs?.[0] : undefined;
+  const res = existing
+    ? await payloadFetch(`/pages/${existing.id}?draft=true&locale=en`, { method: "PATCH", body: JSON.stringify({ ...body, _status: "draft" }) })
+    : await payloadFetch(`/pages?draft=true&locale=en`, { method: "POST", body: JSON.stringify({ ...body, slug, _status: "draft" }) });
+  if (!res.ok) throw new Error(`Page ${existing ? "update" : "create"} failed (${res.status}): ${(await res.text()).slice(0, 400)}`);
+  const json = (await res.json()) as { doc: { id: string } };
+  const id = json.doc.id;
+  return { id, adminUrl: cmsAdminUrlFor("pages", id, "en"), created: !existing };
+}
+
+export function stagingFileUrl(path: string): string {
+  return path.startsWith("http") ? path : `${baseUrl().replace(/\/cms\/api$/, "")}${path}`;
+}
