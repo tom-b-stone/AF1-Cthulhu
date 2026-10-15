@@ -472,6 +472,12 @@ function SeoStudio() {
         )}
         <div style={{ fontSize: 11, color: "var(--muted)", padding: "2px 10px 4px", lineHeight: 1.5 }}>
           {hasConnector ? "Opens claude.ai; Claude writes and publishes, all at once." : hasConnector === false ? "Opens claude.ai; Claude replies with Publish links, 5 per round." : ""}
+          {hasConnector !== null && (
+            <>
+              {" "}
+              <b>Pick Haiku</b> in Claude&apos;s model menu before sending: enough for SEO texts and fastest.
+            </>
+          )}
         </div>
       </SideSection>
       <SideSection title="Edits">

@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       const email = session.user?.email ?? "";
       const { active } = email ? await connectorStatus(email) : { active: false };
       if (active) {
-        return NextResponse.redirect(claudeUrlFor(buildConnectorSelectedPrompt(pairs as [Collection, string][], appOrigin(req))), 307);
+        return NextResponse.redirect(claudeUrlFor(buildConnectorSelectedPrompt(pairs as [Collection, string][], appOrigin(req)), { light: true }), 307);
       }
       items = await Promise.all(pairs.slice(0, MISSING_BATCH_NO_CONNECTOR).map(([c, id]) => toHandoffItem(c as Collection, id)));
     } else if (missing) {
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       const email = session.user?.email ?? "";
       const { active } = email ? await connectorStatus(email) : { active: false };
       if (active) {
-        return NextResponse.redirect(claudeUrlFor(buildConnectorBulkPrompt(allMissing.length, appOrigin(req))), 307);
+        return NextResponse.redirect(claudeUrlFor(buildConnectorBulkPrompt(allMissing.length, appOrigin(req)), { light: true }), 307);
       }
       const targets = allMissing.slice(0, MISSING_BATCH_NO_CONNECTOR);
       items = await Promise.all(targets.map((t) => toHandoffItem(t.collection, t.id)));
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     }
 
     const prompt = buildHandoffPrompt(items, appOrigin(req));
-    return NextResponse.redirect(claudeUrlFor(prompt), 307);
+    return NextResponse.redirect(claudeUrlFor(prompt, { light: true }), 307);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Couldn't build the hand-off" },

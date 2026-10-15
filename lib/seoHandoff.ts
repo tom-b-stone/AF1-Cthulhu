@@ -143,6 +143,12 @@ If a publication date moved and you had to restore it, say so as the first line.
 Last line, exactly: Back to SEO Studio: ${appOrigin}/seo`;
 }
 
-export function claudeUrlFor(prompt: string): string {
-  return `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
+// claude.ai has no URL parameter for the model, so the hint sits on top of
+// the prefilled prompt where the user sees it before pressing send. SEO
+// texts are short and rule-bound: the smallest model does them well and fast.
+export const LIGHT_MODEL_HINT =
+  "BEFORE YOU SEND: switch the model to Haiku (model menu next to the send button). Short texts with fixed rules, Haiku is enough and fastest.\n\n---\n\n";
+
+export function claudeUrlFor(prompt: string, opts: { light?: boolean } = {}): string {
+  return `https://claude.ai/new?q=${encodeURIComponent((opts.light ? LIGHT_MODEL_HINT : "") + prompt)}`;
 }
