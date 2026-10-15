@@ -53,201 +53,99 @@
   #tools:hover { opacity:1; }
   #tools button, #tools a { background:#222; color:#eee; border:1px solid #444; border-radius:8px; padding:6px 10px; font:600 12px Archivo,sans-serif; cursor:pointer; text-decoration:none; }
   .num { font-weight:800; font-size:30px; color:var(--lava); }
+  figure.ph { margin:0; position:relative; overflow:hidden; background:#ddd; }
+  figure.ph img { width:100%; height:100%; object-fit:cover; display:block; }
+  figure.ph figcaption { position:absolute; left:10px; bottom:8px; font-size:13px; color:#fff; background:rgba(0,0,0,.45); padding:3px 8px; border-radius:6px; }
+  img.how { width:100%; border-radius:10px; display:block; }
+  img.pg { position:absolute; box-shadow:0 26px 60px rgba(0,0,0,.45); border-radius:4px; }
+  .ex { font-size:19px; line-height:1.4; opacity:.9; border-left:4px solid var(--lava); padding-left:16px; }
+  .ex b { color:#fff; }
 </style>
 </head>
 <body>
 <div id="viewport"><div id="stage">
 
-  <!-- 1 Title -->
-  <section class="slide dark">
-    <div style="display:grid;grid-template-columns:1fr 860px;gap:60px;height:100%;align-items:center">
+  <!-- 1 Analog + numbers -->
+  <section class="slide" style="padding-top:80px">
+    <div style="display:grid;grid-template-columns:1fr 760px;gap:70px;height:100%">
       <div>
         <div class="k"></div>
-        <div class="eyebrow">Audi Revolut F1® Team · Fan engagement idea</div>
-        <h1>GP<br/>Mini-Zine</h1>
-        <p class="lead" style="margin-top:40px;opacity:.85">Every Grand Prix, folded into the fan's pocket. A printable 16-page zine with the team's best photos of the weekend, a cover to colour in and a Team Card for downloading it.</p>
+        <div class="eyebrow">The trend</div>
+        <h2 style="font-size:72px;margin-bottom:22px">Analog is back.<br/>And it's young.</h2>
+        <p class="lead" style="font-size:27px;max-width:900px">Fans scroll through a race weekend and keep nothing. Meanwhile the same generation buys records, shoots on film and swaps zines.</p>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:30px;margin-top:30px;row-gap:24px">
+          <div class="stat"><b style="font-size:64px">$1bn+</b><span style="font-size:21px">US vinyl sales in 2025, first time since 1983. 19th year of growth in a row</span><i>RIAA</i></div>
+          <div class="stat"><b style="font-size:64px">&#8532;</b><span style="font-size:21px">of Gen Z and younger Millennials use analog tech</span><i>YPulse 2026</i></div>
+          <div class="stat"><b style="font-size:64px">80%</b><span style="font-size:21px">of book buys by UK 13 to 24-year-olds are print. E-books: 14%</span><i>Nielsen BookData</i></div>
+          <div class="stat"><b style="font-size:64px">100M+</b><span style="font-size:21px">instax cameras and printers sold since 1998</span><i>Fujifilm 2025</i></div>
+          <div class="stat"><b style="font-size:64px">~50k</b><span style="font-size:21px">people in Reddit's zine community, 15k visit every week</span><i>Irish Times 2026</i></div>
+          <div class="stat"><b style="font-size:64px">30+</b><span style="font-size:21px">zine fests planned across Japan in 2026</span><i>Unseen Japan</i></div>
+        </div>
+      <div style="font-size:15px;line-height:1.45;opacity:.55;margin-top:26px">Sources: RIAA 2025 year-end report (via Music Week) · YPulse Going Analog 2026 (via Digital Camera World) · Nielsen BookData 2021/22 (via WEF) · Fujifilm, Apr 2025 · Irish Times, Mar 2026 · Unseen Japan, 2026</div>
       </div>
-      <iframe src="/zine/gp-mini-zine.html?format=square&bare=1&city=Shanghai&code=CHN&round=R02&year=2026" title="GP Mini-Zine animation" style="width:860px;height:860px;border:0;border-radius:28px;background:#2B2929"></iframe>
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:18px;margin:-80px -140px -110px 0">
+        <figure class="ph" style="grid-row:span 2"><img src="/pitch/img/zinefest-fluke.jpg" alt="Visitors at a zine festival" /><figcaption>FLUKE Zine Festival · Saginaw-hitchhiker, CC BY-SA 4.0</figcaption></figure>
+        <figure class="ph"><img src="/pitch/img/vinyl.jpg" alt="Records in a record store" /><figcaption>Mr Cup / Fabien Barral, CC0</figcaption></figure>
+        <figure class="ph"><img src="/pitch/img/instax.jpg" alt="instax instant camera" /><figcaption>Ubahnverleih, CC0</figcaption></figure>
+      </div>
     </div>
+    
   </section>
 
-  <!-- 2 Problem -->
-  <section class="slide">
-    <div class="k"></div>
-    <div class="eyebrow">The problem</div>
-    <h2>Fans scroll through a whole race weekend.<br/>They keep almost nothing.</h2>
-    <p class="lead">Hundreds of photos per Grand Prix land in feeds and are gone by Monday. Nothing stays on a desk, a fridge or a shelf. Nothing reminds a fan of the weekend once the app is closed.</p>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:80px">
-      <div class="stat"><b>4h+</b><span>a day on social media for 51% of US teens</span><i>Gallup, 2023 (via Fortune)</i></div>
-      <div class="stat"><b>4 in 10</b><span>US teens aged 13–17 say they are online "almost constantly"</span><i>Pew Research Center (via Digital Camera World)</i></div>
-      <div class="stat"><b>82%</b><span>of US music revenue now comes from streaming, yet vinyl keeps growing (next slide)</span><i>RIAA 2025 (via Fortune)</i></div>
-    </div>
-  </section>
-
-  <!-- 3 Analog is back -->
-  <section class="slide">
-    <div class="k"></div>
-    <div class="eyebrow">The trend</div>
-    <h2>Analog is not nostalgia. It is a growth market.</h2>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:56px;row-gap:60px">
-      <div class="stat"><b>$1bn+</b><span>US vinyl sales in 2025, the first time since 1983. 46.8 million records vs. 29.5 million CDs</span><i>RIAA 2025 year-end report</i></div>
-      <div class="stat"><b>19</b><span>years of uninterrupted vinyl growth in the US, +9.3% in 2025 alone</span><i>RIAA 2025 year-end report</i></div>
-      <div class="stat"><b>⅔</b><span>of Gen Z and younger Millennials use analog tech, from film cameras to record players</span><i>YPulse, 2026 (US/CA, 13–39)</i></div>
-      <div class="stat"><b>100M+</b><span>instax instant cameras and printers sold since 1998. Printed photos are a mass product again</span><i>Fujifilm, April 2025</i></div>
-      <div class="stat"><b>80%</b><span>of book purchases by 13 to 24-year-olds in the UK are print, only 14% e-books</span><i>Nielsen BookData, Nov 2021–Nov 2022</i></div>
-      <div class="stat"><b>35%</b><span>of the 42 million active film camera users worldwide are 18 to 30</span><i>Market Reports World, 2025 (via Fortune)</i></div>
-    </div>
-  </section>
-
-  <!-- 4 Zines -->
+  <!-- 2 What we do: GP Mini-Zine -->
   <section class="slide dark">
-    <div class="k"></div>
-    <div class="eyebrow">Why zines</div>
-    <h2>The zine is the format of the moment.</h2>
-    <p class="lead" style="opacity:.85">Cheap, personal, made by hand. Young people use zines to slow down, collect and share. Print it at home, no shop, no shipping.</p>
-    <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:70px">
-      <div class="stat"><b>~50k</b><span>members in Reddit's zine community, about 15,000 weekly visitors</span><i>Irish Times, March 2026</i></div>
-      <div class="stat"><b>2×</b><span>attendance at the Drogheda Zine Fair in its second year, 56 makers by year three</span><i>Irish Times, March 2026</i></div>
-      <div class="stat"><b>30+</b><span>zine fests scheduled across Japan for 2026 alone</span><i>Unseen Japan, 2026</i></div>
-      <div class="stat"><b>20k</b><span>visitors at Tokyo's Literary Flea Market for self-made publications</span><i>Unseen Japan, 2026</i></div>
-    </div>
-    <p style="font-size:26px;margin-top:60px;opacity:.7">Microcosm Publishing, the US zine distributor, declared 2025 "the Year of Zines" after a surge in zine sales from November 2024.</p>
-  </section>
-
-  <!-- 5 Our fans -->
-  <section class="slide">
-    <div class="k"></div>
-    <div class="eyebrow">Our audience</div>
-    <h2>The new F1 fan is young, creative and collects.</h2>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:60px;row-gap:60px">
-      <div class="stat"><b>3 in 4</b><span>new F1 fans are women. Nearly half of Gen Z respondents are women</span><i>F1 × Motorsport Network Global Fan Survey 2025</i></div>
-      <div class="stat"><b>⅔</b><span>of Gen Z fans say drivers or teams personally inspire them</span><i>Global Fan Survey 2025</i></div>
-      <div class="stat"><b>40%</b><span>of Gen Z fans are more likely to buy from F1 partners (1 in 3 overall)</span><i>Global Fan Survey 2025</i></div>
-      <div class="stat"><b>76%</b><span>say sponsors enhance the F1 experience</span><i>Global Fan Survey 2025</i></div>
-      <div class="stat"><b>100k+</b><span>fans from 186 countries answered the survey</span><i>Global Fan Survey 2025</i></div>
-      <div class="stat"><b>24</b><span>Grands Prix a season: 24 zines, a collection that grows race by race</span><i>2026 calendar</i></div>
-    </div>
-  </section>
-
-  <!-- 6 Examples -->
-  <section class="slide">
-    <div class="k"></div>
-    <div class="eyebrow">Examples</div>
-    <h2>Brands and fans already do it.</h2>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:40px">
-      <div class="card"><div class="tag">F1 fan-made</div><h3>Grand Prix Zine</h3><p>A free printable 8-page F1 season tracker: one A4 sheet folds into a pocket booklet with calendar, teams, predictions and the season's best moment. Pay what you want on itch.io.</p></div>
-      <div class="card"><div class="tag">Sportswear</div><h3>adidas × Stella Sport</h3><p>A stapled A4 lookbook zine for the collection launch: full-colour photography and bold type instead of a catalogue.</p></div>
-      <div class="card"><div class="tag">Music</div><h3>Vevo</h3><p>The video platform's first print publication: a zine on 20 artists to watch, a digital brand going to paper on purpose.</p></div>
-      <div class="card"><div class="tag">Sport media</div><h3>BBC Sport</h3><p>An intern handbook made as a zine with a thick cover: onboarding as an object people keep.</p></div>
-      <div class="card"><div class="tag">Kids</div><h3>Trailblazer Mag</h3><p>A monthly interactive magazine with colouring pages and cut-outs. The reader finishes the product.</p></div>
-      <div class="card" style="background:var(--graphite);color:var(--chalk);border-color:var(--graphite)"><div class="tag" style="border-color:var(--chalk)">The gap</div><h3>An open lane in F1</h3><p>Fans make F1 zines for themselves. We found no team that gives them official race-weekend photos in a format to print, fold and keep.</p></div>
-    </div>
-  </section>
-
-  <!-- 7 The product -->
-  <section class="slide">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:70px;height:100%;align-items:center">
+    <div style="display:grid;grid-template-columns:820px 1fr;gap:70px;height:100%">
       <div>
         <div class="k"></div>
-        <div class="eyebrow">The idea</div>
-        <h2>One zine per Grand Prix.</h2>
-        <ul class="list" style="margin-top:20px">
-          <li>16 pages from two A4 sheets, one cut each, no glue</li>
-          <li>13 photos of the weekend, selected by the team in SlashLens</li>
-          <li>A line-art cover to colour in, it also looks finished as it is</li>
-          <li>A QR code on the back: share the zine with #ARF1</li>
-          <li>Download after login, a Team Card for every zine</li>
-        </ul>
+        <div class="eyebrow">What we do</div>
+        <h2 style="font-size:96px">GP Mini-Zine.</h2>
+        <p class="lead" style="font-size:30px;opacity:.88">One zine per Grand Prix. 13 photos of the weekend from the team, 16 pages, two A4 sheets. Fans print it at home, colour in the cover, scan the code on the back and post it with #ARF1. The download needs a login and unlocks a Team Card.</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:40px">
+          <img class="how" src="/zine/media/audif1_gp-mini-zine_step-01.png" alt="Step 1" />
+          <img class="how" src="/zine/media/audif1_gp-mini-zine_step-02.png" alt="Step 2" />
+          <img class="how" src="/zine/media/audif1_gp-mini-zine_step-03.png" alt="Step 3" />
+          <img class="how" src="/zine/media/audif1_gp-mini-zine_step-04.png" alt="Step 4" />
+          <img class="how" src="/zine/media/audif1_gp-mini-zine_step-05.png" alt="Step 5" />
+          <img class="how" src="/zine/media/audif1_gp-mini-zine_step-06.png" alt="Step 6" />
+          <img class="how" src="/zine/media/audif1_gp-mini-zine_step-07.png" alt="Step 7" />
+          <img class="how" src="/zine/media/audif1_gp-mini-zine_step-08.png" alt="Step 8" />
+        </div>
+        <div style="font-size:20px;opacity:.6;margin-top:12px">Two sheets, one cut each, ten minutes.</div>
       </div>
-      <div style="display:flex;gap:40px;justify-content:center;align-items:center">
-        <img class="shadow" src="/pitch/cover-outline-chn.png" alt="Colour-in cover, Chinese Grand Prix" style="width:380px;transform:rotate(-4deg)" />
-        <img class="shadow" src="/pitch/cover-outline-portrait.png" alt="Colour-in cover with a driver portrait" style="width:380px;transform:rotate(3deg) translateY(40px)" />
+      <div style="position:relative">
+        <div class="eyebrow" style="position:absolute;left:0;top:0">Our zine, prototype</div>
+        <img class="pg" src="/pitch/cover-outline-portrait.png" alt="Colour-in cover" style="left:0;top:70px;width:290px;transform:rotate(-5deg)" />
+        <img class="pg" src="/pitch/img/zine-p03.jpg" alt="Page 3" style="left:230px;top:40px;width:260px;transform:rotate(2deg)" />
+        <img class="pg" src="/pitch/img/zine-p04.jpg" alt="Page 4" style="left:450px;top:90px;width:260px;transform:rotate(6deg)" />
+        <img class="pg" src="/pitch/img/zine-p16.jpg" alt="Back with QR code" style="left:640px;top:60px;width:205px;transform:rotate(-3deg)" />
+        <div class="eyebrow" style="position:absolute;left:0;top:590px">Zines out there</div>
+        <div style="position:absolute;left:0;right:0;top:630px;display:grid;grid-template-columns:420px 1fr;gap:26px">
+          <figure class="ph" style="height:250px;margin:0"><img src="/pitch/img/zinefest-la.jpg" alt="Zines on a table at LA Zine Fest" /><figcaption>LA Zine Fest 2017 · Pizzajono, CC BY-SA 4.0</figcaption></figure>
+          <div style="display:grid;gap:16px;align-content:start">
+            <div class="ex"><b>Grand Prix Zine</b> by rdarida: a fan-made F1 season tracker, one A4 sheet folded into 8 pages. Free on itch.io.</div>
+            <div class="ex"><b>adidas &times; Stella Sport</b> launched a collection with a stapled lookbook zine. <b>Vevo</b> made its first print piece a zine.</div>
+            <div class="ex"><b>No F1 team</b> we could find gives fans its own race photos to print and keep.</div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- 8 How it works for fans -->
-  <section class="slide">
-    <div class="k"></div>
-    <div class="eyebrow">For the fan</div>
-    <h2>Eight steps. Ten minutes.</h2>
-    <div class="grid" style="grid-template-columns:repeat(4,330px);gap:22px;margin-top:10px">
-      <img src="/zine/media/audif1_gp-mini-zine_step-01.png" alt="" style="width:100%;border-radius:14px;border:2px solid var(--grey)" />
-      <img src="/zine/media/audif1_gp-mini-zine_step-02.png" alt="" style="width:100%;border-radius:14px;border:2px solid var(--grey)" />
-      <img src="/zine/media/audif1_gp-mini-zine_step-03.png" alt="" style="width:100%;border-radius:14px;border:2px solid var(--grey)" />
-      <img src="/zine/media/audif1_gp-mini-zine_step-04.png" alt="" style="width:100%;border-radius:14px;border:2px solid var(--grey)" />
-      <img src="/zine/media/audif1_gp-mini-zine_step-05.png" alt="" style="width:100%;border-radius:14px;border:2px solid var(--grey)" />
-      <img src="/zine/media/audif1_gp-mini-zine_step-06.png" alt="" style="width:100%;border-radius:14px;border:2px solid var(--grey)" />
-      <img src="/zine/media/audif1_gp-mini-zine_step-07.png" alt="" style="width:100%;border-radius:14px;border:2px solid var(--grey)" />
-      <img src="/zine/media/audif1_gp-mini-zine_step-08.png" alt="" style="width:100%;border-radius:14px;border:2px solid var(--grey)" />
-    </div>
-  </section>
-
-  <!-- 9 Why it works for us -->
-  <section class="slide dark">
-    <div class="k"></div>
-    <div class="eyebrow">For the team</div>
-    <h2>Small format. Big loyalty levers.</h2>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:50px">
-      <div><div class="num">01</div><h3 style="font-size:40px;margin:10px 0">Registrations</h3><p style="font-size:26px;line-height:1.4;opacity:.85">The download sits behind the login. Every zine is a reason to create an account.</p></div>
-      <div><div class="num">02</div><h3 style="font-size:40px;margin:10px 0">Collection</h3><p style="font-size:26px;line-height:1.4;opacity:.85">One Team Card per zine, 24 a season. Collecting brings fans back after every race.</p></div>
-      <div><div class="num">03</div><h3 style="font-size:40px;margin:10px 0">Creator content</h3><p style="font-size:26px;line-height:1.4;opacity:.85">Coloured covers and finished zines are made to be posted. Real fan content with #ARF1.</p></div>
-      <div><div class="num">04</div><h3 style="font-size:40px;margin:10px 0">Time with the brand</h3><p style="font-size:26px;line-height:1.4;opacity:.85">Printing, folding, colouring: minutes of attention away from the feed, and an object that stays.</p></div>
-      <div><div class="num">05</div><h3 style="font-size:40px;margin:10px 0">Partners in print</h3><p style="font-size:26px;line-height:1.4;opacity:.85">Room for a partner page. 40% of Gen Z fans are more likely to buy from F1 partners.</p></div>
-      <div><div class="num">06</div><h3 style="font-size:40px;margin:10px 0">Near-zero cost</h3><p style="font-size:26px;line-height:1.4;opacity:.85">Fans print at home: no print run, no shipping. The tool builds a zine in minutes.</p></div>
-    </div>
-  </section>
-
-  <!-- 10 Workflow -->
-  <section class="slide">
-    <div class="k"></div>
-    <div class="eyebrow">For us: the workflow</div>
-    <h2>From race Sunday to zine on Monday.</h2>
-    <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:60px">
-      <div class="card"><div class="tag">Sunday</div><h3>Select</h3><p>The photo team picks about 14 shots of the weekend in SlashLens, e.g. a "Zine" collection per GP.</p></div>
-      <div class="card"><div class="tag">Monday</div><h3>Build</h3><p>The Ktulu tool lays out the zine, renders the colour-in cover and the 300 dpi print PDF.</p></div>
-      <div class="card"><div class="tag">Monday</div><h3>Publish</h3><p>One click creates the fan page as a draft on staging: teaser, how-to, download, Team Card, share buttons.</p></div>
-      <div class="card"><div class="tag">Week after</div><h3>Measure</h3><p>Downloads, logins, Team Cards unlocked, QR scans (UTM print_qr) and #ARF1 posts.</p></div>
-    </div>
-    <p style="font-size:28px;margin-top:60px">Prototype ready: the Chinese Grand Prix zine and its fan page are on staging as a draft.</p>
-  </section>
-
-  <!-- 11 Next steps + CTA -->
+  <!-- 3 CTA -->
   <section class="slide lava">
-    <div class="k"></div>
-    <div class="eyebrow" style="opacity:.85">Next steps</div>
-    <h2 style="max-width:1400px">Test it on the next Grand Prix.</h2>
-    <ul class="list" style="margin:30px 0 70px;max-width:1400px">
-      <li style="color:var(--chalk)">Set up the Zine Team Card and the login gate for the download</li>
-      <li style="color:var(--chalk)">Agree with the photo team on a "Zine" collection per GP in SlashLens</li>
-      <li style="color:var(--chalk)">Print test: fold and staple on office printers, fix what doesn't work</li>
-      <li style="color:var(--chalk)">Launch on one GP, review the numbers, then roll out for the season</li>
-    </ul>
-    <div style="display:flex;gap:28px;align-items:center">
-      <a class="cta" href="/photobook">Build a zine →</a>
-      <a class="cta ghost" href="https://staging.audif1team.com/cms/admin/collections/pages/6ad0819207a2e8280072c58f?locale=en" target="_blank" rel="noreferrer">See the draft page ↗</a>
+    <div style="display:grid;grid-template-columns:1fr 760px;gap:80px;height:100%;align-items:center">
+      <div>
+        <div class="k"></div>
+        <div class="eyebrow" style="opacity:.85">Next Grand Prix</div>
+        <h1 style="font-size:112px">Let's build<br/>our magazines.</h1>
+        <p class="lead" style="margin:36px 0 50px;font-size:30px">Pick the photos in SlashLens, build the zine in Ktulu, publish the fan page. One GP as a test, then the season.</p>
+        <div style="display:flex;gap:28px;align-items:center">
+          <a class="cta" href="/photobook">Build a zine &rarr;</a>
+          <a class="cta ghost" href="https://staging.audif1team.com/cms/admin/collections/pages/6ad0819207a2e8280072c58f?locale=en" target="_blank" rel="noreferrer">Draft fan page &#8599;</a>
+        </div>
+      </div>
+      <iframe src="/zine/gp-mini-zine.html?format=square&amp;bare=1&amp;city=Singapore&amp;code=SIN&amp;round=R18&amp;year=2026" title="GP Mini-Zine animation" style="width:700px;height:700px;border:0;border-radius:28px;background:#2B2929"></iframe>
     </div>
-  </section>
-
-  <!-- 12 Sources -->
-  <section class="slide">
-    <div class="k"></div>
-    <div class="eyebrow">Sources</div>
-    <ul style="font-size:21px;line-height:1.6;padding-left:24px;margin:0;columns:2;column-gap:70px">
-      <li><a href="https://www.musicweek.com/labels/read/riaa-us-revenue-hits-record-high-as-vinyl-sales-pass-1-billion/093770">RIAA 2025 year-end report, via Music Week</a></li>
-      <li><a href="https://fortune.com/2026/02/24/gen-z-resurrects-analog-economy-music-print-book-vinyl-concerts">Fortune, Feb 2026: Gen Z and the analog economy</a></li>
-      <li><a href="https://fortune.com/2026/07/14/gen-z-film-camera-market-revival/">Fortune, Jul 2026: film camera revival (Market Reports World, Gallup, RIAA)</a></li>
-      <li><a href="https://www.digitalcameraworld.com/cameras/retro-tech-is-back-but-just-how-trendy-is-it-a-new-study-shows-a-surprising-majority-of-gen-z-uses-analog-cameras-and-more">Digital Camera World on the YPulse study (2026) and Pew</a></li>
-      <li><a href="https://www.ypulse.com/report/2026/07/09/going-analog-trend-report/">YPulse: Going Analog trend report, Jul 2026</a></li>
-      <li><a href="https://www.fujirumors.com/?p=134709">Fujifilm: 100 million instax units, Apr 2025</a></li>
-      <li><a href="https://weforum.org/agenda/2023/03/gen-zers-are-bookworms-but-say-theyre-shunning-e-books-because-of-eye-strain-digital-detoxing-and-their-love-for-libraries">World Economic Forum on Nielsen BookData, 2023</a></li>
-      <li><a href="https://www.irishtimes.com/life-style/people/2026/03/08/gen-zine-young-people-are-ditching-digital-for-home-made-publications-and-community/">Irish Times, Mar 2026: Gen-Zine</a></li>
-      <li><a href="https://unseen-japan.com/japan-zine-boom/">Unseen Japan: Japan's zine boom</a></li>
-      <li><a href="https://microcosmpublishing.com/blog/2025/01/microcosm-declares-2025-the-year-of-zines/">Microcosm Publishing: 2025 the Year of Zines</a></li>
-      <li><a href="https://www.blackbookmotorsport.com/news/f1-motorsport-network-study-women-gen-z-fans-sponsors-july-2025/">BlackBook Motorsport on the 2025 Global F1 Fan Survey</a></li>
-      <li><a href="https://rdarida.itch.io/gpzine">Grand Prix Zine by rdarida (itch.io)</a></li>
-      <li><a href="https://exwhyzed.com/modern-zines-showcase-of-creative-corporate-and-agency-prints/">Exwhyzed: zines by adidas × Stella Sport, Vevo, BBC Sport, Trailblazer Mag</a></li>
-    </ul>
   </section>
 
 </div></div>

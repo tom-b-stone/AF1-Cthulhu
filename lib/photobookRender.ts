@@ -230,7 +230,7 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = CHALK;
     ctx.font = F(800, 66);
-    ctx.fillText("Share your book.", FRAME + 44, FRAME + 150);
+    ctx.fillText("Share your zine.", FRAME + 44, FRAME + 150);
     // QR on a chalk tile
     const qrSize = 470;
     const qx = (W - qrSize) / 2;
@@ -247,7 +247,7 @@ export async function renderPage(book: Book, bookPage: number, getPhoto: PhotoSo
     ctx.drawImage(qr, qx, qy, qrSize, qrSize);
     ctx.fillStyle = CHALK;
     ctx.font = F(500, 30);
-    let y = wrap(ctx, `Scan, post a photo of your book and tag @${book.instagram}.`, FRAME + 44, qy + qrSize + 110, W - 2 * FRAME - 88, 42);
+    let y = wrap(ctx, `Scan, post a photo of your zine and tag @${book.instagram}.`, FRAME + 44, qy + qrSize + 110, W - 2 * FRAME - 88, 42);
     ctx.font = F(800, 34);
     wrap(ctx, book.hashtags.join(" "), FRAME + 44, y + 10, W - 2 * FRAME - 88, 44);
     await drawLogo(ctx, FRAME + 44, H - FRAME - 110, 52, CHALK);
@@ -341,7 +341,7 @@ export async function buildPdf(book: Book, getPhoto: PhotoSource, origin: string
   const lava = rgb(0.89, 0.24, 0.1);
   const dark = rgb(0.17, 0.16, 0.16);
   g.drawRectangle({ x: 0, y: 0, width: SHEET_W, height: SHEET_H, color: rgb(0.96, 0.95, 0.95) });
-  g.drawText("How to fold your mini book", { x: 56, y: SHEET_H - 80, size: 28, font: helvB, color: dark });
+  g.drawText("How to fold your GP Mini-Zine", { x: 56, y: SHEET_H - 80, size: 28, font: helvB, color: dark });
   g.drawRectangle({ x: 56, y: SHEET_H - 100, width: 40, height: 4, color: lava });
   const steps = [
     "Print both sheets on A4, landscape, at 100 % (no \"fit to page\"). Single-sided.",
@@ -351,7 +351,7 @@ export async function buildPdf(book: Book, getPhoto: PhotoSource, origin: string
     "Fold along the long side again, push both ends together so the cut opens into a cross.",
     "Flatten it into a little book: the cover (Grand Prix name) goes on the front.",
     "Open sheet 1 at its centre pages and lay sheet 2 inside. Staple or stitch the spine if you like.",
-    "Scan the QR code on the back and share your book.",
+    "Scan the QR code on the back and share your zine.",
   ];
   let y = SHEET_H - 150;
   steps.forEach((s, i) => {

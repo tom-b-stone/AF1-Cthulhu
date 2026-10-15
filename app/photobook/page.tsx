@@ -46,7 +46,7 @@ export default function PhotobookList() {
           <div className="section-label" style={{ marginBottom: 8 }}>GP Mini-Zine · prototype</div>
           <h1>GP Mini-Zine</h1>
           <p>
-            The SlashLens selection of a Grand Prix becomes a printable 16-page mini book (two A4 sheets, one cut each, no glue) with a QR
+            The SlashLens selection of a Grand Prix becomes a printable 16-page GP Mini-Zine (two A4 sheets, one cut each, no glue) with a QR
             code on the back, plus a fan page on the staging CMS to download it.
           </p>
         </div>

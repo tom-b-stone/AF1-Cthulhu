@@ -33,7 +33,7 @@ export default async function SharePage({ params }: { params: { slug: string } }
           <div style={{ fontSize: 13, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.75 }}>
             {p.gpName} {p.year} · GP Mini-Zine
           </div>
-          <h1 style={{ margin: 0, fontSize: "clamp(38px, 9vw, 64px)", lineHeight: 1, fontWeight: 800, letterSpacing: "-0.01em" }}>Share your book.</h1>
+          <h1 style={{ margin: 0, fontSize: "clamp(38px, 9vw, 64px)", lineHeight: 1, fontWeight: 800, letterSpacing: "-0.01em" }}>Share your zine.</h1>
           <p style={{ margin: 0, fontSize: 18, lineHeight: 1.5, opacity: 0.85, maxWidth: 520 }}>
             You printed it, cut it and folded it. Show us your {p.city} weekend in print.
           </p>
@@ -46,7 +46,7 @@ export default async function SharePage({ params }: { params: { slug: string } }
 
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px 60px", display: "grid", gap: 28 }}>
         {[
-          ["01", "Take a photo of your book", "Open on your favourite page, or fanned out on the table."],
+          ["01", "Take a photo of your zine", "Open on your favourite page, or fanned out on the table."],
           ["02", "Post it on Instagram", "Feed or story, whatever you like."],
           ["03", "Tag us", tags],
         ].map(([n, h, t]) => (

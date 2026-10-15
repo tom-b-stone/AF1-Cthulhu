@@ -37,7 +37,7 @@ const TILES: { title: string; href: string; key: string; external?: boolean; sta
     href: "/photobook",
     key: "/photobook",
     status: "staging",
-    text: "Grand Prix mini book to print and fold, with a QR to share it. Prototype.",
+    text: "GP Mini-Zine: print, fold, colour in, share via QR. Prototype.",
   },
   {
     title: "CRM Images",
