@@ -18,6 +18,7 @@ import { learnPerson } from "./learnRun";
 import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 import { copyTeamCard } from "./teamCardCopy";
+import { FIELDS, applyChanges, diff, getCard, listCards, readChangeset, saveChangeset, stagingLinks, type Change, type LocValue } from "./teamCards";
 
 export type ToolResult = { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[]; isError?: boolean };
 
@@ -327,6 +328,70 @@ ${SEO_WRITE_RECIPE}`);
       console.log(`[connector] ${actor} copied team card ${id} to staging: ${r.ok}`);
       const lines = r.steps.map((s) => `${s.ok ? "✓" : "✗"} ${s.step}${s.detail ? ` (${s.detail})` : ""}${s.link ? ` ${s.link}` : ""}`);
       return text(`${r.ok ? "Done" : "Finished with issues"}\n${lines.join("\n")}`, !r.ok);
+    },
+  },
+  {
+    name: "teamcard_list",
+    annotations: { title: "List Team Cards", readOnlyHint: true, openWorldHint: false },
+    description: "Team Cards in the configurator: id, name, status, mechanic, reward type, where the module sits, staging links. Start here for questions or bulk changes.",
+    inputSchema: { type: "object", properties: {} },
+    async run() {
+      const cards = await listCards();
+      return text(cards.map((c) => `${c.id} · ${c.name} · ${c.status} · mechanic ${c.mechanic ?? "?"} · reward ${c.rewardType ?? "?"} · ${c.placement ?? ""} · ${stagingLinks(c).badge}`).join("\n") || "No cards yet.");
+    },
+  },
+  {
+    name: "teamcard_get",
+    annotations: { title: "Read a Team Card", readOnlyHint: true, openWorldHint: false },
+    description: "All editable fields of one Team Card with their keys, EN and DE values, the step they belong to (Card, Logged-out reveal, Reward and CTA, Engagement, Module, Settings), limits and options. Use the keys in teamcard_propose.",
+    inputSchema: { type: "object", required: ["card"], properties: { card: { type: "string", description: "e.g. TC-037" } } },
+    async run(args) {
+      const c = await getCard(String(args.card ?? ""));
+      if (!c) return text("Card not found. Call teamcard_list.", true);
+      const lines = FIELDS.map((f) => {
+        const v = c.values[f.key];
+        const val = f.localized ? `EN: ${JSON.stringify((v as LocValue)?.en ?? "")} | DE: ${JSON.stringify((v as LocValue)?.de ?? "")}` : `value: ${JSON.stringify(v)}`;
+        return `[${f.step}] ${f.key} (${f.label}${f.maxWords ? `, max ${f.maxWords} words` : ""}${f.options ? `, one of ${f.options.join("/")}` : ""}${f.localized ? "" : ", not per language"}) ${val}`;
+      });
+      return text(`${c.id} · ${c.name} · status ${c.status}\n${lines.join("\n")}\nLast changes: ${c.log.slice(0, 3).map((l) => `${l.at.slice(0, 16)} ${l.summary}`).join("; ")}`);
+    },
+  },
+  {
+    name: "teamcard_propose",
+    annotations: { title: "Preview Team Card changes", readOnlyHint: true, openWorldHint: false },
+    description:
+      "Preview changes to one or many Team Cards WITHOUT writing anything. changes = [{card, key, locale (\"en\"|\"de\", omit for fields that are not per language), value}]. Before calling: ask the user which cards and fields, and whether to change English AND German (write the German as a transcreation). Returns a before/after table with rule issues and a changeset id. Show the table, fix issues, and only call teamcard_apply after the user says yes.",
+    inputSchema: {
+      type: "object",
+      required: ["changes"],
+      properties: {
+        changes: {
+          type: "array",
+          items: { type: "object", required: ["card", "key", "value"], properties: { card: { type: "string" }, key: { type: "string" }, locale: { type: "string", enum: ["en", "de"] }, value: { type: ["string", "boolean"] } } },
+        },
+      },
+    },
+    async run(args) {
+      const changes = (args.changes as Change[]) ?? [];
+      const { rows, errors } = diff(await listCards(), changes);
+      if (!rows.length) return text(`Nothing to change.${errors.length ? `\n${errors.join("\n")}` : ""}`, errors.length > 0);
+      const id = await saveChangeset(changes);
+      const table = rows.map((r) => `| ${r.card} | ${r.label}${r.locale ? ` ${r.locale.toUpperCase()}` : ""} | ${JSON.stringify(r.before)} | ${JSON.stringify(r.after)} | ${r.issues.join("; ") || "ok"} |`);
+      return text(`Changeset ${id} (nothing written yet)\n| Card | Field | Before | After | Check |\n|---|---|---|---|---|\n${table.join("\n")}${errors.length ? `\nNot included:\n${errors.join("\n")}` : ""}\nAsk the user to confirm, then call teamcard_apply with changeset "${id}".`);
+    },
+  },
+  {
+    name: "teamcard_apply",
+    annotations: { title: "Apply Team Card changes to staging", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description: "Applies a changeset from teamcard_propose AFTER the user confirmed it: updates the card records and pushes the changed fields to the STAGING CMS (badge, engagement, module; the module's page is republished on staging). Returns what was written and any errors.",
+    inputSchema: { type: "object", required: ["changeset"], properties: { changeset: { type: "string" } } },
+    async run(args, actor) {
+      const changes = await readChangeset(String(args.changeset ?? ""));
+      if (!changes) return text("Changeset not found or expired. Run teamcard_propose again.", true);
+      const r = await applyChanges(changes, actor);
+      const cards = await listCards();
+      const links = [...new Set(r.applied.map((a) => a.card))].map((id) => { const c = cards.find((x) => x.id === id)!; const l = stagingLinks(c); return `${id}: ${[l.badge, l.engagement, l.page].filter(Boolean).join(" · ")}`; });
+      return text(`Applied ${r.applied.length} change(s).\n${r.pushed.map((p) => `✓ ${p}`).join("\n")}${r.errors.length ? `\n✗ ${r.errors.join("\n✗ ")}` : ""}\nStaging: ${links.join("\n")}\nNow suggest the next step to the user.`, r.errors.length > 0 && r.applied.length === 0);
     },
   },
 ];

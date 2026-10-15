@@ -1,0 +1,218 @@
+// Server-only: Team Card records for the configurator.
+//
+// The tool record is the source of truth while the team edits. One record
+// per card holds every editable text (EN + DE) and setting of the three CMS
+// objects: badge, engagement, module (badge-engagement-teaser on a page).
+// Changes are previewed first (before/after per card, field, language);
+// nothing reaches staging until they are applied. Applying writes the
+// record, pushes the changed fields to staging per locale and logs it.
+import { kvGet, kvSet, kvSetEx } from "./kv";
+import { stagingRequest } from "./payloadClient";
+
+type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+import { FIELDS, fieldByKey, fieldIssues, type DocKind, type FieldDef, type Loc, type LocValue } from "./teamCardFields";
+export { FIELDS, STEPS, fieldByKey, fieldIssues } from "./teamCardFields";
+export type { DocKind, FieldDef, Loc, LocValue } from "./teamCardFields";
+
+export type CardRecord = {
+  id: string; // TC-037
+  name: string;
+  status: string; // tracker status: Briefed … Staging … Live
+  staging: { badgeId: string; engagementId?: string; pageId?: string; blockId?: string };
+  imageUrl?: string; // card artwork for the previews (public file)
+  mechanic?: string; // q-and-a, survey, hot-or-not, page, link
+  rewardType?: string; // noReward, raffleSignup, couponCode
+  placement?: string; // where the module sits, in words
+  values: Record<string, LocValue | string | boolean | undefined>;
+  updatedAt: string;
+  log: { at: string; by: string; summary: string }[];
+};
+
+const KEY = "teamcards:v1";
+
+// The Nuvolari card rebuilt on staging on 15 Oct 2026 (demo seed).
+const SEED: Omit<CardRecord, "values" | "updatedAt" | "log">[] = [
+  {
+    id: "TC-037",
+    name: "Nico's Nuvolari Helmet",
+    status: "Staging",
+    staging: { badgeId: "6ad0c51507a2e8280072e0e5", engagementId: "6ad0c38407a2e8280072df55", pageId: "6aa965d96840acd28673c7ff", blockId: "6ad0c5176f63cb0001129801" },
+    imageUrl: "https://www.audif1.com/cms/api/media/file/AF1_Exclusive_Card_Monaco26_HUL_Nuvolari_Helmet-300x374.webp",
+    mechanic: "q-and-a",
+    rewardType: "noReward",
+    placement: "Production: Monaco race page, under the first widget set. Staging: end of the Badge Teaser Test Page.",
+  },
+];
+
+async function stg(path: string, init: RequestInit = {}): Promise<Json> {
+  const res = await stagingRequest(path, init);
+  const text = await res.text();
+  if (!res.ok) throw new Error(`staging ${init.method ?? "GET"} ${path.split("?")[0]}: ${res.status} ${text.slice(0, 240)}`);
+  return text ? JSON.parse(text) : {};
+}
+
+const getPath = (o: Json, p: (string | number)[]) => p.reduce((a, k) => (a == null ? undefined : a[k]), o);
+function setPath(o: Json, p: (string | number)[], v: unknown) {
+  let cur = o;
+  for (let i = 0; i < p.length - 1; i++) {
+    if (cur[p[i]] == null) cur[p[i]] = typeof p[i + 1] === "number" ? [] : {};
+    cur = cur[p[i]];
+  }
+  cur[p[p.length - 1]] = v;
+}
+
+async function readDoc(rec: CardRecord, doc: DocKind, loc: Loc): Promise<Json> {
+  const q = `locale=${loc}&fallback-locale=none&depth=0`;
+  if (doc === "badge") return stg(`/badges/${rec.staging.badgeId}?${q}`);
+  if (doc === "engagement") return rec.staging.engagementId ? stg(`/engagements/${rec.staging.engagementId}?${q}`) : null;
+  if (!rec.staging.pageId) return null;
+  const page = await stg(`/pages/${rec.staging.pageId}?${q}&draft=true`);
+  return (page.sections ?? []).find((s: Json) => s.id === rec.staging.blockId) ?? null;
+}
+
+// Reads every field of a card from staging (both locales).
+export async function loadFromStaging(rec: CardRecord): Promise<CardRecord> {
+  const docs: Record<string, Json> = {};
+  for (const d of ["badge", "engagement", "module"] as DocKind[]) for (const l of ["en", "de"] as Loc[]) docs[`${d}:${l}`] = await readDoc(rec, d, l);
+  const values: CardRecord["values"] = {};
+  for (const f of FIELDS) {
+    if (f.localized) values[f.key] = { en: getPath(docs[`${f.doc}:en`], f.path) ?? "", de: getPath(docs[`${f.doc}:de`], f.path) ?? "" };
+    else values[f.key] = getPath(docs[`${f.doc}:en`], f.path);
+  }
+  return { ...rec, values, updatedAt: new Date().toISOString() };
+}
+
+export async function listCards(): Promise<CardRecord[]> {
+  const raw = await kvGet(KEY).catch(() => null);
+  if (raw) return JSON.parse(raw) as CardRecord[];
+  const seeded: CardRecord[] = [];
+  for (const s of SEED) {
+    const base: CardRecord = { ...s, values: {}, updatedAt: new Date().toISOString(), log: [{ at: new Date().toISOString(), by: "setup", summary: "Imported from staging (rebuilt from production)" }] };
+    seeded.push(await loadFromStaging(base).catch(() => base));
+  }
+  await kvSet(KEY, JSON.stringify(seeded));
+  return seeded;
+}
+
+async function saveCards(cards: CardRecord[]) {
+  await kvSet(KEY, JSON.stringify(cards));
+}
+
+export async function getCard(id: string): Promise<CardRecord | undefined> {
+  return (await listCards()).find((c) => c.id.toLowerCase() === id.toLowerCase());
+}
+
+// ---- changes -------------------------------------------------------------
+export type Change = { card: string; key: string; locale?: Loc | null; value: string | boolean };
+export type DiffRow = { card: string; key: string; label: string; locale: Loc | null; before: unknown; after: unknown; issues: string[] };
+
+export function diff(cards: CardRecord[], changes: Change[]): { rows: DiffRow[]; errors: string[] } {
+  const rows: DiffRow[] = [];
+  const errors: string[] = [];
+  for (const c of changes) {
+    const card = cards.find((x) => x.id.toLowerCase() === c.card.toLowerCase());
+    const f = fieldByKey(c.key);
+    if (!card) { errors.push(`Unknown card ${c.card}`); continue; }
+    if (!f) { errors.push(`Unknown field ${c.key}`); continue; }
+    if (f.doc === "engagement" && !card.staging.engagementId) { errors.push(`${card.id} has no engagement`); continue; }
+    if (f.doc === "module" && !card.staging.blockId) { errors.push(`${card.id} has no module`); continue; }
+    if (f.localized && c.locale !== "en" && c.locale !== "de") { errors.push(`${card.id} ${f.label}: say which language (en or de)`); continue; }
+    if (f.options && !f.options.includes(String(c.value))) { errors.push(`${card.id} ${f.label}: one of ${f.options.join(", ")}`); continue; }
+    const cur = card.values[f.key];
+    const before = f.localized ? (cur as LocValue | undefined)?.[c.locale as Loc] ?? "" : cur;
+    if (before === c.value) continue;
+    const otherLoc = c.locale === "en" ? "de" : "en";
+    const pendingOther = changes.find((x) => x.card === c.card && x.key === c.key && x.locale === otherLoc)?.value;
+    const otherNow = f.localized ? String(pendingOther ?? (cur as LocValue | undefined)?.[otherLoc] ?? "") : undefined;
+    rows.push({ card: card.id, key: f.key, label: f.label, locale: f.localized ? (c.locale as Loc) : null, before, after: c.value, issues: fieldIssues(f, f.localized ? (c.locale as Loc) : null, c.value, c.locale === "en" ? otherNow : undefined) });
+  }
+  return { rows, errors };
+}
+
+// Pending change sets (for the connector: propose → user confirms → apply).
+export async function saveChangeset(changes: Change[]): Promise<string> {
+  const id = `cs_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  await kvSetEx(`teamcards:cs:${id}`, JSON.stringify(changes), 60 * 60 * 24);
+  return id;
+}
+export async function readChangeset(id: string): Promise<Change[] | null> {
+  const raw = await kvGet(`teamcards:cs:${id}`).catch(() => null);
+  return raw ? (JSON.parse(raw) as Change[]) : null;
+}
+
+// Writes the changes into the records and pushes them to staging, one
+// PATCH per document and locale. Staging is the test system, so the page
+// with the module is published there after the update.
+export async function applyChanges(changes: Change[], by: string): Promise<{ applied: DiffRow[]; pushed: string[]; errors: string[] }> {
+  const cards = await listCards();
+  const { rows, errors } = diff(cards, changes);
+  const pushed: string[] = [];
+  const byCard = new Map<string, DiffRow[]>();
+  for (const r of rows) byCard.set(r.card, [...(byCard.get(r.card) ?? []), r]);
+  for (const [cardId, list] of byCard) {
+    const card = cards.find((c) => c.id === cardId)!;
+    try {
+      for (const doc of ["badge", "engagement", "module"] as DocKind[]) {
+        const mine = list.filter((r) => fieldByKey(r.key)!.doc === doc);
+        if (!mine.length) continue;
+        const locs = [...new Set(mine.map((r) => r.locale ?? "en"))] as Loc[];
+        for (const loc of locs) {
+          const forLoc = mine.filter((r) => (r.locale ?? "en") === loc);
+          if (doc === "module") {
+            const page = await stg(`/pages/${card.staging.pageId}?locale=${loc}&fallback-locale=none&depth=0&draft=true`);
+            const block = (page.sections ?? []).find((s: Json) => s.id === card.staging.blockId);
+            if (!block) throw new Error("module not found on the page");
+            for (const r of forLoc) setPath(block, fieldByKey(r.key)!.path, r.after);
+            await stg(`/pages/${card.staging.pageId}?locale=${loc}&draft=true`, { method: "PATCH", body: JSON.stringify({ sections: page.sections, _status: "draft" }) });
+          } else {
+            const coll = doc === "badge" ? "badges" : "engagements";
+            const id = doc === "badge" ? card.staging.badgeId : card.staging.engagementId!;
+            const cur = await stg(`/${coll}/${id}?locale=${loc}&fallback-locale=none&depth=0`);
+            const body: Json = {};
+            for (const r of forLoc) {
+              const f = fieldByKey(r.key)!;
+              const top = f.path[0] as string;
+              if (!(top in body)) body[top] = JSON.parse(JSON.stringify(cur[top] ?? (typeof f.path[1] === "number" ? [] : null)));
+              if (f.path.length === 1) body[top] = r.after;
+              else setPath(body, f.path, r.after);
+            }
+            await stg(`/${coll}/${id}?locale=${loc}`, { method: "PATCH", body: JSON.stringify(body) });
+          }
+          pushed.push(`${card.id} ${doc} ${loc.toUpperCase()}: ${forLoc.map((r) => r.label).join(", ")}`);
+        }
+        if (doc === "module") await stg(`/pages/${card.staging.pageId}?locale=en`, { method: "PATCH", body: JSON.stringify({ _status: "published" }) });
+      }
+      for (const r of list) {
+        const f = fieldByKey(r.key)!;
+        if (f.localized) card.values[f.key] = { ...((card.values[f.key] as LocValue) ?? {}), [r.locale as Loc]: String(r.after) };
+        else card.values[f.key] = r.after as string | boolean;
+      }
+      card.updatedAt = new Date().toISOString();
+      card.log = [{ at: card.updatedAt, by, summary: `${list.length} change${list.length === 1 ? "" : "s"}: ${[...new Set(list.map((r) => r.label + (r.locale ? ` ${r.locale.toUpperCase()}` : "")))].join(", ")}` }, ...card.log].slice(0, 50);
+    } catch (e) {
+      errors.push(`${card.id}: ${e instanceof Error ? e.message : "push failed"} (record not changed)`);
+      byCard.set(cardId, []);
+    }
+  }
+  await saveCards(cards);
+  return { applied: [...byCard.values()].flat(), pushed, errors };
+}
+
+export async function reloadCard(id: string): Promise<CardRecord | undefined> {
+  const cards = await listCards();
+  const i = cards.findIndex((c) => c.id === id);
+  if (i < 0) return undefined;
+  cards[i] = await loadFromStaging(cards[i]);
+  cards[i].log = [{ at: new Date().toISOString(), by: "reload", summary: "Reloaded from staging" }, ...cards[i].log].slice(0, 50);
+  await saveCards(cards);
+  return cards[i];
+}
+
+export function stagingLinks(c: CardRecord) {
+  const base = "https://staging.audif1team.com/cms/admin/collections";
+  return {
+    badge: `${base}/badges/${c.staging.badgeId}`,
+    engagement: c.staging.engagementId ? `${base}/engagements/${c.staging.engagementId}` : undefined,
+    page: c.staging.pageId ? `${base}/pages/${c.staging.pageId}` : undefined,
+  };
+}

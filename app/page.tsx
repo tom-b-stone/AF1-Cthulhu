@@ -43,8 +43,8 @@ const TILES: { title: string; href: string; key: string; external?: boolean; sta
     title: "Team Card Configurator",
     href: "/teamcards",
     key: "/teamcards",
-    status: "planned",
-    text: "Briefing and status for Team Cards: assets, copy along the fan journey, previews, then publish and set up.",
+    status: "staging",
+    text: "All Team Cards, guided editing with a live journey preview, and a helper for bulk changes in EN and DE.",
   },
   {
     title: "CRM Images",
