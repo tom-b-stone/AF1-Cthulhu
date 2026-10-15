@@ -38,7 +38,8 @@ const SIDEBARS: Record<string, Section[]> = {
     {
       title: "GP Mini-Zine",
       entries: [
-        { href: "/photobook", label: "All photobooks", exact: true },
+        { href: "/photobook", label: "All zines", exact: true },
+        { href: "/pitch/gp-mini-zine.html", label: "Pitch deck", note: "full screen" },
         { href: "https://slashlens.netlify.app/", label: "SlashLens", note: "↗" },
       ],
     },
@@ -121,7 +122,12 @@ export default function Sidebar() {
               );
               return (
                 <li key={e.href + e.label}>
-                  {external ? (
+                  {e.href.endsWith(".html") ? (
+                    // static page (e.g. a full-screen pitch deck): plain navigation, same tab
+                    <a href={e.href} style={style}>
+                      {inner}
+                    </a>
+                  ) : external ? (
                     <a href={e.href} target="_blank" rel="noreferrer" style={style}>
                       {inner}
                     </a>

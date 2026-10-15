@@ -59,6 +59,7 @@
   body.square .sheet { width:80%; }
   body.square .book { width:31%; }
   body.square .tag { font-size:clamp(12px,2.6vmin,30px); right:7%; bottom:5%; }
+  body.square.bare .sheet, body.square.bare .book { top:50%; }
   @media (prefers-reduced-motion: reduce) { *{animation:none !important} .book,.tag{opacity:1} .sheet{opacity:0} }
 </style>
 </head>
@@ -87,6 +88,7 @@
     if (q.get("code")) document.getElementById("code").textContent = q.get("code");
     if (q.get("round")) document.getElementById("round").textContent = q.get("round");
     if (q.get("format") === "square") document.body.classList.add("square");
+    if (q.get("bare")) { document.querySelector(".title").style.display = "none"; document.body.classList.add("bare"); }
   </script>
 </body>
 </html>
