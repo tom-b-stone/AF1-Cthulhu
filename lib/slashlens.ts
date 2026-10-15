@@ -92,7 +92,16 @@ function score(p: SlPhoto) {
 
 export type Pick = { id: string; name: string; sub: string; tags: string[]; desc?: string; slot: string; thumb: string };
 
-export function autoPick(all: SlPhoto[], weekend: string, n = 14): { cover: Pick | null; inside: Pick[] } {
+// seed 0 = the best pick; any other seed shuffles near-equal photos so
+// "reload" gives a different but still balanced selection
+function jitter(id: string, seed: number) {
+  if (!seed) return 0;
+  let h = seed * 2654435761;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 1000) / 250; // 0 … 4 points
+}
+
+export function autoPick(all: SlPhoto[], weekend: string, n = 14, seed = 0): { cover: Pick | null; inside: Pick[] } {
   // Getty agency shots are licensed for editorial use, not for a fan
   // download; and no other team's car in our zine
   const rival = /haas|ferrari|mercedes|mclaren|red bull|williams|alpine|aston martin|racing bulls|cadillac/i;
@@ -100,7 +109,7 @@ export function autoPick(all: SlPhoto[], weekend: string, n = 14): { cover: Pick
     .filter((p) => p.weekend === weekend && p.analyzed !== false && !/getty/i.test(p.sub + p.name) && !rival.test(p.desc ?? ""))
     // F1 Academy / junior programme has its own stories; the zine is the F1 team
     .filter((p) => !/F1A|ACADEMY/i.test(p.sub) && !p.tags.some((t) => ["academy", "emma", "freddie"].includes(t)))
-    .sort((a, b) => score(b) - score(a));
+    .sort((a, b) => score(b) + jitter(b.id, seed) - (score(a) + jitter(a.id, seed)));
   const usedBursts = new Set<string>();
   const usedIds = new Set<string>();
   const take = (p: SlPhoto, slot: string): Pick => {

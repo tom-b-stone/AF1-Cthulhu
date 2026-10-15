@@ -159,13 +159,13 @@ export default function PhotobookEditor() {
   }
 
   // ---- SlashLens: auto pick ----------------------------------------------
-  async function slashlensPick(auto = false) {
+  async function slashlensPick(auto = false, seed = 0) {
     if (!book) return;
     const r = races?.find((x) => x.round === book.round && x.year === book.year);
     setSlBusy("pick");
     setSlOff(new Set());
     try {
-      const q = new URLSearchParams({ round: String(book.round ?? ""), city: book.city, country: r?.country ?? "", ...(auto ? { auto: "1" } : {}) });
+      const q = new URLSearchParams({ round: String(book.round ?? ""), city: book.city, country: r?.country ?? "", ...(auto ? { auto: "1" } : {}), ...(seed ? { seed: String(seed) } : {}) });
       const j = (await (await fetch(`/api/zine/slashlens?${q}`)).json()) as SlResult;
       setSl(j);
     } catch {
@@ -412,14 +412,9 @@ export default function PhotobookEditor() {
               <button className="btn btn-primary" disabled={!book.round || slBusy !== ""} onClick={() => void slashlensPick(false)}>
                 {slBusy === "pick" ? "Looking in SlashLens…" : "Auto-select 14 from SlashLens"}
               </button>
-              {sl?.ok && sl.source?.type === "collection" && (
-                <button className="btn" disabled={slBusy !== ""} onClick={() => void slashlensPick(true)}>
-                  Ignore the collection, pick automatically
-                </button>
-              )}
-              {sl?.ok && sl.source?.type === "auto" && (
-                <button className="btn" disabled={slBusy !== ""} onClick={() => void slashlensPick(true)}>
-                  Pick again
+              {sl?.ok && (
+                <button className="btn" disabled={slBusy !== ""} onClick={() => void slashlensPick(true, Date.now() % 100000)} title="New automatic selection from the same weekend">
+                  ↻ Reload auto-selection
                 </button>
               )}
               <a className="btn" href="https://slashlens.netlify.app/" target="_blank" rel="noreferrer">

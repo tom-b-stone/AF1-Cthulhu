@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         .map((p) => ({ id: p!.id, name: p!.name, sub: p!.sub, tags: p!.tags, desc: p!.desc, slot: "collection", thumb: slThumb(p!.id) }));
       return NextResponse.json({ ok: true, weekend, count, weekends, source: { type: "collection", id: zineCol.id, name: zineCol.name }, cover: picks[0] ?? null, inside: picks.slice(1, 14), collections: cols.map((c) => ({ id: c.id, name: c.name, n: c.photoIds.length })) });
     }
-    const pick = autoPick(photos, weekend);
+    const pick = autoPick(photos, weekend, 14, Number(q.get("seed")) || 0);
     return NextResponse.json({ ok: true, weekend, count, weekends, source: { type: "auto" }, ...pick, collections: cols.map((c) => ({ id: c.id, name: c.name, n: c.photoIds.length })) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "SlashLens not reachable" }, { status: 502 });
