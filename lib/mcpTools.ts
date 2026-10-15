@@ -317,12 +317,13 @@ ${SEO_WRITE_RECIPE}`);
         badgeId: { type: "string", description: "Production badge id or its CMS admin link" },
         keepDraft: { type: "boolean", description: "Disable the staging card (default false; a disabled card loses the link to engagement and module)" },
         withPageBlock: { type: "boolean", description: "Place the teaser on its staging page as a draft (default true)" },
+        targetPageId: { type: "string", description: "Staging page id to use when the production page does not exist on staging (CTA link + module placement)" },
       },
     },
     async run(args, actor) {
       const id = String(args.badgeId ?? "").match(/[a-f0-9]{24}/)?.[0];
       if (!id) return text("badgeId missing", true);
-      const r = await copyTeamCard({ badgeId: id, keepDraft: args.keepDraft as boolean | undefined, withPageBlock: args.withPageBlock as boolean | undefined });
+      const r = await copyTeamCard({ badgeId: id, keepDraft: args.keepDraft as boolean | undefined, withPageBlock: args.withPageBlock as boolean | undefined, targetPageId: (String(args.targetPageId ?? "").match(/[a-f0-9]{24}/) ?? [])[0] });
       console.log(`[connector] ${actor} copied team card ${id} to staging: ${r.ok}`);
       const lines = r.steps.map((s) => `${s.ok ? "✓" : "✗"} ${s.step}${s.detail ? ` (${s.detail})` : ""}${s.link ? ` ${s.link}` : ""}`);
       return text(`${r.ok ? "Done" : "Finished with issues"}\n${lines.join("\n")}`, !r.ok);

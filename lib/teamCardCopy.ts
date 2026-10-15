@@ -206,7 +206,7 @@ async function stagingPageByUrl(url: string, slug: string): Promise<Json | null>
 }
 
 // ---- main -----------------------------------------------------------------
-export type CopyOptions = { badgeId: string; keepDraft?: boolean; withPageBlock?: boolean };
+export type CopyOptions = { badgeId: string; keepDraft?: boolean; withPageBlock?: boolean; targetPageId?: string };
 
 export async function copyTeamCard(opts: CopyOptions): Promise<CopyResult> {
   const steps: CopyStep[] = [];
@@ -241,7 +241,10 @@ export async function copyTeamCard(opts: CopyOptions): Promise<CopyResult> {
         if (v?.id && !pageMap.has(v.id)) {
           const sp = await stagingPageByUrl(v.url, v.slug);
           if (sp) pageMap.set(v.id, sp.id);
-          else steps.push({ step: `CTA target not on staging: ${v.url}`, ok: false, detail: "Link left empty; set it in the CMS." });
+          else if (opts.targetPageId) {
+            pageMap.set(v.id, opts.targetPageId);
+            steps.push({ step: `${v.url} is not on staging: CTA and module go to the chosen staging page`, ok: true, link: `${STAGING_ADMIN}/pages/${opts.targetPageId}` });
+          } else steps.push({ step: `CTA target not on staging: ${v.url}`, ok: false, detail: "Pass targetPageId (a staging page) to link and place it there." });
         }
       }
     }
@@ -314,7 +317,7 @@ export async function copyTeamCard(opts: CopyOptions): Promise<CopyResult> {
             const at = sections.findIndex(isOurs);
             if (loc === "en") {
               if (at >= 0) sections[at] = { ...mine, id: sections[at].id };
-              else sections.splice(Math.min(idx, sections.length), 0, mine);
+              else sections.splice(sp === opts.targetPageId ? sections.length : Math.min(idx, sections.length), 0, mine);
             } else {
               if (at < 0) break;
               sections[at] = withIds(mine, sections[at]);
@@ -322,7 +325,7 @@ export async function copyTeamCard(opts: CopyOptions): Promise<CopyResult> {
             await stg(`/pages/${sp}?locale=${loc}&draft=true`, { method: "PATCH", body: JSON.stringify({ sections, _status: "draft" }) });
           }
           res.pageId = sp;
-          steps.push({ step: `teaser block placed on ${target.url} (draft, position ${idx + 1})`, ok: true, link: `${STAGING_ADMIN}/pages/${sp}` });
+          steps.push({ step: `module placed${sp === opts.targetPageId ? " at the end of the chosen staging page" : ` on ${target.url} at position ${idx + 1}`} (draft version)`, ok: true, link: `${STAGING_ADMIN}/pages/${sp}` });
         }
       }
     }
