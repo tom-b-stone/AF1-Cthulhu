@@ -7,14 +7,14 @@ type Step = { step: string; ok: boolean; detail?: string; link?: string };
 
 // First building block of the configurator's publish step: copy a live
 // Team Card (badge, engagement, page teaser, images) from production to
-// staging. The badge stays hidden (isDraft) and the page change is a draft
-// version unless the switches say otherwise.
+// staging. The card is created active (a disabled card does not link to its
+// engagement and module); the page change is saved as a draft version.
 export default function CopyCard() {
   const [cards, setCards] = useState<Card[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<string>("");
-  const [keepDraft, setKeepDraft] = useState(true);
+  const [keepDraft, setKeepDraft] = useState(false);
   const [withPage, setWithPage] = useState(true);
   const [busy, setBusy] = useState(false);
   const [steps, setSteps] = useState<Step[] | null>(null);
@@ -55,7 +55,7 @@ export default function CopyCard() {
         ))}
       </select>
       <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
-        <input type="checkbox" checked={keepDraft} onChange={(e) => setKeepDraft(e.target.checked)} /> Keep the card hidden on staging (isDraft)
+        <input type="checkbox" checked={keepDraft} onChange={(e) => setKeepDraft(e.target.checked)} /> Disable the card on staging (breaks the link between card, engagement and module; leave off)
       </label>
       <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
         <input type="checkbox" checked={withPage} onChange={(e) => setWithPage(e.target.checked)} /> Add the teaser block to its staging page (as a draft version)

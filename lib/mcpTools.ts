@@ -309,13 +309,13 @@ ${SEO_WRITE_RECIPE}`);
     name: "teamcard_copy_to_staging",
     annotations: { title: "Copy a Team Card from production to staging", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     description:
-      "Copies one live Team Card from production to the STAGING CMS: card images, loyalty tags, badge type, the engagement, the badge (hidden with isDraft unless keepDraft=false) and its badge-engagement-teaser block on the linked staging page (saved as a draft version, not published). Production is only read. Running it again updates the same staging documents.",
+      "Copies one live Team Card from production to the STAGING CMS: card images, loyalty tags, badge type, the engagement, the badge (active, because a disabled badge does not link to its engagement and module; keepDraft=true disables it) and its badge-engagement-teaser block on the linked staging page (saved as a draft version, not published). Production is only read. Running it again updates the same staging documents.",
     inputSchema: {
       type: "object",
       required: ["badgeId"],
       properties: {
         badgeId: { type: "string", description: "Production badge id or its CMS admin link" },
-        keepDraft: { type: "boolean", description: "Keep the staging card hidden (default true)" },
+        keepDraft: { type: "boolean", description: "Disable the staging card (default false; a disabled card loses the link to engagement and module)" },
         withPageBlock: { type: "boolean", description: "Place the teaser on its staging page as a draft (default true)" },
       },
     },

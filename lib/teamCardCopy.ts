@@ -10,7 +10,8 @@
 //   1. media (card image, backside, engagement images) re-uploaded
 //   2. loyalty tags + badge type matched by title (created when missing)
 //   3. engagement created (no back link yet)
-//   4. badge created (isDraft on by default, so it stays hidden)
+//   4. badge created ACTIVE (isDraft = "Disable this badge" off): the CMS
+//      only links badge, engagement and module while the card is active
 //   5. engagement → loggedOutBadge = new badge
 //   6. teaser block inserted into the staging page as a DRAFT version
 // Every step is idempotent: running it again updates the same documents.
@@ -265,7 +266,7 @@ export async function copyTeamCard(opts: CopyOptions): Promise<CopyResult> {
         rewardCTA: (b.rewardCTA ?? []).map(remapDoc),
         raffleConfirmedCTA: (b.raffleConfirmedCTA ?? []).map(remapDoc),
         clusters: [],
-        isDraft: opts.keepDraft !== false,
+        isDraft: opts.keepDraft === true,
       },
       media,
       steps
