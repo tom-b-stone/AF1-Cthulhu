@@ -10,6 +10,19 @@ import { buildPdf, renderPage } from "@/lib/photobookRender";
 import { compressImage, thumbnail } from "@/lib/imageCompress";
 import { newId } from "@/lib/batchStore";
 
+type SlPick = { id: string; name: string; sub: string; tags: string[]; desc?: string; slot: string; thumb: string };
+type SlResult = {
+  ok: boolean;
+  error?: string;
+  weekend?: string;
+  count?: number;
+  source?: { type: "auto" } | { type: "collection"; id: string; name: string };
+  cover?: SlPick | null;
+  inside?: SlPick[];
+  collections?: { id: string; name: string; n: number }[];
+};
+const baseName = (n: string) => n.replace(/\.[^.]+$/, "").toLowerCase();
+
 type Race = { round: number; label: string; country: string; city: string; start?: string; end?: string; loc: string; year: number };
 
 const STEPS = ["Grand Prix & photos", "Arrange", "Print file", "Microsite"];
@@ -38,6 +51,9 @@ export default function PhotobookEditor() {
   const [publishing, setPublishing] = useState(false);
   const [notice, setNotice] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [sl, setSl] = useState<SlResult | null>(null);
+  const [slBusy, setSlBusy] = useState<"" | "pick" | "save">("");
+  const [slOff, setSlOff] = useState<Set<string>>(new Set());
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   useEffect(() => {
@@ -112,10 +128,56 @@ export default function PhotobookEditor() {
     }
     setThumbs(t);
     // first import: cover = first landscape-free (portrait) shot, inside = the rest in order
-    const coverId = book.coverId ?? (photos.find((p) => p.height >= p.width) ?? photos[0])?.id;
-    const order = book.order.length ? book.order : photos.filter((p) => p.id !== coverId).slice(0, INSIDE_PHOTOS).map((p) => p.id);
+    let coverId = book.coverId ?? (photos.find((p) => p.height >= p.width) ?? photos[0])?.id;
+    let order = book.order.length ? book.order : photos.filter((p) => p.id !== coverId).slice(0, INSIDE_PHOTOS).map((p) => p.id);
+    // photos from a SlashLens pick: cover and reading order as picked
+    if (book.pick && !book.order.length) {
+      const byName = new Map(photos.map((p) => [baseName(p.name), p.id]));
+      const cov = book.pick.coverName ? byName.get(baseName(book.pick.coverName)) : undefined;
+      if (cov) coverId = cov;
+      const picked = book.pick.names.map((n) => byName.get(baseName(n))).filter((x): x is string => !!x && x !== coverId);
+      if (picked.length) order = picked.slice(0, INSIDE_PHOTOS);
+    }
     await save({ ...book, photos, coverId, order });
     setImporting(null);
+  }
+
+  // ---- SlashLens: auto pick ----------------------------------------------
+  async function slashlensPick(auto = false) {
+    if (!book) return;
+    const r = races?.find((x) => x.round === book.round && x.year === book.year);
+    setSlBusy("pick");
+    setSlOff(new Set());
+    try {
+      const q = new URLSearchParams({ round: String(book.round ?? ""), city: book.city, country: r?.country ?? "", ...(auto ? { auto: "1" } : {}) });
+      const j = (await (await fetch(`/api/zine/slashlens?${q}`)).json()) as SlResult;
+      setSl(j);
+    } catch {
+      setSl({ ok: false, error: "SlashLens not reachable" });
+    } finally {
+      setSlBusy("");
+    }
+  }
+  const slChosen = (s: SlResult | null) => [...(s?.cover ? [s.cover] : []), ...(s?.inside ?? [])].filter((p) => !slOff.has(p.id));
+  async function slashlensSave() {
+    if (!book || !sl?.weekend) return;
+    const chosen = slChosen(sl);
+    let collectionId = sl.source?.type === "collection" ? sl.source.id : undefined;
+    setSlBusy("save");
+    try {
+      if (!collectionId) {
+        const res = await fetch("/api/zine/slashlens", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weekend: sl.weekend, name: `GP Mini-Zine ${book.loc}`, photoIds: chosen.map((p) => p.id) }) });
+        const j = await res.json();
+        if (!j.ok) throw new Error(j.error || "save failed");
+        collectionId = j.id;
+      }
+      await save({ ...book, source: `SlashLens › ${sl.weekend} › GP Mini-Zine ${book.loc}`, pick: { weekend: sl.weekend, coverName: sl.cover && !slOff.has(sl.cover.id) ? sl.cover.name : undefined, names: chosen.map((p) => p.name), collectionId } });
+      setNotice({ tone: "ok", text: `Saved in SlashLens as "GP Mini-Zine ${book.loc}" under ${sl.weekend.replace(/_/g, " ")}. Open SlashLens, download the collection (↓) and drop the ZIP here: the photos land in this order.` });
+    } catch (e) {
+      setNotice({ tone: "err", text: `SlashLens: ${e instanceof Error ? e.message : "failed"}` });
+    } finally {
+      setSlBusy("");
+    }
   }
 
   // ---- step 2: arrange --------------------------------------------------
@@ -298,13 +360,67 @@ export default function PhotobookEditor() {
 
           <div className="card" style={{ padding: 16, display: "grid", gap: 12 }}>
             <div className="section-label">Photos from SlashLens</div>
-            <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>
-              In SlashLens, collect the book photos in a collection under the race weekend (like &quot;Beauty Car Shots&quot; under 00 Shootings) and download it
-              (↓). Drop the ZIP or the photos here. Direct import from SlashLens comes once it exposes collections.
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button className="btn btn-primary" disabled={!book.round || slBusy !== ""} onClick={() => void slashlensPick(false)}>
+                {slBusy === "pick" ? "Looking in SlashLens…" : "Auto-select 14 from SlashLens"}
+              </button>
+              {sl?.ok && sl.source?.type === "collection" && (
+                <button className="btn" disabled={slBusy !== ""} onClick={() => void slashlensPick(true)}>
+                  Ignore the collection, pick automatically
+                </button>
+              )}
+              {sl?.ok && sl.source?.type === "auto" && (
+                <button className="btn" disabled={slBusy !== ""} onClick={() => void slashlensPick(true)}>
+                  Pick again
+                </button>
+              )}
+              <a className="btn" href="https://slashlens.netlify.app/" target="_blank" rel="noreferrer">
+                Open SlashLens ↗
+              </a>
+              {!book.round && <span style={{ fontSize: 12, color: "var(--muted)" }}>Choose the Grand Prix first.</span>}
+            </div>
+            {sl && !sl.ok && <div style={{ fontSize: 12, color: "#e9c46a" }}>{sl.error}</div>}
+            {sl?.ok && (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {sl.weekend?.replace(/_/g, " ")} · {sl.count} photos in SlashLens ·{" "}
+                  {sl.source?.type === "collection" ? <>team collection &quot;{sl.source.name}&quot;</> : "automatic pick: car on track, both drivers, details, garage, atmosphere; one shot per burst, race days first"}
+                  {" "}· click a photo to leave it out
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
+                  {[...(sl.cover ? [sl.cover] : []), ...(sl.inside ?? [])].map((p, i) => {
+                    const off = slOff.has(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        title={`${p.name}\n${p.desc ?? ""}\n${p.tags.join(", ")}`}
+                        onClick={() => setSlOff((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })}
+                        style={{ padding: 0, border: `2px solid ${i === 0 && sl.cover ? "var(--vapor-rose)" : off ? "transparent" : "var(--accent)"}`, borderRadius: 8, overflow: "hidden", background: "var(--surface)", cursor: "pointer", position: "relative", opacity: off ? 0.35 : 1 }}
+                      >
+                        {/* Drive thumbnail, loads with the viewer's Google session */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.thumb} alt="" referrerPolicy="no-referrer" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+                        <span style={{ position: "absolute", left: 4, bottom: 4, fontSize: 10, background: "rgba(0,0,0,0.65)", color: "#fff", borderRadius: 4, padding: "1px 5px" }}>
+                          {i === 0 && sl.cover ? "cover" : p.slot}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <button className="btn btn-primary" disabled={slBusy !== "" || !slChosen(sl).length} onClick={() => void slashlensSave()}>
+                    {slBusy === "save" ? "Saving…" : sl.source?.type === "collection" ? `Use these ${slChosen(sl).length}` : `Save ${slChosen(sl).length} as SlashLens collection`}
+                  </button>
+                  <span style={{ fontSize: 12, color: "var(--muted)" }}>Then download the collection in SlashLens (↓) and drop the ZIP below.</span>
+                </div>
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
+              Or pick by hand: collect the photos in a SlashLens collection under the race weekend and download it (↓).
             </div>
             <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--muted)" }}>
               SlashLens collection (name or link, for the record)
-              <input className="input" value={book.source} onChange={(e) => void save({ ...book, source: e.target.value })} placeholder="R17 Singapore › Photobook" />
+              <input className="input" value={book.source} onChange={(e) => void save({ ...book, source: e.target.value })} placeholder="R17 Singapore › GP Mini-Zine" />
             </label>
             <div
               onDragOver={(e) => {

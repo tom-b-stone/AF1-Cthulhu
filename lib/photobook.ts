@@ -24,6 +24,9 @@ export type Book = {
   coverId?: string;
   // "outline" = line drawing of the cover photo to colour in (default), "photo" = full-bleed photo
   coverStyle?: "outline" | "photo";
+  // SlashLens pick (auto or a team collection): file names in reading order,
+  // used to sort the photos once the ZIP from SlashLens is dropped in
+  pick?: { weekend: string; coverName?: string; names: string[]; collectionId?: string };
   order: string[]; // the 13 inside photos, reading order (book pages 3–15)
   stagingPageId?: string;
   stagingPageUrl?: string;

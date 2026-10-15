@@ -58,6 +58,18 @@
   figure.ph figcaption { position:absolute; left:10px; bottom:8px; font-size:13px; color:#fff; background:rgba(0,0,0,.45); padding:3px 8px; border-radius:6px; }
   img.how { width:100%; border-radius:10px; display:block; }
   img.pg { position:absolute; box-shadow:0 26px 60px rgba(0,0,0,.45); border-radius:4px; }
+  figure.ph.vid { background:#000; }
+  figure.ph iframe { position:absolute; inset:-1px; width:calc(100% + 2px); height:calc(100% + 2px); border:0; pointer-events:none; }
+  .stage3d { position:absolute; left:-110px; right:-30px; top:70px; bottom:-60px; perspective:2200px; display:grid; place-items:center; }
+  .book3d { --w:400px; --h:566px; --t:14s; position:relative; width:calc(var(--w) * 2); height:var(--h); transform-style:preserve-3d; transform:rotateX(38deg) rotateZ(-8deg) translateY(-10px); }
+  .pg3 { position:absolute; top:0; width:var(--w); height:var(--h); background:#F5F2F2 center/cover; box-shadow:0 40px 70px rgba(0,0,0,.55); }
+  .base-l { left:0; background:#ECE8E8; }
+  .base-r { left:var(--w); }
+  .leaf { position:absolute; left:var(--w); top:0; width:var(--w); height:var(--h); transform-origin:left center; transform-style:preserve-3d; transition:transform 1.3s cubic-bezier(.55,.05,.25,1); transform:translateZ(calc((4 - var(--i)) * 0.8px)) rotateY(0deg); }
+  .leaf.on { transform:translateZ(calc(var(--i) * 0.8px + 1px)) rotateY(-179deg); }
+  .face { position:absolute; inset:0; background:#F5F2F2 center/cover; backface-visibility:hidden; }
+  .face.front { box-shadow:inset 8px 0 14px -10px rgba(0,0,0,.4); }
+  .face.back { transform:rotateY(180deg); box-shadow:inset -8px 0 14px -10px rgba(0,0,0,.4); }
   .ex { font-size:19px; line-height:1.4; opacity:.9; border-left:4px solid var(--lava); padding-left:16px; }
   .ex b { color:#fff; }
 </style>
@@ -83,24 +95,25 @@
         </div>
       <div style="font-size:15px;line-height:1.45;opacity:.55;margin-top:26px">Sources: RIAA 2025 year-end report (via Music Week) · YPulse Going Analog 2026 (via Digital Camera World) · Nielsen BookData 2021/22 (via WEF) · Fujifilm, Apr 2025 · Irish Times, Mar 2026 · Unseen Japan, 2026</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:18px;margin:-80px -140px -110px 0">
-        <figure class="ph" style="grid-row:span 2"><img src="/pitch/img/zinefest-fluke.jpg" alt="Visitors at a zine festival" /><figcaption>FLUKE Zine Festival · Saginaw-hitchhiker, CC BY-SA 4.0</figcaption></figure>
-        <figure class="ph"><img src="/pitch/img/vinyl.jpg" alt="Records in a record store" /><figcaption>Mr Cup / Fabien Barral, CC0</figcaption></figure>
-        <figure class="ph"><img src="/pitch/img/instax.jpg" alt="instax instant camera" /><figcaption>Ubahnverleih, CC0</figcaption></figure>
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:330px 1fr 330px;gap:16px;margin:-80px -140px -110px 0">
+        <figure class="ph"><img src="/pitch/img/minizine-guide.jpg" alt="A folded one-sheet mini zine" /><figcaption>Alzinous, CC BY-SA 4.0</figcaption></figure>
+        <figure class="ph"><img src="/pitch/img/minizines-wall.jpg" alt="Mini zines in a wall holder" /><figcaption>L Maule, CC BY 4.0</figcaption></figure>
+        <figure class="ph vid" style="grid-column:span 2"><iframe src="https://www.youtube-nocookie.com/embed/ab4O9SWNl9g?autoplay=1&amp;mute=1&amp;loop=1&amp;playlist=ab4O9SWNl9g&amp;controls=0&amp;modestbranding=1&amp;playsinline=1&amp;rel=0" title="Austin Kleon: How to make a zine from a single sheet of paper" allow="autoplay; encrypted-media" loading="lazy"></iframe><figcaption>Austin Kleon: one sheet, one cut (YouTube)</figcaption></figure>
+        <figure class="ph"><img src="/pitch/img/minizines-table.jpg" alt="Mini zines for sale at a zine fair" /><figcaption>L Maule, CC BY 4.0</figcaption></figure>
+        <figure class="ph vid"><iframe src="https://www.youtube-nocookie.com/embed/HHXA1K9oM7A?autoplay=1&amp;mute=1&amp;loop=1&amp;playlist=HHXA1K9oM7A&amp;controls=0&amp;modestbranding=1&amp;playsinline=1&amp;rel=0" title="Mr OddestBall: How I make my zines" allow="autoplay; encrypted-media" loading="lazy"></iframe><figcaption>Mr OddestBall (YouTube)</figcaption></figure>
       </div>
     </div>
-    
-  </section>
+    </section>
 
   <!-- 2 What we do: GP Mini-Zine -->
   <section class="slide dark">
-    <div style="display:grid;grid-template-columns:820px 1fr;gap:70px;height:100%">
+    <div style="display:grid;grid-template-columns:840px 1fr;gap:60px;height:100%">
       <div>
         <div class="k"></div>
         <div class="eyebrow">What we do</div>
-        <h2 style="font-size:96px">GP Mini-Zine.</h2>
-        <p class="lead" style="font-size:30px;opacity:.88">One zine per Grand Prix. 13 photos of the weekend from the team, 16 pages, two A4 sheets. Fans print it at home, colour in the cover, scan the code on the back and post it with #ARF1. The download needs a login and unlocks a Team Card.</p>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:40px">
+        <h2 style="font-size:84px">GP Mini-Zine.</h2>
+        <p class="lead" style="font-size:27px;opacity:.88">One zine per Grand Prix. 13 photos of the weekend from the team, 16 pages, two A4 sheets. Fans print it at home, colour in the cover, scan the code on the back and post it with #ARF1. The download needs a login and unlocks a Team Card.</p>
+        <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:30px">
           <img class="how" src="/zine/media/audif1_gp-mini-zine_step-01.png" alt="Step 1" />
           <img class="how" src="/zine/media/audif1_gp-mini-zine_step-02.png" alt="Step 2" />
           <img class="how" src="/zine/media/audif1_gp-mini-zine_step-03.png" alt="Step 3" />
@@ -110,22 +123,30 @@
           <img class="how" src="/zine/media/audif1_gp-mini-zine_step-07.png" alt="Step 7" />
           <img class="how" src="/zine/media/audif1_gp-mini-zine_step-08.png" alt="Step 8" />
         </div>
-        <div style="font-size:20px;opacity:.6;margin-top:12px">Two sheets, one cut each, ten minutes.</div>
-      </div>
-      <div style="position:relative">
-        <div class="eyebrow" style="position:absolute;left:0;top:0">Our zine, prototype</div>
-        <img class="pg" src="/pitch/cover-outline-portrait.png" alt="Colour-in cover" style="left:0;top:70px;width:290px;transform:rotate(-5deg)" />
-        <img class="pg" src="/pitch/img/zine-p03.jpg" alt="Page 3" style="left:230px;top:40px;width:260px;transform:rotate(2deg)" />
-        <img class="pg" src="/pitch/img/zine-p04.jpg" alt="Page 4" style="left:450px;top:90px;width:260px;transform:rotate(6deg)" />
-        <img class="pg" src="/pitch/img/zine-p16.jpg" alt="Back with QR code" style="left:640px;top:60px;width:205px;transform:rotate(-3deg)" />
-        <div class="eyebrow" style="position:absolute;left:0;top:590px">Zines out there</div>
-        <div style="position:absolute;left:0;right:0;top:630px;display:grid;grid-template-columns:420px 1fr;gap:26px">
-          <figure class="ph" style="height:250px;margin:0"><img src="/pitch/img/zinefest-la.jpg" alt="Zines on a table at LA Zine Fest" /><figcaption>LA Zine Fest 2017 · Pizzajono, CC BY-SA 4.0</figcaption></figure>
-          <div style="display:grid;gap:16px;align-content:start">
+        <div style="font-size:18px;opacity:.6;margin-top:10px">How it works: two sheets, one cut each, ten minutes.</div>
+        <div class="eyebrow" style="margin-top:46px">Zines out there</div>
+        <div style="display:grid;grid-template-columns:330px 1fr;gap:22px">
+          <figure class="ph" style="height:230px;margin:0"><img src="/pitch/img/zinefest-la.jpg" alt="Zines on a table at LA Zine Fest" /><figcaption>LA Zine Fest 2017 · Pizzajono, CC BY-SA 4.0</figcaption></figure>
+          <div style="display:grid;gap:12px;align-content:start">
             <div class="ex"><b>Grand Prix Zine</b> by rdarida: a fan-made F1 season tracker, one A4 sheet folded into 8 pages. Free on itch.io.</div>
             <div class="ex"><b>adidas &times; Stella Sport</b> launched a collection with a stapled lookbook zine. <b>Vevo</b> made its first print piece a zine.</div>
             <div class="ex"><b>No F1 team</b> we could find gives fans its own race photos to print and keep.</div>
           </div>
+        </div>
+      
+      </div>
+      <div style="position:relative">
+        <div class="eyebrow" style="position:absolute;left:0;top:0">Our zine, prototype</div>
+        <div class="stage3d">
+          <div class="book3d">
+            <div class="pg3 base-l"></div>
+            <div class="pg3 base-r" style="background-image:url(/pitch/img/zine-p16.jpg)"></div>
+            <div class="leaf" style="--i:3"><div class="face front" style="background-image:url(/pitch/img/zine-p07.jpg)"></div><div class="face back" style="background-image:url(/pitch/img/zine-p03.jpg)"></div></div>
+            <div class="leaf" style="--i:2"><div class="face front" style="background-image:url(/pitch/img/zine-p05.jpg)"></div><div class="face back" style="background-image:url(/pitch/img/zine-p06.jpg)"></div></div>
+            <div class="leaf" style="--i:1"><div class="face front" style="background-image:url(/pitch/img/zine-p03.jpg)"></div><div class="face back" style="background-image:url(/pitch/img/zine-p04.jpg)"></div></div>
+            <div class="leaf" style="--i:0"><div class="face front" style="background-image:url(/pitch/cover-outline-portrait.png)"></div><div class="face back" style="background-image:url(/pitch/img/zine-p02.jpg)"></div></div>
+          </div>
+        </div>
         </div>
       </div>
     </div>
@@ -181,6 +202,16 @@
   addEventListener("touchstart", (e) => (x0 = e.touches[0].clientX), { passive: true });
   addEventListener("touchend", (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 50) show(dx < 0 ? i + 1 : i - 1); x0 = null; });
   document.getElementById("fs").onclick = full;
+  // 3D zine: turn the pages one by one, then close it again
+  (function zine() {
+    const leaves = [...document.querySelectorAll(".book3d .leaf")].sort((x, y) => +getComputedStyle(x).getPropertyValue("--i") - +getComputedStyle(y).getPropertyValue("--i"));
+    if (!leaves.length) return;
+    let k = 0, dir = 1;
+    setInterval(() => {
+      if (dir === 1) { if (k < leaves.length) leaves[k++].classList.add("on"); else { dir = -1; } }
+      else { if (k > 0) leaves[--k].classList.remove("on"); else { dir = 1; } }
+    }, 1500);
+  })();
   fit(); show(i);
 </script>
 </body>
