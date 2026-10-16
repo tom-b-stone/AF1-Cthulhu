@@ -328,7 +328,15 @@ ${SEO_WRITE_RECIPE}`);
       if (args.ktulu_action) {
         const t = TOOLS.find((x) => x.name === String(args.ktulu_action));
         if (!t) return text(`Unknown action ${String(args.ktulu_action)}`, true);
-        return t.run((args.ktulu_args as Record<string, unknown>) ?? {}, actor);
+        let a: unknown = args.ktulu_args ?? {};
+        if (typeof a === "string") {
+          try {
+            a = JSON.parse(a);
+          } catch {
+            a = {};
+          }
+        }
+        return t.run(a as Record<string, unknown>, actor);
       }
       const id = String(args.badgeId ?? "").match(/[a-f0-9]{24}/)?.[0];
       if (!id) return text("badgeId missing", true);
