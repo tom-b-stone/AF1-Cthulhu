@@ -323,6 +323,13 @@ ${SEO_WRITE_RECIPE}`);
       },
     },
     async run(args, actor) {
+      // passthrough to any action (claude.ai caches the tool list; this
+      // existing tool reaches new actions without reconnecting)
+      if (args.ktulu_action) {
+        const t = TOOLS.find((x) => x.name === String(args.ktulu_action));
+        if (!t) return text(`Unknown action ${String(args.ktulu_action)}`, true);
+        return t.run((args.ktulu_args as Record<string, unknown>) ?? {}, actor);
+      }
       const id = String(args.badgeId ?? "").match(/[a-f0-9]{24}/)?.[0];
       if (!id) return text("badgeId missing", true);
       const r = await copyTeamCard({ badgeId: id, keepDraft: args.keepDraft as boolean | undefined, withPageBlock: args.withPageBlock as boolean | undefined, targetPageId: (String(args.targetPageId ?? "").match(/[a-f0-9]{24}/) ?? [])[0] });
