@@ -4,6 +4,7 @@
 // staging CMS. Opening the page runs the check (newest change wins) and asks
 // when both sides changed the same text.
 import { useEffect, useMemo, useState } from "react";
+import { Table, type TableColumn } from "@/components/ui/table-editable";
 
 type Diff = { key: string; pageId: string; page: string; block: string; layer: string; kind?: string; base?: string; cms?: string; figma?: string; state: string };
 type Page = { id: string; url: string; title: string; updatedAt: string; status: string; blocks: { id: string; blockType: string; hidden: boolean; fields: unknown[] }[] };
@@ -84,8 +85,17 @@ export default function Page() {
 
   const figmaLink = (node?: string) => (s ? `https://www.figma.com/design/${s.campaign.figmaFile}/WorkingDoc?node-id=${(node ?? s.campaign.figmaPage).replace(":", "-")}` : "#");
 
+  const pageColumns: TableColumn<Page>[] = [
+    { key: "title", header: "Page", width: "300px", sortable: true, cell: (p) => <div><div style={{ fontWeight: 600 }}>{p.title}</div><div style={{ color: "var(--muted)", fontSize: 12 }}>/{p.url}</div></div> },
+    { key: "url", header: "URL", width: "260px", sortable: true, cell: (p) => <span style={{ fontSize: 12 }}>/{p.url}</span> },
+    { key: "modules", header: "Modules", width: "90px", sortable: true, sortValue: (p) => p.blocks.length, cell: (p) => p.blocks.length },
+    { key: "figma", header: "Figma", width: "100px", cell: (p) => { const node = s?.figma?.nodes?.[p.id]; return node ? <a href={figmaLink(node)} target="_blank" rel="noreferrer">Frame ↗</a> : <span style={{ color: "var(--muted)" }}>not built</span>; } },
+    { key: "staging", header: "Staging", width: "140px", cell: (p) => <span style={{ fontSize: 12, whiteSpace: "nowrap" }}><a href={`${STG}/en/${p.url}`} target="_blank" rel="noreferrer">Page ↗</a> · <a href={`${STG}/cms/admin/collections/pages/${p.id}`} target="_blank" rel="noreferrer">CMS ↗</a></span> },
+    { key: "state", header: "State", width: "140px", sortable: true, sortValue: (p) => byPage[p.id] ?? 0, cell: (p) => (byPage[p.id] ? `${byPage[p.id]} difference${byPage[p.id] === 1 ? "" : "s"}` : s?.figma?.nodes?.[p.id] ? "in sync" : "–") },
+  ];
+
   return (
-    <div style={{ display: "grid", gap: 24, maxWidth: 1100 }}>
+    <div style={{ display: "grid", gap: 24, maxWidth: 1400 }}>
       <div>
         <h1 style={{ margin: "0 0 6px" }}>Sitemap Sync{s ? ` · ${s.campaign.name}` : ""}</h1>
         <p style={{ color: "var(--muted)", margin: 0 }}>
@@ -163,36 +173,18 @@ export default function Page() {
       )}
 
       {s && (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {["Page", "Modules", "Figma", "Staging", "State"].map((h) => (
-                  <th key={h} style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {s.pages.map((p) => {
-                const node = s.figma?.nodes?.[p.id];
-                return (
-                  <tr key={p.id} style={{ borderBottom: "1px solid var(--border)", verticalAlign: "top" }}>
-                    <td style={{ padding: 10 }}>
-                      <div style={{ fontWeight: 600 }}>{p.title}</div>
-                      <div style={{ color: "var(--muted)", fontSize: 12 }}>/{p.url}</div>
-                    </td>
-                    <td style={{ padding: 10, color: "var(--muted)", fontSize: 12 }}>{p.blocks.length}</td>
-                    <td style={{ padding: 10, fontSize: 12 }}>{node ? <a href={figmaLink(node)} target="_blank" rel="noreferrer">Frame ↗</a> : <span style={{ color: "var(--muted)" }}>not built</span>}</td>
-                    <td style={{ padding: 10, fontSize: 12, whiteSpace: "nowrap" }}>
-                      <a href={`${STG}/en/${p.url}`} target="_blank" rel="noreferrer">Page ↗</a>{" · "}
-                      <a href={`${STG}/cms/admin/collections/pages/${p.id}`} target="_blank" rel="noreferrer">CMS ↗</a>
-                    </td>
-                    <td style={{ padding: 10, fontSize: 12 }}>{byPage[p.id] ? `${byPage[p.id]} difference${byPage[p.id] === 1 ? "" : "s"}` : node ? "in sync" : "–"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="beui beui-compact">
+          <Table<Page>
+            data={s.pages}
+            columns={pageColumns}
+            getRowId={(p) => p.id}
+            resizable
+            reorderable
+            defaultSort={{ key: "url", direction: "asc" }}
+            height={Math.min(760, 120 + s.pages.length * 48)}
+            rowHeight={48}
+            className="rounded-lg border border-border"
+          />
         </div>
       )}
 
