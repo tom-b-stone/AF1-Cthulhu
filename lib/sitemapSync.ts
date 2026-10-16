@@ -32,8 +32,8 @@ export const CAMPAIGNS: Record<string, Campaign> = {
     key: "sin",
     name: "Unlock Singapore",
     root: "unlock-singapore",
-    figmaFile: "GTdJnVBixOYab3V4qzKcEC",
-    figmaPage: "3186:2",
+    figmaFile: "rGxt5J0qhiK759uEbaKgTO",
+    figmaPage: "692:56",
   },
 };
 

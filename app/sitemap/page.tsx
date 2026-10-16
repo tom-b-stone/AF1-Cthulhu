@@ -75,7 +75,7 @@ export default function Page() {
     setTokenAt(new Date().toISOString());
   }
 
-  const figmaLink = (node?: string) => (s ? `https://www.figma.com/design/${s.campaign.figmaFile}/05-1_AF1_Design_Loyalty?node-id=${(node ?? s.campaign.figmaPage).replace(":", "-")}` : "#");
+  const figmaLink = (node?: string) => (s ? `https://www.figma.com/design/${s.campaign.figmaFile}/WorkingDoc?node-id=${(node ?? s.campaign.figmaPage).replace(":", "-")}` : "#");
 
   return (
     <div style={{ display: "grid", gap: 24, maxWidth: 1100 }}>
