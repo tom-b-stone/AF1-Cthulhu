@@ -103,6 +103,20 @@ export async function engagementPreview(rec: CardRecord): Promise<EngagementPrev
   };
 }
 
+// The card's documents as they are on staging (EN + DE): the editor fills the captured
+// site templates from them, so every text on the screens shows the real content.
+export type RawDocs = Record<Loc, { badge: Json; engagement: Json; module: Json }>;
+export async function rawDocs(rec: CardRecord): Promise<RawDocs> {
+  const out = {} as RawDocs;
+  await Promise.all(
+    (["en", "de"] as Loc[]).map(async (l) => {
+      const [badge, engagement, module] = await Promise.all((["badge", "engagement", "module"] as DocKind[]).map((d) => readDoc(rec, d, l).catch(() => null)));
+      out[l] = { badge, engagement, module };
+    }),
+  );
+  return out;
+}
+
 // Reads every field of a card from staging (both locales).
 export async function loadFromStaging(rec: CardRecord): Promise<CardRecord> {
   const docs: Record<string, Json> = {};

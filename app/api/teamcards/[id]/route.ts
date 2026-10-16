@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
-import { applyChanges, diff, engagementPreview, getCard, listCards, reloadCard, stagingLinks, type Change } from "@/lib/teamCards";
+import { applyChanges, diff, engagementPreview, getCard, listCards, rawDocs, reloadCard, stagingLinks, type Change } from "@/lib/teamCards";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,8 +11,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!session?.user?.email) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const card = await getCard(params.id);
   if (!card) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const preview = await engagementPreview(card).catch(() => null);
-  return NextResponse.json({ card: { ...card, links: stagingLinks(card), preview } });
+  const [preview, raw] = await Promise.all([engagementPreview(card).catch(() => null), rawDocs(card).catch(() => null)]);
+  return NextResponse.json({ card: { ...card, links: stagingLinks(card), preview, raw } });
 }
 
 // { action: "preview", changes } → before/after + rule issues, nothing written

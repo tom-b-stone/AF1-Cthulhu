@@ -49,7 +49,16 @@ export const FIELDS: FieldDef[] = [
   { key: "disabled", label: "Disable this card", step: "Settings", doc: "badge", path: ["isDraft"], localized: false, kind: "boolean", help: "A disabled card loses the link to its engagement and module. Leave off." },
 ];
 
-export const fieldByKey = (k: string) => FIELDS.find((f) => f.key === k);
+// "raw:<doc>:<dot.path>" addresses any text of the badge, engagement or module that has no
+// named field yet (texts found in the captured site templates, e.g. answer options)
+export function rawField(k: string): FieldDef | undefined {
+  const m = /^raw:(badge|engagement|module):(.+)$/.exec(k);
+  if (!m) return undefined;
+  const path = m[2].split(".").map((p) => (/^\d+$/.test(p) ? Number(p) : p));
+  const label = m[2].replace(/\.(\d+)/g, (_x, n) => ` ${Number(n) + 1}`).replace(/\./g, " · ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+  return { key: k, label: label.charAt(0).toUpperCase() + label.slice(1), step: "Settings", doc: m[1] as DocKind, path, localized: true, kind: "text" };
+}
+export const fieldByKey = (k: string) => FIELDS.find((f) => f.key === k) ?? rawField(k);
 
 export type LocValue = { en?: string; de?: string };
 // ---- rules --------------------------------------------------------------

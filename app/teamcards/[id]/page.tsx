@@ -1,481 +1,743 @@
 "use client";
 
-// Guided edit of one Team Card, in two columns: the step's fields on the left,
-// a live mobile preview on the right that renders the texts in the real
-// audif1.com frontend (production CSS and module markup, see LivePreview).
-// Typing on the left updates the preview; clicking a text in the preview
-// selects its field. Ask-backs (German after English, rule issues) stay.
-// Nothing is written before Review.
+// Team Card editor. The whole fan journey as real audif1.com screens (captured
+// on staging, filled with this card's content) on one canvas; texts are edited
+// in place or in the drawer that slides in from the right. Steps stay fixed in
+// the header. Changing a text that appears elsewhere asks where else it should
+// change (this journey → the campaign → all cards). Nothing is written before Review.
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FIELDS, STEPS, fieldIssues, type FieldDef, type Loc, type LocValue } from "@/lib/teamCardFields";
-import { LivePreview, type PreviewCard } from "../LivePreview";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { FIELDS, fieldByKey, fieldIssues, type FieldDef, type Loc } from "@/lib/teamCardFields";
+import { SitePhone } from "../SitePhone";
+import { HINTS, LANES, STEPS, TEAM_RULES, kindOf, stationsFor, type Lane, type Station } from "../journey";
 
-type Values = Record<string, LocValue | string | boolean | undefined>;
+type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+type LV = { en: string; de: string };
+type Values = Record<string, LV>;
 type Card = {
   id: string;
   name: string;
   status: string;
-  mechanic?: string;
   rewardType?: string;
   imageUrl?: string;
-  engagementImageUrl?: string;
   badgeTypeLabel?: string;
   raceLabel?: string;
-  values: Values;
+  values: Record<string, Json>;
   links: { badge: string; engagement?: string; page?: string };
-  preview?: PreviewCard["preview"];
-  log: { at: string; by: string; summary: string }[];
+  preview?: { type?: string } | null;
+  raw?: Record<Loc, { badge: Json; engagement: Json; module: Json }> | null;
 };
-type DiffRow = { card: string; key: string; label: string; locale: Loc | null; before: unknown; after: unknown; issues: string[] };
+type OtherCard = { id: string; name: string; values: Record<string, Json> };
+type LexEntry = { id: string; field: string; en: string; de: string; uses: number; saved: boolean; cards: string[] };
+type Templates = Record<string, Record<string, { label: string; html: string; popup: boolean }>>;
+type Mode = "en" | "de" | "stack" | "side";
+type Ask = { key: string; lang: Loc; from: string; to: string; journey: string[]; campaign: { id: string; name: string }[]; global: { id: string; name: string; value: string }[]; stage: 0 | 1 | 2 };
+type Cross = Record<string, { key: string; locale: Loc; value: string }[]>;
 
-const ALL = [...STEPS, "Review"] as const;
-type Step = (typeof ALL)[number];
-
-const TALK: Record<Step, string> = {
-  Module: "Let's start where fans meet the card: the module on the page. Click any text in the preview and type. What makes them stop scrolling?",
-  Engagement: "Now the task that unlocks the card. Write the question first, then flip through what fans see after answering, logged out and logged in, and what they share.",
-  Reveal: "Fans who aren't logged in see the card right after the task. Give them a reason to log in.",
-  Collected: "The moment of collecting. Short and proud: the popup title has six words at most, the line below twenty.",
-  Collection: "In the profile the card waits until it's earned. Tell fans how to get it and where the button takes them. Switch to \"collected\" for the line they see afterwards.",
-  Reward: "What does the card give besides itself? Raffle and voucher get their own fields once a card needs them.",
-  Settings: "Last check before the review. The card stays active, otherwise it loses its link to the engagement and the module.",
-  Review: "Here's everything you changed, checked against the rules. Have a look, then apply it to staging.",
-};
-
-const VIEWS: Record<Step, { key: string; label: string }[]> = {
-  Module: [{ key: "module", label: "On the page" }],
-  Engagement: [
-    { key: "question", label: "The question" },
-    { key: "overlay", label: "Answered, logged out" },
-    { key: "post", label: "Answered, logged in" },
-    { key: "share", label: "Shared" },
-  ],
-  Reveal: [{ key: "reveal", label: "Card popup, not logged in" }],
-  Collected: [{ key: "collected", label: "Card popup, collected" }],
-  Collection: [
-    { key: "unearned", label: "Not collected yet" },
-    { key: "earned", label: "Collected" },
-    { key: "shelf", label: "In the collection" },
-  ],
-  Reward: [{ key: "reward", label: "Reward" }],
-  Settings: [{ key: "module", label: "On the page" }],
-  Review: [{ key: "module", label: "On the page" }],
-};
-
-// which preview screen shows a field (first match wins)
-const VIEW_KEYS: Record<string, string[]> = {
-  module: ["modCategory", "modHeadline", "modSubline", "modCopy", "modBackground", "question"],
-  question: ["question", "submitLabel"],
-  overlay: ["overlayTitle", "overlaySubtitle"],
-  post: ["postTitle", "postMessage"],
-  share: ["shareTitle", "shareText"],
-  reveal: ["revealTitle", "revealDescription", "revealButton", "rewardTeaser"],
-  collected: ["badgePopupTitle", "rewardDescription", "description"],
-  unearned: ["publicTitle", "rewardTeaser", "ctaLabel", "description"],
-  earned: ["publicTitle", "description", "rewardDescription"],
-  shelf: ["publicTitle"],
-};
-// the whole journey of a card, in the order fans see it
-const JOURNEY: { key: string; label: string }[] = [
-  { key: "module", label: "1 · On the page" },
-  { key: "question", label: "2 · The question" },
-  { key: "overlay", label: "3a · Answered, logged out" },
-  { key: "reveal", label: "3b · Card popup, logged out" },
-  { key: "post", label: "4a · Answered, logged in" },
-  { key: "collected", label: "4b · Card popup, collected" },
-  { key: "unearned", label: "5a · Collection, not yet collected" },
-  { key: "earned", label: "5b · Collection, collected" },
-  { key: "shelf", label: "5c · Trophy shelf" },
-  { key: "share", label: "6 · Shared" },
-];
+const C = { bg: "#0c0c0e", panel: "#141417", line: "#26262b", line2: "#34343b", fg: "#e7e5e4", mute: "#8b8a91", lava: "#ff2d00", ok: "#6fcf7c" };
+const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+const getPath = (o: Json, p: (string | number)[]) => p.reduce((a: Json, k) => (a == null ? undefined : a[k]), o);
 const words = (v: string) => v.trim().split(/\s+/).filter(Boolean).length;
+function similar(a: string, b: string) {
+  const x = norm(a), y = norm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const A = new Set(x.split(" ")), B = new Set(y.split(" "));
+  const inter = [...A].filter((w) => B.has(w)).length;
+  return inter / Math.max(A.size, B.size) >= 0.8;
+}
+const keysIn = (html: string) => [...new Set([...html.matchAll(/data-k="([^"]+)"/g)].map((m) => m[1]))];
+const labelOf = (k: string) => fieldByKey(k)?.label ?? k;
+const isText = (f?: FieldDef) => !!f && (f.kind === "text" || f.kind === "textarea");
 
-const get = (v: Values, f: FieldDef, l: Loc) => (f.localized ? ((v[f.key] as LocValue | undefined)?.[l] ?? "") : (v[f.key] as string | boolean | undefined));
+const Icon = ({ d, size = 16 }: { d: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d={d} />
+  </svg>
+);
+const I = { back: "M15 18l-6-6 6-6", left: "M15 18l-6-6 6-6", right: "M9 18l6-6-6-6", plus: "M12 5v14M5 12h14", minus: "M5 12h14", info: "M12 16v-4M12 8h.01M22 12a10 10 0 11-20 0 10 10 0 0120 0z", x: "M18 6L6 18M6 6l12 12", book: "M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5A2.5 2.5 0 004 5.5v14zM20 17v4H6.5" };
+
+const btn = (active = false): CSSProperties => ({ display: "inline-flex", alignItems: "center", gap: 6, height: 32, padding: "0 12px", borderRadius: 8, border: `1px solid ${active ? C.lava : C.line2}`, background: active ? "rgba(255,45,0,.12)" : "transparent", color: C.fg, fontSize: 12.5, cursor: "pointer" });
 
 export default function EditCard() {
   const { id } = useParams<{ id: string }>();
   const [card, setCard] = useState<Card | null>(null);
+  const [tpl, setTpl] = useState<Templates | null>(null);
+  const [others, setOthers] = useState<OtherCard[]>([]);
+  const [lex, setLex] = useState<LexEntry[]>([]);
+  const [initial, setInitial] = useState<Values>({});
   const [vals, setVals] = useState<Values>({});
-  const [step, setStep] = useState<Step>("Module");
-  const [view, setView] = useState<string>("module");
-  const [lang, setLang] = useState<Loc>("en");
+  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState("page");
+  const [whole, setWhole] = useState(false);
+  const [mode, setMode] = useState<Mode>("en");
+  const [scale, setScale] = useState(0.62);
   const [focus, setFocus] = useState<string | undefined>();
-  const [keepDe, setKeepDe] = useState<Record<string, boolean>>({});
-  const [ask, setAsk] = useState<string[] | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [review, setReview] = useState<{ rows: DiffRow[]; errors: string[] } | null>(null);
+  const [station, setStation] = useState<string | undefined>();
+  const [drawer, setDrawer] = useState(false);
+  const [ask, setAsk] = useState<Ask | null>(null);
+  const [asked, setAsked] = useState<Record<string, boolean>>({});
+  const [cross, setCross] = useState<Cross>({});
+  const [draft, setDraft] = useState<{ at: string; vals: Values } | null>(null);
+  const [review, setReview] = useState<{ rows: Json[]; errors: string[] } | null>(null);
   const [result, setResult] = useState<{ pushed: string[]; errors: string[] } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [formOpen, setFormOpen] = useState(true);
-  const [journey, setJourney] = useState(false);
 
+  // ---- load ---------------------------------------------------------------
   useEffect(() => {
-    fetch(`/api/teamcards/${id}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.card) {
-          setCard(j.card);
-          setVals(j.card.values);
-        }
-      });
+    Promise.all([
+      fetch(`/api/teamcards/${id}`).then((r) => r.json()),
+      fetch("/af1-live/templates.json").then((r) => r.json()),
+      fetch("/api/teamcards").then((r) => r.json()).catch(() => ({ cards: [] })),
+      fetch("/api/teamcards/lexicon").then((r) => r.json()).catch(() => ({ entries: [] })),
+    ])
+      .then(([c, t, all, lx]) => {
+        if (!c.card) throw new Error(c.error ?? "card not found");
+        setCard(c.card);
+        setTpl(t);
+        setOthers((all.cards ?? []).filter((x: OtherCard) => x.id !== c.card.id));
+        setLex(lx.entries ?? []);
+      })
+      .catch((e) => setError(e.message));
   }, [id]);
 
-  const changes = useMemo(() => {
-    if (!card) return [] as { key: string; locale?: Loc; value: string | boolean }[];
-    const out: { key: string; locale?: Loc; value: string | boolean }[] = [];
-    for (const f of FIELDS) {
-      if (f.localized) {
-        for (const l of ["en", "de"] as Loc[]) if (get(vals, f, l) !== get(card.values, f, l)) out.push({ key: f.key, locale: l, value: String(get(vals, f, l)) });
-      } else if (get(vals, f, "en") !== get(card.values, f, "en")) out.push({ key: f.key, value: get(vals, f, "en") as string | boolean });
-    }
-    return out;
-  }, [vals, card]);
-
-  // select a field; the preview follows to a screen that shows it
-  const pick = useCallback(
-    (k: string) => {
-      setFocus(k);
-      setFormOpen(true);
-      setView((cur) => {
-        if (VIEW_KEYS[cur]?.includes(k)) return cur;
-        const inStep = VIEWS[step].find((v) => VIEW_KEYS[v.key]?.includes(k));
-        const any = Object.keys(VIEW_KEYS).find((v) => VIEW_KEYS[v].includes(k));
-        return inStep?.key ?? any ?? cur;
-      });
-      setTimeout(() => document.getElementById(`f-${k}`)?.focus(), 0);
+  const kind = kindOf(card?.preview?.type);
+  const stations = useMemo(() => stationsFor(kind), [kind]);
+  const htmlOf = useCallback(
+    (s: Station) => {
+      const [a, b] = s.tpl.split("/");
+      return tpl?.[a]?.[b]?.html ?? tpl?.survey?.[b]?.html ?? "";
     },
-    [step],
+    [tpl],
+  );
+  const allKeys = useMemo(() => [...new Set(stations.flatMap((s) => keysIn(htmlOf(s))))].filter((k) => !k.startsWith("meta:")), [stations, htmlOf]);
+
+  // initial values straight from the staging documents (EN + DE)
+  useEffect(() => {
+    if (!card || !tpl) return;
+    const raw = card.raw;
+    const from = (k: string, l: Loc): string => {
+      const f = fieldByKey(k);
+      if (!f) return "";
+      const doc = raw?.[f.localized ? l : "en"]?.[f.doc];
+      if (doc) {
+        const v = getPath(doc, f.path);
+        if (typeof v === "string") return v;
+        if (v != null && !f.localized) return String(v);
+        if (k.startsWith("raw:")) return "";
+      }
+      const cv = card.values[k];
+      if (cv && typeof cv === "object") return String(cv[l] ?? "");
+      return cv != null ? String(cv) : "";
+    };
+    const keys = [...new Set([...allKeys, ...FIELDS.map((f) => f.key)])];
+    const init: Values = Object.fromEntries(keys.map((k) => [k, { en: from(k, "en"), de: from(k, "de") }]));
+    setInitial(init);
+    setVals(init);
+    try {
+      const d = JSON.parse(localStorage.getItem(`tc-draft:${card.id}`) ?? "null");
+      if (d?.vals) setDraft(d);
+    } catch {}
+  }, [card, tpl, allKeys]);
+
+  const changed = useMemo(
+    () => Object.keys(vals).flatMap((k) => (["en", "de"] as Loc[]).filter((l) => (vals[k]?.[l] ?? "") !== (initial[k]?.[l] ?? "") && (fieldByKey(k)?.localized !== false || l === "en")).map((l) => ({ key: k, locale: l }))),
+    [vals, initial],
+  );
+  // autosave a draft of unsaved edits
+  useEffect(() => {
+    if (!card || !Object.keys(initial).length) return;
+    try {
+      if (changed.length) localStorage.setItem(`tc-draft:${card.id}`, JSON.stringify({ at: new Date().toISOString(), vals: Object.fromEntries([...new Set(changed.map((c) => c.key))].map((k) => [k, vals[k]])) }));
+      else if (!draft) localStorage.removeItem(`tc-draft:${card.id}`);
+    } catch {}
+  }, [changed, vals, card, initial, draft]);
+
+  const textOf = useCallback(
+    (k: string, l: Loc) => {
+      if (k === "meta:race") return card?.raceLabel ?? "";
+      if (k === "meta:type") return card?.badgeTypeLabel ?? "";
+      if (k === "meta:season") return "2026";
+      return vals[k]?.[l] ?? "";
+    },
+    [vals, card],
   );
 
-  if (!card) return <div style={{ color: "var(--muted)" }}>Loading card…</div>;
-
-  const fieldsOf = (s: Step) => FIELDS.filter((f) => f.step === s);
-  const issuesOf = (f: FieldDef, l: Loc) => (f.localized ? fieldIssues(f, l, get(vals, f, l), l === "en" ? String(get(vals, f, "de")) : undefined) : fieldIssues(f, null, get(vals, f, "en")));
-  const deMissing = (f: FieldDef) => f.localized && get(vals, f, "en") !== get(card.values, f, "en") && get(vals, f, "de") === get(card.values, f, "de") && !keepDe[f.key];
-  const stepState = (s: Step) => {
-    const fs = fieldsOf(s);
-    const changed = changes.filter((c) => fs.some((f) => f.key === c.key)).length;
-    const problems = fs.flatMap((f) => [...issuesOf(f, "en"), ...(f.localized ? issuesOf(f, "de").map((x) => `${x} (DE)`) : [])]).concat(fs.filter(deMissing).map((f) => `${f.label}: English changed, German not yet`));
-    return { changed, problems };
-  };
-
-  const edit = (key: string, value: string | boolean, l: Loc = lang) => {
-    const f = FIELDS.find((x) => x.key === key);
-    if (!f) return;
-    setVals((cur) => ({ ...cur, [key]: f.localized ? { ...((cur[key] as LocValue) ?? {}), [l]: String(value) } : value }));
-  };
-
-  const go = (s: Step) => {
-    setStep(s);
-    setView(VIEWS[s][0]?.key ?? "");
-    setAsk(null);
-    setFocus(undefined);
-    if (s === "Review") void runPreview();
-  };
-  const next = (force = false) => {
-    const { problems } = stepState(step);
-    if (problems.length && !force) {
-      setAsk(problems);
-      return;
+  const images = useMemo(() => {
+    const out: Record<string, string> = {};
+    const raw = card?.raw?.en;
+    for (const k of ["badge:badgeImage", "badge:badgeBackImage", "engagement:background.imageSettings.media", "engagement:questions.0.assetId"]) {
+      const [doc, path] = k.split(":");
+      const v = raw ? getPath((raw as Json)[doc], path.split(".").map((p) => (/^\d+$/.test(p) ? Number(p) : p))) : undefined;
+      const mid = v && typeof v === "object" ? v.id : v;
+      if (mid) out[k] = `/api/sitemap/media/${mid}`;
     }
-    go(ALL[Math.min(ALL.indexOf(step) + 1, ALL.length - 1)]);
+    if (!out["badge:badgeImage"] && card?.imageUrl) out["badge:badgeImage"] = card.imageUrl;
+    return out;
+  }, [card]);
+
+  // ---- editing ------------------------------------------------------------
+  const setText = useCallback((k: string, l: Loc, v: string) => setVals((cur) => ({ ...cur, [k]: { ...(cur[k] ?? { en: "", de: "" }), [l]: v } })), []);
+  const issuesOf = (k: string, l: Loc) => {
+    const f = fieldByKey(k);
+    if (!f || !isText(f)) return [];
+    return fieldIssues(f, l, textOf(k, l), l === "en" ? textOf(k, "de") : undefined).map((x) => x.replace(`${f.label}: `, ""));
   };
 
+  // after a text change: where else does the old text appear?
+  const checkScope = useCallback(
+    (k: string, l: Loc) => {
+      const from = initial[k]?.[l] ?? "";
+      const to = vals[k]?.[l] ?? "";
+      const sig = `${k}|${l}|${to}`;
+      if (!from.trim() || from === to || asked[sig]) return;
+      const journey = Object.keys(initial).filter((x) => x !== k && norm(initial[x]?.[l] ?? "") === norm(from) && norm(vals[x]?.[l] ?? "") === norm(from));
+      const f = FIELDS.find((x) => x.key === k);
+      const prefix = card?.id.split("-")[0] ?? "";
+      const val = (o: OtherCard) => {
+        const v = o.values[k];
+        return typeof v === "object" && v ? String(v[l] ?? "") : String(v ?? "");
+      };
+      const campaign = f ? others.filter((o) => o.id.split("-")[0] === prefix && norm(val(o)) === norm(from)).map((o) => ({ id: o.id, name: o.name })) : [];
+      const global = f ? others.filter((o) => o.id.split("-")[0] !== prefix && similar(val(o), from)).map((o) => ({ id: o.id, name: o.name, value: val(o) })) : [];
+      if (!journey.length && !campaign.length && !global.length) return;
+      setAsked((a) => ({ ...a, [sig]: true }));
+      setAsk({ key: k, lang: l, from, to, journey, campaign, global, stage: journey.length ? 0 : campaign.length ? 1 : 2 });
+    },
+    [initial, vals, asked, others, card],
+  );
+
+  const onPhone = useCallback(
+    (sid: string, m: { type: string; k?: string; v?: string }) => {
+      const [stId, l] = sid.split("~") as [string, Loc];
+      if (m.type === "focus" && m.k) {
+        setFocus(m.k);
+        setStation(stId);
+        if (!m.k.startsWith("meta:")) setDrawer(true);
+      }
+      if (m.type === "edit" && m.k && !m.k.startsWith("meta:")) setText(m.k, l, m.v ?? "");
+      if (m.type === "blur" && m.k && !m.k.startsWith("meta:")) setTimeout(() => checkScope(m.k!, l), 60);
+    },
+    [setText, checkScope],
+  );
+
+  // ---- review / apply -------------------------------------------------------
+  const changesPayload = () => changed.map((c) => ({ key: c.key, locale: fieldByKey(c.key)?.localized === false ? undefined : c.locale, value: fieldByKey(c.key)?.kind === "boolean" ? vals[c.key][c.locale] === "true" : vals[c.key][c.locale] }));
   async function runPreview() {
     setBusy("Checking your changes…");
     setResult(null);
-    const j = await fetch(`/api/teamcards/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "preview", changes }) }).then((r) => r.json());
+    const j = await fetch(`/api/teamcards/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "preview", changes: changesPayload() }) }).then((r) => r.json());
     setReview(j.rows ? j : { rows: [], errors: [j.error ?? "failed"] });
     setBusy(null);
   }
   async function apply() {
+    if (!card) return;
     setBusy("Writing to staging…");
-    const j = await fetch(`/api/teamcards/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "apply", changes }) }).then((r) => r.json());
+    const j = await fetch(`/api/teamcards/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "apply", changes: changesPayload() }) }).then((r) => r.json());
+    const crossList = Object.entries(cross).flatMap(([cid, list]) => list.map((c) => ({ card: cid, ...c })));
+    let cr: Json = { pushed: [], errors: [] };
+    if (crossList.length) cr = await fetch("/api/teamcards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "apply", changes: crossList }) }).then((r) => r.json());
+    // the lexicon learns what was applied
+    const learn = [...new Set(changed.map((c) => c.key))].filter((k) => isText(fieldByKey(k))).map((k) => ({ field: k, en: vals[k].en, de: vals[k].de, card: card.id }));
+    if (learn.length) fetch("/api/teamcards/lexicon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "learn", items: learn }) }).then((r) => r.json()).then((x) => x.entries && setLex(x.entries)).catch(() => {});
     window.dispatchEvent(new Event("af1:changed"));
-    setResult({ pushed: j.pushed ?? [], errors: j.errors ?? (j.error ? [j.error] : []) });
-    if (j.card) {
-      setCard(j.card);
-      setVals(j.card.values);
-    }
+    setResult({ pushed: [...(j.pushed ?? []), ...(cr.pushed ?? [])], errors: [...(j.errors ?? (j.error ? [j.error] : [])), ...(cr.errors ?? [])] });
+    try {
+      localStorage.removeItem(`tc-draft:${card.id}`);
+    } catch {}
+    setInitial(vals);
+    setCross({});
     setReview(null);
     setBusy(null);
   }
 
-  const st = stepState(step);
-  const fs = fieldsOf(step);
-  const focusField = FIELDS.find((f) => f.key === focus);
-
-  const previewCard: PreviewCard = { imageUrl: card.imageUrl, engagementImageUrl: card.engagementImageUrl, badgeTypeLabel: card.badgeTypeLabel, raceLabel: card.raceLabel, rewardType: card.rewardType, preview: card.preview };
-  const views = VIEWS[step];
-
-  const fieldEditor = (f: FieldDef) => {
-    const v = get(vals, f, f.localized ? lang : "en");
-    const iss = issuesOf(f, f.localized ? lang : "en");
-    const changed = changes.some((c) => c.key === f.key);
-    const inPreview = Object.values(VIEW_KEYS).some((ks) => ks.includes(f.key));
+  if (error) return <div style={{ color: "#e06c5b", padding: 24 }}>Could not load the card: {error}</div>;
+  if (!card || !tpl || !Object.keys(vals).length)
     return (
-      <div key={f.key} style={{ display: "grid", gap: 5, padding: "10px 12px", borderRadius: 10, border: `1px solid ${focus === f.key ? "var(--accent)" : "var(--border)"}`, background: focus === f.key ? "rgba(227,62,26,0.05)" : "transparent" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-          <label htmlFor={`f-${f.key}`} style={{ fontSize: 13, fontWeight: 600, cursor: inPreview ? "pointer" : undefined }} onClick={() => pick(f.key)}>
-            {f.label}
-            {changed && <span style={{ color: "var(--accent)", fontWeight: 400 }}> · changed</span>}
-          </label>
-          <span style={{ fontSize: 11, color: f.maxWords && typeof v === "string" && words(v) > f.maxWords ? "#e06c5b" : "var(--muted)" }}>
-            {f.maxWords && typeof v === "string" ? `${words(v)}/${f.maxWords} words` : f.localized ? (lang === "en" ? "EN" : "DE") : ""}
-          </span>
+      <div style={{ display: "grid", gap: 14, padding: 8 }} aria-busy="true">
+        <div style={{ height: 22, width: 260, borderRadius: 6, background: C.panel }} />
+        <div style={{ display: "flex", gap: 18 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} style={{ width: 250, height: 520, borderRadius: 26, background: C.panel, opacity: 1 - i * 0.18 }} />
+          ))}
         </div>
-        {f.kind === "select" ? (
-          <select id={`f-${f.key}`} className="input" value={String(v ?? "")} onFocus={() => pick(f.key)} onChange={(e) => edit(f.key, e.target.value, "en")}>
-            {(f.options ?? []).map((o) => (
-              <option key={o}>{o}</option>
-            ))}
-          </select>
-        ) : (
-          <textarea
-            id={`f-${f.key}`}
-            className="input"
-            rows={Math.max(f.kind === "textarea" ? 3 : 1, Math.ceil(String(v ?? "").length / 70))}
-            style={{ width: "100%", resize: "vertical", fontSize: 14, lineHeight: 1.45 }}
-            value={String(v ?? "")}
-            onFocus={() => pick(f.key)}
-            onChange={(e) => edit(f.key, e.target.value)}
-          />
-        )}
-        {f.help && <div style={{ fontSize: 11, color: "var(--muted)" }}>{f.help}</div>}
-        {iss.length > 0 && <div style={{ fontSize: 12, color: "#e06c5b" }}>{iss.join(" · ")}</div>}
-        {deMissing(f) && (
-          <div style={{ fontSize: 12, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-            English changed. German too?
-            <button className="btn" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => { setLang("de"); pick(f.key); }}>
-              Show German
-            </button>
-            <button className="btn" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => setKeepDe((k) => ({ ...k, [f.key]: true }))}>
-              Keep it
-            </button>
-          </div>
-        )}
       </div>
+    );
+
+  const current = STEPS.find((s) => s.key === step)!;
+  const lanes: Lane[] = whole ? ["page", "out", "in", "collection"] : current.lanes;
+  const langs: Loc[] = mode === "en" ? ["en"] : mode === "de" ? ["de"] : ["en", "de"];
+  const stepCount = (key: string) => {
+    const s = STEPS.find((x) => x.key === key)!;
+    const ks = new Set(stations.filter((st) => s.lanes.includes(st.lane)).flatMap((st) => keysIn(htmlOf(st))));
+    return { changed: changed.filter((c) => ks.has(c.key)).length, issues: [...ks].reduce((n, k) => n + issuesOf(k, "en").length + issuesOf(k, "de").length, 0) };
+  };
+  const focusStation = stations.find((s) => s.id === station) ?? stations.find((s) => lanes.includes(s.lane));
+  const drawerKeys = focusStation ? keysIn(htmlOf(focusStation)).filter((k) => !k.startsWith("meta:")) : [];
+  const whereUsed = (k: string) => [...new Set(stations.filter((s) => keysIn(htmlOf(s)).includes(k)).map((s) => s.label.replace(/, back$/, "")))];
+  const missingDe = allKeys.filter((k) => textOf(k, "en").trim() && !textOf(k, "de").trim());
+
+  // ---- render -------------------------------------------------------------
+  const phone = (s: Station, l: Loc, tag?: string) => {
+    const keys = keysIn(htmlOf(s));
+    return (
+      <SitePhone
+        key={s.id + l}
+        id={`${s.id}~${l}`}
+        html={htmlOf(s)}
+        side={s.side}
+        lang={l}
+        tag={tag}
+        scale={scale}
+        values={Object.fromEntries(keys.map((k) => [k, textOf(k, l)]))}
+        images={images}
+        editable={keys.filter((k) => !k.startsWith("meta:"))}
+        missing={l === "de" ? missingDe : undefined}
+        focus={focus}
+        onEvent={onPhone}
+      />
     );
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: formOpen ? "minmax(340px, 440px) minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 24, alignItems: "start" }}>
-      {/* ---- left: edit ---- */}
-      <div style={{ display: formOpen ? "grid" : "none", gap: 16, minWidth: 0 }}>
-        <div>
-          <Link href="/teamcards" style={{ fontSize: 12, color: "var(--muted)" }}>
-            ← All Team Cards
+    <div style={{ margin: "-28px -36px", minHeight: "calc(100dvh - 64px)", background: C.bg, color: C.fg }}>
+      {/* ---- fixed header: card, steps, view controls ---- */}
+      <div style={{ position: "sticky", top: 64, zIndex: 30, background: "rgba(12,12,14,.92)", backdropFilter: "blur(10px)", borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 24px 8px", flexWrap: "wrap" }}>
+          <Link href="/teamcards" aria-label="All Team Cards" style={{ ...btn(), padding: "0 8px" }}>
+            <Icon d={I.back} />
           </Link>
-          <h1 style={{ margin: "4px 0 2px" }}>{card.name}</h1>
-          <div style={{ color: "var(--muted)", fontSize: 13 }}>
-            {card.id} · {card.status} · on staging: <a href={card.links.badge} target="_blank" rel="noreferrer">card</a>
-            {card.links.engagement && (
-              <>
-                {" · "}
-                <a href={card.links.engagement} target="_blank" rel="noreferrer">engagement</a>
-              </>
-            )}
-            {card.links.page && (
-              <>
-                {" · "}
-                <a href={card.links.page} target="_blank" rel="noreferrer">page</a>
-              </>
-            )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 17, fontWeight: 650, letterSpacing: "-.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.name}</div>
+            <div style={{ fontSize: 11.5, color: C.mute }}>
+              {card.id} · {kind === "qa" ? "Text answer" : kind === "hot" ? "Hot or not" : "Multiple choice"} · staging{" "}
+              <a href={card.links.badge} target="_blank" rel="noreferrer" style={{ color: C.mute }}>card ↗</a>
+              {card.links.page && (
+                <>
+                  {" · "}
+                  <a href={card.links.page} target="_blank" rel="noreferrer" style={{ color: C.mute }}>page ↗</a>
+                </>
+              )}
+            </div>
           </div>
+          <div style={{ flex: 1 }} />
+          <div role="group" aria-label="Language" style={{ display: "flex", border: `1px solid ${C.line2}`, borderRadius: 8, overflow: "hidden" }}>
+            {(["en", "de", "stack", "side"] as Mode[]).map((m) => (
+              <button key={m} onClick={() => setMode(m)} aria-pressed={mode === m} style={{ height: 30, padding: "0 10px", border: 0, background: mode === m ? "rgba(255,45,0,.16)" : "transparent", color: mode === m ? "#fff" : C.mute, fontSize: 12, cursor: "pointer" }}>
+                {m === "en" ? "EN" : m === "de" ? "DE" : m === "stack" ? "EN over DE" : "EN | DE"}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <button aria-label="Smaller screens" style={{ ...btn(), padding: "0 8px" }} onClick={() => setScale((s) => Math.max(0.4, +(s - 0.08).toFixed(2)))}>
+              <Icon d={I.minus} />
+            </button>
+            <span style={{ fontSize: 11, color: C.mute, width: 34, textAlign: "center" }}>{Math.round(scale * 100)}%</span>
+            <button aria-label="Bigger screens" style={{ ...btn(), padding: "0 8px" }} onClick={() => setScale((s) => Math.min(1, +(s + 0.08).toFixed(2)))}>
+              <Icon d={I.plus} />
+            </button>
+          </div>
+          <button style={btn(whole)} onClick={() => setWhole((w) => !w)} aria-pressed={whole}>
+            {whole ? "Whole journey" : "This step"}
+          </button>
+          <button
+            style={{ ...btn(), background: changed.length ? C.lava : "transparent", borderColor: changed.length ? C.lava : C.line2, color: "#fff", fontWeight: 600 }}
+            onClick={() => {
+              setStep("review");
+              void runPreview();
+            }}
+          >
+            Review{changed.length ? ` ${changed.length}` : ""}
+          </button>
         </div>
-
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {ALL.map((s, i) => {
-            const x = s === "Review" ? { changed: changes.length, problems: [] as string[] } : stepState(s);
-            const mark = x.problems.length ? "!" : x.changed ? "●" : "✓";
-            const col = x.problems.length ? "#e06c5b" : x.changed ? "var(--accent)" : "#6fcf7c";
+        <nav aria-label="Steps" style={{ display: "flex", gap: 4, padding: "0 24px 10px", overflowX: "auto" }}>
+          {STEPS.map((s, i) => {
+            const n = s.lanes.length ? stepCount(s.key) : { changed: s.key === "review" ? changed.length : 0, issues: 0 };
+            const on = s.key === step;
             return (
-              <button key={s} className="btn" onClick={() => go(s)} style={{ padding: "5px 11px", borderColor: s === step ? "var(--accent)" : undefined }}>
-                <span style={{ color: col, fontWeight: 700 }}>{s === "Review" ? (changes.length ? changes.length : "·") : mark}</span> {i + 1}. {s}
+              <button
+                key={s.key}
+                onClick={() => {
+                  setStep(s.key);
+                  setWhole(false);
+                  setStation(undefined);
+                  if (s.key === "review") void runPreview();
+                }}
+                aria-current={on ? "step" : undefined}
+                style={{ display: "flex", alignItems: "center", gap: 8, height: 34, padding: "0 12px", borderRadius: 999, border: `1px solid ${on ? C.lava : C.line}`, background: on ? "rgba(255,45,0,.1)" : C.panel, color: on ? "#fff" : C.fg, fontSize: 12.5, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <span style={{ width: 18, height: 18, borderRadius: 99, display: "grid", placeItems: "center", fontSize: 10.5, fontWeight: 700, background: n.issues ? "rgba(224,108,91,.2)" : n.changed ? "rgba(255,45,0,.25)" : "#27272a", color: n.issues ? "#e06c5b" : "#fff" }}>{n.issues ? "!" : i + 1}</span>
+                {s.title}
+                {n.changed > 0 && <span style={{ fontSize: 10.5, color: C.lava }}>{n.changed} changed</span>}
               </button>
             );
           })}
-        </div>
-
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <div style={{ width: 30, height: 30, borderRadius: 99, background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>TC</div>
-          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "4px 14px 14px 14px", padding: "10px 14px", fontSize: 14, lineHeight: 1.5 }}>
-            {TALK[step]}
-            {step !== "Review" && step !== "Settings" && step !== "Reward" && (
-              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-                {st.problems.length ? `${st.problems.length} thing${st.problems.length === 1 ? "" : "s"} to look at in this step.` : st.changed ? `${st.changed} change${st.changed === 1 ? "" : "s"} so far, all fine.` : "Nothing changed yet. Everything here is complete."}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {step !== "Review" && step !== "Settings" && fs.length > 0 && (
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 4 }}>You are editing</span>
-              {(["en", "de"] as Loc[]).map((l) => (
-                <button key={l} className="btn" style={{ padding: "4px 12px", borderColor: lang === l ? "var(--accent)" : undefined }} onClick={() => setLang(l)}>
-                  {l === "en" ? "English" : "German"}
-                </button>
-              ))}
-            </div>
-            {fs.map(fieldEditor)}
-          </div>
-        )}
-
-        {step === "Reward" && fs.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)" }}>Raffle and voucher fields appear once a card needs them. The preview shows how this card works.</div>}
-
-        {step === "Settings" &&
-          fs.map((f) => (
-            <label key={f.key} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14 }}>
-              <input type="checkbox" checked={Boolean(get(vals, f, "en"))} onChange={(e) => edit(f.key, e.target.checked, "en")} /> {f.label}
-              <span style={{ color: "var(--muted)", fontSize: 12 }}>{f.help}</span>
-            </label>
-          ))}
-
-        {step === "Review" && (
-          <div style={{ display: "grid", gap: 12 }}>
-            {busy && <div style={{ color: "var(--muted)" }}>{busy}</div>}
-            {review && review.rows.length === 0 && !result && <div style={{ color: "var(--muted)" }}>Nothing changed yet. Pick a step above and click into a text.</div>}
-            {review && review.rows.length > 0 && (
-              <>
-                <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 11 }}>
-                      <th style={{ padding: 6 }}>Field</th>
-                      <th style={{ padding: 6 }}>Before</th>
-                      <th style={{ padding: 6 }}>After</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {review.rows.map((r, i) => (
-                      <tr key={i} style={{ borderTop: "1px solid var(--border)", verticalAlign: "top", cursor: "pointer" }} onClick={() => pick(r.key)}>
-                        <td style={{ padding: 6 }}>
-                          {r.label}
-                          {r.locale ? ` · ${r.locale === "en" ? "English" : "German"}` : ""}
-                          {r.issues.length > 0 && <div style={{ color: "#e06c5b", fontSize: 12 }}>{r.issues.join(" · ")}</div>}
-                        </td>
-                        <td style={{ padding: 6, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{String(r.before ?? "")}</td>
-                        <td style={{ padding: 6, whiteSpace: "pre-wrap" }}>{String(r.after ?? "")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div style={{ fontSize: 13, color: "var(--muted)" }}>Apply writes these {review.rows.length} changes to the card, engagement and module on staging. The staging page is republished.</div>
-                <div>
-                  <button className="btn btn-primary" disabled={!!busy} onClick={apply}>
-                    Yes, apply to staging
-                  </button>
-                </div>
-              </>
-            )}
-            {result && (
-              <div style={{ display: "grid", gap: 6, fontSize: 14 }}>
-                {result.pushed.map((p, i) => (
-                  <div key={i}>✓ {p}</div>
-                ))}
-                {result.errors.map((p, i) => (
-                  <div key={i} style={{ color: "#e06c5b" }}>
-                    ✗ {p}
-                  </div>
-                ))}
-                <div style={{ fontWeight: 600, marginTop: 6 }}>What next?</div>
-                <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
-                  {card.links.page && (
-                    <li>
-                      <a href={card.links.page} target="_blank" rel="noreferrer">Look at it on staging ↗</a>
-                    </li>
-                  )}
-                  <li>
-                    Same wording elsewhere? Use <Link href="/teamcards#replace">Search and replace</Link> on the overview to change it on all cards at once.
-                  </li>
-                  <li>The Figma sitemap picks the change up on its next sync.</li>
-                  <li>Once the client has approved, the card is rebuilt on production (comes with the publish step).</li>
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {ask && (
-          <div style={{ border: "1px solid rgba(227,62,26,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 14, display: "grid", gap: 8 }}>
-            <div>Before we go on, have a look at {ask.length === 1 ? "this" : `these ${ask.length}`}:</div>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
-              {ask.map((x, i) => (
-                <li key={i}>{x}</li>
-              ))}
-            </ul>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button className="btn" style={{ padding: "4px 12px" }} onClick={() => setAsk(null)}>
-                I&apos;ll fix it
-              </button>
-              <button className="btn" style={{ padding: "4px 12px" }} onClick={() => next(true)}>
-                Go on anyway
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step !== "Review" && (
-          <div style={{ display: "flex", gap: 8 }}>
-            {ALL.indexOf(step) > 0 && (
-              <button className="btn" onClick={() => go(ALL[ALL.indexOf(step) - 1])}>
-                Back
-              </button>
-            )}
-            <button className="btn btn-primary" onClick={() => next()}>
-              {ALL[ALL.indexOf(step) + 1] === "Review" ? "Review my changes" : `Next: ${ALL[ALL.indexOf(step) + 1]}`}
-            </button>
-          </div>
-        )}
+        </nav>
       </div>
 
-      {/* ---- right: live mobile previews, side by side ---- */}
-      <div style={{ position: "sticky", top: 12, display: "grid", gap: 10, minWidth: 0 }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <button className="btn" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => setFormOpen((x) => !x)}>
-            {formOpen ? "◀ Hide form" : "✎ Edit"}
-          </button>
-          {!formOpen && <b style={{ fontSize: 14, marginRight: 6 }}>{card.name}</b>}
-          <button className="btn" style={{ padding: "4px 12px", fontSize: 12, borderColor: !journey ? "var(--accent)" : undefined }} onClick={() => setJourney(false)}>
-            This step
-          </button>
-          <button className="btn" style={{ padding: "4px 12px", fontSize: 12, borderColor: journey ? "var(--accent)" : undefined }} onClick={() => setJourney(true)}>
-            Whole journey
-          </button>
-          <span style={{ flex: 1 }} />
-          {(["en", "de"] as Loc[]).map((l) => (
-            <button key={l} className="btn" style={{ padding: "4px 10px", fontSize: 12, borderColor: lang === l ? "var(--accent)" : undefined }} onClick={() => setLang(l)}>
-              {l.toUpperCase()}
-            </button>
-          ))}
+      {draft && (
+        <div role="status" style={{ margin: "14px 24px 0", padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.line2}`, background: C.panel, display: "flex", gap: 10, alignItems: "center", fontSize: 13 }}>
+          <Icon d={I.info} /> You have unsaved edits from {new Date(draft.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}.
+          <button style={btn(true)} onClick={() => { setVals((v) => ({ ...v, ...draft.vals })); setDraft(null); }}>Restore</button>
+          <button style={btn()} onClick={() => { setDraft(null); try { localStorage.removeItem(`tc-draft:${card.id}`); } catch {} }}>Discard</button>
         </div>
-        <div style={{ display: "flex", gap: 22, overflowX: "auto", paddingBottom: 10, alignItems: "flex-start" }}>
-          {(journey ? JOURNEY : views.length ? views : JOURNEY.slice(0, 1)).map((v, i, arr) => {
-            const active = (focus && VIEW_KEYS[v.key]?.includes(focus)) || (!focus && v.key === view);
+      )}
+
+      {/* ---- canvas ---- */}
+      {lanes.length > 0 && (
+        <div style={{ padding: "18px 24px 60px", paddingRight: drawer ? 484 : 64, transition: "padding .25s ease-out", display: "grid", gap: 18 }}>
+          {!whole && <div style={{ fontSize: 13.5, color: C.mute, maxWidth: 760 }}>{current.talk} Tap any text on a screen to change it.</div>}
+          {lanes.map((ln) => {
+            const L = LANES[ln];
+            const list = stations.filter((s) => s.lane === ln);
             return (
-              <div key={v.key} style={{ display: "flex", gap: 22, alignItems: "center", flexShrink: 0 }}>
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: active ? "var(--accent)" : "var(--muted)", textAlign: "center", cursor: "pointer" }} onClick={() => setView(v.key)}>
-                    {v.label}
-                  </div>
-                  <LivePreview view={v.key} vals={vals} lang={lang} card={previewCard} focus={focus} onFocus={pick} active={!!active} />
+              <section key={ln} aria-label={L.title} style={{ borderRadius: 18, background: L.tint, border: `1px solid ${C.line}`, borderLeft: `3px solid ${L.edge}`, padding: "14px 16px 18px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+                  <h2 style={{ margin: 0, fontSize: 14, fontWeight: 650, letterSpacing: ".02em" }}>{L.title}</h2>
+                  <span style={{ fontSize: 12, color: C.mute }}>{L.text}</span>
                 </div>
-                {i < arr.length - 1 && <span style={{ color: "var(--muted)", fontSize: 18 }}>→</span>}
-              </div>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, overflowX: "auto", paddingBottom: 6, paddingTop: 10 }}>
+                  {(ln === "out" || ln === "in") && (
+                    <div style={{ alignSelf: "center", flexShrink: 0, width: 110, textAlign: "center", fontSize: 11.5, color: C.mute }}>
+                      <div style={{ width: 60, height: 60, margin: "0 auto 12px", transform: "rotate(45deg)", border: `1px solid ${L.edge}`, borderRadius: 8, display: "grid", placeItems: "center" }}>
+                        <span style={{ transform: "rotate(-45deg)", fontSize: 11.5, color: C.fg, fontWeight: 600 }}>{ln === "out" ? "No" : "Yes"}</span>
+                      </div>
+                      Logged in?
+                    </div>
+                  )}
+                  {list.map((s, i) => (
+                    <div key={s.id} style={{ display: "flex", alignItems: "flex-start", gap: 14, flexShrink: 0 }}>
+                      <div style={{ display: "grid", gap: 8, padding: 8, borderRadius: 14, outline: station === s.id ? `1px solid ${C.lava}` : "none", outlineOffset: 2 }} onMouseDown={() => setStation(s.id)}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 12.5, fontWeight: 600 }}>{s.label}</div>
+                            <div style={{ fontSize: 11, color: C.mute }}>{s.note}</div>
+                          </div>
+                          {s.side && <span style={{ fontSize: 10, color: C.mute, border: `1px solid ${C.line2}`, borderRadius: 99, padding: "1px 7px", alignSelf: "start" }}>{s.side}</span>}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: mode === "stack" ? "column" : "row", gap: 14 }}>{langs.map((l) => phone(s, l, langs.length > 1 ? l.toUpperCase() : undefined))}</div>
+                      </div>
+                      {i < list.length - 1 && (
+                        <div aria-hidden style={{ alignSelf: "center", color: C.mute, marginTop: 30 }}>
+                          <Icon d={I.right} size={22} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
             );
           })}
         </div>
-        <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
-          Mobile, with the audif1.com production styles and staging content. Tap a text to edit it, tap the card to flip it, swipe popups to the back.
-          {focusField && (
+      )}
+
+      {/* ---- settings ---- */}
+      {step === "settings" && (
+        <div style={{ padding: "22px 24px", maxWidth: 720, display: "grid", gap: 14 }}>
+          <div style={{ fontSize: 13.5, color: C.mute }}>{current.talk}</div>
+          {FIELDS.filter((f) => f.kind === "select" || f.kind === "boolean").map((f) => (
+            <label key={f.key} style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 12, alignItems: "center", fontSize: 13.5 }}>
+              <span>
+                {f.label}
+                {f.help && <span style={{ display: "block", fontSize: 11.5, color: C.mute }}>{f.help}</span>}
+              </span>
+              {f.kind === "boolean" ? (
+                <input type="checkbox" checked={textOf(f.key, "en") === "true"} onChange={(e) => setText(f.key, "en", String(e.target.checked))} />
+              ) : (
+                <select className="input" value={textOf(f.key, "en")} onChange={(e) => setText(f.key, "en", e.target.value)}>
+                  {(f.options ?? []).map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              )}
+            </label>
+          ))}
+          <div style={{ fontSize: 12.5, color: C.mute }}>Reward type: {card.rewardType ?? "no reward"}. Raffle and voucher fields appear here once a card uses them.</div>
+        </div>
+      )}
+
+      {/* ---- review ---- */}
+      {step === "review" && (
+        <div style={{ padding: "22px 24px", maxWidth: 1000, display: "grid", gap: 14 }}>
+          {busy && <div style={{ color: C.mute }}>{busy}</div>}
+          {review && review.rows.length === 0 && !Object.keys(cross).length && !result && <div style={{ color: C.mute }}>Nothing changed yet. Pick a step and tap a text on a screen.</div>}
+          {review && (review.rows.length > 0 || Object.keys(cross).length > 0) && (
             <>
-              {" "}
-              Editing: <b>{focusField.label}</b> ({lang === "en" ? "English" : "German"})
+              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ textAlign: "left", color: C.mute, fontSize: 11 }}>
+                    <th style={{ padding: 8 }}>Field</th>
+                    <th style={{ padding: 8 }}>Before</th>
+                    <th style={{ padding: 8 }}>After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {review.rows.map((r: Json, i: number) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${C.line}`, verticalAlign: "top" }}>
+                      <td style={{ padding: 8 }}>
+                        {r.label}
+                        {r.locale ? ` · ${String(r.locale).toUpperCase()}` : ""}
+                        {r.issues?.length > 0 && <div style={{ color: "#e06c5b", fontSize: 12 }}>{r.issues.join(" · ")}</div>}
+                      </td>
+                      <td style={{ padding: 8, color: C.mute, whiteSpace: "pre-wrap" }}>{String(initial[r.key]?.[r.locale as Loc] ?? r.before ?? "")}</td>
+                      <td style={{ padding: 8, whiteSpace: "pre-wrap" }}>{String(r.after ?? "")}</td>
+                    </tr>
+                  ))}
+                  {Object.entries(cross).flatMap(([cid, list]) =>
+                    list.map((c, i) => (
+                      <tr key={cid + i} style={{ borderTop: `1px solid ${C.line}`, verticalAlign: "top" }}>
+                        <td style={{ padding: 8 }}>
+                          {labelOf(c.key)} · {c.locale.toUpperCase()}
+                          <div style={{ color: C.mute, fontSize: 11.5 }}>on {cid}</div>
+                        </td>
+                        <td style={{ padding: 8, color: C.mute }}>same as this card before</td>
+                        <td style={{ padding: 8, whiteSpace: "pre-wrap" }}>{c.value}</td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+              {review.errors.length > 0 && <div style={{ color: "#e06c5b", fontSize: 13 }}>{review.errors.join(" · ")}</div>}
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button style={{ ...btn(), background: C.lava, borderColor: C.lava, color: "#fff", fontWeight: 600, height: 38, padding: "0 18px" }} disabled={!!busy} onClick={() => void apply()}>
+                  Apply to staging
+                </button>
+                <span style={{ fontSize: 12.5, color: C.mute }}>Writes the card, engagement and module on staging and republishes the page. Figma picks it up on its next sync.</span>
+              </div>
             </>
           )}
+          {result && (
+            <div style={{ display: "grid", gap: 6, fontSize: 13.5 }}>
+              {result.pushed.map((p, i) => (
+                <div key={i} style={{ color: C.ok }}>✓ {p}</div>
+              ))}
+              {result.errors.map((p, i) => (
+                <div key={i} style={{ color: "#e06c5b" }}>✗ {p}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---- drawer with notch ---- */}
+      <aside
+        aria-label="Edit texts"
+        style={{ position: "fixed", top: 64, right: 0, bottom: 0, width: 460, zIndex: 40, transform: drawer ? "translateX(0)" : "translateX(100%)", transition: "transform .28s cubic-bezier(.22,1,.36,1)", background: "rgba(20,20,23,.97)", borderLeft: `1px solid ${C.line2}`, boxShadow: drawer ? "-24px 0 60px -30px rgba(0,0,0,.8)" : "none", display: "flex", flexDirection: "column" }}
+        onKeyDown={(e) => e.key === "Escape" && setDrawer(false)}
+      >
+        <button
+          onClick={() => setDrawer((d) => !d)}
+          aria-expanded={drawer}
+          aria-label={drawer ? "Close the text editor" : "Open the text editor"}
+          style={{ position: "absolute", left: -34, top: "38%", width: 34, height: 132, borderRadius: "12px 0 0 12px", border: `1px solid ${C.line2}`, borderRight: 0, background: "#1b1b1f", color: C.fg, cursor: "pointer", display: "grid", placeItems: "center", gap: 6, padding: "10px 0" }}
+        >
+          <Icon d={drawer ? I.right : I.left} />
+          <span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 11.5, letterSpacing: ".06em" }}>Edit texts{changed.length ? ` · ${changed.length}` : ""}</span>
+        </button>
+        <div style={{ padding: "16px 18px 10px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "start", gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, color: C.mute, textTransform: "uppercase", letterSpacing: ".08em" }}>{focusStation ? LANES[focusStation.lane].title : ""}</div>
+            <div style={{ fontSize: 15, fontWeight: 650 }}>{focusStation?.label ?? "Pick a screen"}</div>
+            <div style={{ fontSize: 11.5, color: C.mute }}>{focusStation?.note}</div>
+          </div>
+          <button aria-label="Close" style={{ ...btn(), padding: "0 8px" }} onClick={() => setDrawer(false)}>
+            <Icon d={I.x} />
+          </button>
+        </div>
+        <div style={{ overflowY: "auto", padding: "12px 18px 40px", display: "grid", gap: 12, alignContent: "start" }}>
+          {drawerKeys.length === 0 && <div style={{ fontSize: 13, color: C.mute }}>Tap a text on any screen to edit it here.</div>}
+          {drawerKeys.map((k) => (
+            <FieldBox
+              key={k}
+              k={k}
+              focused={focus === k}
+              value={{ en: textOf(k, "en"), de: textOf(k, "de") }}
+              initial={initial[k] ?? { en: "", de: "" }}
+              where={whereUsed(k)}
+              issues={{ en: issuesOf(k, "en"), de: issuesOf(k, "de") }}
+              lex={lex.filter((e) => e.field === k).sort((a, b) => Number(b.saved) - Number(a.saved) || b.uses - a.uses).slice(0, 3)}
+              examples={others
+                .flatMap((o) => {
+                  const v = o.values[k];
+                  return v && typeof v === "object" && v.en && norm(String(v.en)) !== norm(textOf(k, "en")) ? [{ card: o.name, en: String(v.en), de: String(v.de ?? "") }] : [];
+                })
+                .slice(0, 3)}
+              onFocus={() => setFocus(k)}
+              onChange={(l, v) => setText(k, l, v)}
+              onBlur={(l) => checkScope(k, l)}
+              onSave={async () => {
+                const r = await fetch("/api/teamcards/lexicon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", field: k, en: textOf(k, "en"), de: textOf(k, "de") }) }).then((x) => x.json());
+                if (r.entries) setLex(r.entries);
+              }}
+            />
+          ))}
+        </div>
+      </aside>
+
+      {/* ---- smart change pop-up ---- */}
+      {ask && (
+        <ScopeDialog
+          ask={ask}
+          onClose={() => setAsk(null)}
+          onNext={(picked) => {
+            if (ask.stage === 0) {
+              for (const k of picked) setText(k, ask.lang, ask.to);
+              const nx = ask.campaign.length ? 1 : ask.global.length ? 2 : null;
+              setAsk(nx === null ? null : { ...ask, stage: nx as 1 | 2 });
+            } else {
+              if (picked.length)
+                setCross((c) => {
+                  const out = { ...c };
+                  for (const cid of picked) out[cid] = [...(out[cid] ?? []).filter((x) => !(x.key === ask.key && x.locale === ask.lang)), { key: ask.key, locale: ask.lang, value: ask.to }];
+                  return out;
+                });
+              setAsk(ask.stage === 1 && ask.global.length ? { ...ask, stage: 2 } : null);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// one field in the drawer: label, what it is, EN + DE, counters, rules, lexicon
+function FieldBox({
+  k, focused, value, initial, where, issues, lex, examples, onFocus, onChange, onBlur, onSave,
+}: {
+  k: string; focused: boolean; value: LV; initial: LV; where: string[]; issues: Record<Loc, string[]>; lex: LexEntry[]; examples: { card: string; en: string; de: string }[];
+  onFocus: () => void; onChange: (l: Loc, v: string) => void; onBlur: (l: Loc) => void; onSave: () => void;
+}) {
+  const f = fieldByKey(k);
+  const h = HINTS[k];
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focused) ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focused]);
+  const long = f?.kind === "textarea" || value.en.length > 60;
+  const dirty = value.en !== initial.en || value.de !== initial.de;
+  return (
+    <div ref={ref} style={{ borderRadius: 12, border: `1px solid ${focused ? C.lava : C.line}`, background: focused ? "rgba(255,45,0,.05)" : "#18181b", padding: 12, display: "grid", gap: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>
+          {f?.label ?? k}
+          {dirty && <span style={{ color: C.lava, fontWeight: 500, fontSize: 11.5 }}> · changed</span>}
+        </div>
+        <span style={{ fontSize: 10.5, color: C.mute, textAlign: "right" }}>on {where.join(", ")}</span>
+      </div>
+      {h && (
+        <div style={{ display: "flex", gap: 8, fontSize: 12, color: "#c7c5cb", background: "rgba(127,184,255,.06)", border: "1px solid rgba(127,184,255,.18)", borderRadius: 8, padding: "7px 9px" }}>
+          <span style={{ color: "#7fb8ff", marginTop: 1 }}>
+            <Icon d={I.info} size={14} />
+          </span>
+          <span>
+            {h.what}
+            {h.rules?.length ? <span style={{ color: C.mute }}> {h.rules.join(" · ")}</span> : null}
+          </span>
+        </div>
+      )}
+      {(["en", "de"] as Loc[]).map((l) => (
+        <div key={l} style={{ display: "grid", gap: 4 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: C.mute }}>
+            <span style={{ fontWeight: 700, letterSpacing: ".06em" }}>{l.toUpperCase()}</span>
+            <span style={{ color: f?.maxWords && words(value[l]) > f.maxWords ? "#e06c5b" : C.mute }}>{f?.maxWords ? `${words(value[l])}/${f.maxWords} words` : `${value[l].length} characters`}</span>
+          </div>
+          <textarea
+            aria-label={`${f?.label ?? k} ${l.toUpperCase()}`}
+            rows={long ? Math.max(2, Math.ceil(value[l].length / 52)) : 1}
+            value={value[l]}
+            onFocus={onFocus}
+            onChange={(e) => onChange(l, e.target.value)}
+            onBlur={() => onBlur(l)}
+            style={{ width: "100%", resize: "vertical", fontSize: 14, lineHeight: 1.45, padding: "8px 10px", borderRadius: 8, border: `1px solid ${issues[l].length ? "rgba(224,108,91,.6)" : !value[l].trim() && l === "de" && value.en.trim() ? "rgba(255,45,0,.5)" : C.line2}`, background: "#0f0f12", color: C.fg, fontFamily: "inherit" }}
+          />
+          {issues[l].length > 0 && (
+            <div role="alert" style={{ fontSize: 11.5, color: "#e06c5b" }}>
+              {issues[l].join(" · ")}
+            </div>
+          )}
+          {l === "de" && value.en.trim() && !value.de.trim() && <div style={{ fontSize: 11.5, color: C.lava }}>German is missing.</div>}
+        </div>
+      ))}
+      {(lex.length > 0 || examples.length > 0) && (
+        <div style={{ display: "grid", gap: 5 }}>
+          <div style={{ fontSize: 10.5, color: C.mute, letterSpacing: ".06em", textTransform: "uppercase" }}>From the lexicon and other cards</div>
+          {lex.map((e) => (
+            <button key={e.id} onClick={() => { onChange("en", e.en); if (e.de) onChange("de", e.de); }} style={{ textAlign: "left", fontSize: 12, padding: "6px 8px", borderRadius: 8, border: `1px solid ${C.line2}`, background: "transparent", color: C.fg, cursor: "pointer" }}>
+              <span style={{ color: e.saved ? C.ok : C.mute, fontSize: 10.5, marginRight: 6 }}>{e.saved ? "approved" : `used ${e.uses}×`}</span>
+              {e.en}
+              {e.de && <span style={{ color: C.mute }}> / {e.de}</span>}
+            </button>
+          ))}
+          {examples.map((e, i) => (
+            <button key={i} onClick={() => { onChange("en", e.en); if (e.de) onChange("de", e.de); }} style={{ textAlign: "left", fontSize: 12, padding: "6px 8px", borderRadius: 8, border: `1px dashed ${C.line2}`, background: "transparent", color: C.fg, cursor: "pointer" }}>
+              <span style={{ color: C.mute, fontSize: 10.5, marginRight: 6 }}>{e.card}</span>
+              {e.en}
+              {e.de && <span style={{ color: C.mute }}> / {e.de}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <details style={{ fontSize: 11.5, color: C.mute }}>
+          <summary style={{ cursor: "pointer" }}>Team rules</summary>
+          <ul style={{ margin: "6px 0 0", paddingLeft: 16, display: "grid", gap: 2 }}>
+            {TEAM_RULES.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </details>
+        <button onClick={onSave} style={{ ...btn(), height: 26, fontSize: 11.5 }} title="Keep this EN/DE wording as an approved phrasing for this field">
+          <Icon d={I.book} size={13} /> Save to lexicon
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ScopeDialog({ ask, onClose, onNext }: { ask: Ask; onClose: () => void; onNext: (picked: string[]) => void }) {
+  const items =
+    ask.stage === 0
+      ? ask.journey.map((k) => ({ id: k, label: labelOf(k), sub: "" }))
+      : ask.stage === 1
+        ? ask.campaign.map((c) => ({ id: c.id, label: c.name, sub: c.id }))
+        : ask.global.map((c) => ({ id: c.id, label: c.name, sub: c.value }));
+  const [picked, setPicked] = useState<string[]>(items.map((i) => i.id));
+  useEffect(() => setPicked(items.map((i) => i.id)), [ask.stage]); // eslint-disable-line react-hooks/exhaustive-deps
+  const title =
+    ask.stage === 0
+      ? `The same text is used ${items.length === 1 ? "once more" : `${items.length} more times`} in this journey. Change it there too?`
+      : ask.stage === 1
+        ? `${items.length} other card${items.length === 1 ? "" : "s"} of this campaign use the same text. Change ${items.length === 1 ? "it" : "them"} too?`
+        : "Cards in other campaigns use the same or a similar wording. Is this a global change?";
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Where else should this change?" style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,.55)", display: "grid", placeItems: "center" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 520, maxWidth: "calc(100vw - 32px)", borderRadius: 16, background: "#18181b", border: `1px solid ${C.line2}`, boxShadow: "0 30px 80px -20px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.06)", padding: 20, display: "grid", gap: 14 }}>
+        <div style={{ fontSize: 11, color: C.mute, letterSpacing: ".08em", textTransform: "uppercase" }}>
+          {labelOf(ask.key)} · {ask.lang.toUpperCase()}
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 650 }}>{title}</div>
+        <div style={{ fontSize: 13, color: C.mute }}>
+          <span style={{ textDecoration: "line-through" }}>{ask.from}</span> → <span style={{ color: C.fg }}>{ask.to}</span>
+        </div>
+        <div style={{ display: "grid", gap: 6, maxHeight: 280, overflowY: "auto" }}>
+          {items.map((i) => (
+            <label key={i.id} style={{ display: "flex", gap: 10, alignItems: "start", fontSize: 13, padding: "6px 8px", borderRadius: 8, border: `1px solid ${C.line}` }}>
+              <input type="checkbox" checked={picked.includes(i.id)} onChange={(e) => setPicked((p) => (e.target.checked ? [...p, i.id] : p.filter((x) => x !== i.id)))} style={{ marginTop: 3 }} />
+              <span>
+                {i.label}
+                {i.sub && <span style={{ display: "block", fontSize: 11.5, color: C.mute }}>{i.sub}</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button style={btn()} onClick={() => onNext([])}>
+            Only here
+          </button>
+          <button style={{ ...btn(), background: C.lava, borderColor: C.lava, color: "#fff", fontWeight: 600 }} onClick={() => onNext(picked)}>
+            Change {picked.length} {ask.stage === 0 ? "more" : picked.length === 1 ? "card" : "cards"}
+          </button>
         </div>
       </div>
     </div>
