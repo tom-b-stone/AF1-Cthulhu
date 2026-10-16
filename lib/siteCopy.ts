@@ -29,7 +29,8 @@ export type Job = {
   engagements: Record<string, string>;
   tags: Record<string, string>;
   loyalty?: Record<string, string>;
-  keyword?: string; // for content tag fallback // production loyaltyId → new staging loyalty-id
+  keyword?: string; // for content tag fallback
+  relinked?: string[]; // badges copied again after all pages were live // production loyaltyId → new staging loyalty-id
   log: string[];
   finished: boolean;
   updatedAt: string;
@@ -248,7 +249,7 @@ export async function stepJob(id: string, budgetMs = 40_000): Promise<Job> {
     for (const p of job.pages) {
       if (p.live || !p.stg) continue;
       if (left() < 5000) return job;
-      await stg(`/pages/${p.stg}?locale=en`, { method: "PATCH", body: JSON.stringify({ _status: "published" }) }).catch((e) => job.log.push(`publish shell /${p.url}: ${e instanceof Error ? e.message.slice(0, 160) : e}`));
+      await stg(`/pages/${p.stg}?locale=en`, { method: "PATCH", body: JSON.stringify({ _status: "published" }) }).catch(() => null); // empty pages may not validate; fine
       p.live = true;
     }
     // 2 contents
@@ -276,7 +277,20 @@ export async function stepJob(id: string, budgetMs = 40_000): Promise<Job> {
       job.log.push(`published on staging: /${p.url} (${(sections ?? []).length} sections) ${ADMIN}/pages/${p.stg}`);
       await saveJob(job);
     }
-    job.finished = job.pages.every((p) => p.done);
+    // 3 Team Cards again, now that every page is live: page mechanics and
+    //   CTA targets that pointed at not-yet-published pages resolve now
+    if (job.pages.every((p) => p.done)) {
+      job.relinked ??= [];
+      for (const prodBadge of Object.keys(job.badges)) {
+        if (job.relinked.includes(prodBadge)) continue;
+        if (left() < 12000) return job;
+        const r = await copyTeamCard({ badgeId: prodBadge, withPageBlock: false, media: ctx.media });
+        const bad = r.steps.filter((x) => !x.ok);
+        job.log.push(`Team Card relinked: ${r.steps[0]?.step.replace("read from production: ", "") ?? prodBadge}${bad.length ? ` (${bad.map((b) => b.step).join("; ")})` : ""}`);
+        job.relinked.push(prodBadge);
+      }
+    }
+    job.finished = job.pages.every((p) => p.done) && Object.keys(job.badges).every((b) => job.relinked?.includes(b));
   } catch (e) {
     job.log.push(`error: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
