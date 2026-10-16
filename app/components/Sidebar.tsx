@@ -9,7 +9,7 @@ import { useSidebarSlot } from "./SidebarSlot";
 // In-tool navigation. Switching between tools happens in the header's Tools
 // menu; this column only knows about the tool you're in: its views, its
 // settings, its help. Each tool registers its entries here.
-type Entry = { href: string; label: string; note?: string; exact?: boolean };
+type Entry = { href: string; label: string; note?: string; hint?: string; exact?: boolean };
 type Section = { title: string; entries: Entry[] };
 
 const SIDEBARS: Record<string, Section[]> = {
@@ -44,7 +44,22 @@ const SIDEBARS: Record<string, Section[]> = {
       ],
     },
   ],
-  "/teamcards": [{ title: "Team Card Configurator", entries: [{ href: "/teamcards", label: "All cards", exact: true }, { href: "/teamcards/sitemap", label: "Sitemap Sync", note: "Figma ↔ CMS" }, { href: "https://www.figma.com/design/rGxt5J0qhiK759uEbaKgTO/WorkingDoc?node-id=692-56", label: "Figma sitemap", note: "↗" }, { href: "https://staging.audif1team.com/cms/admin/collections/badges", label: "Staging: cards", note: "↗" }, { href: "/suggest", label: "Add an idea" }] }],
+  "/teamcards": [
+    {
+      title: "Team Cards",
+      entries: [
+        { href: "/teamcards", label: "All cards", hint: "Edit texts and see the whole journey", exact: true },
+        { href: "/teamcards/sitemap", label: "Figma ↔ CMS changes", hint: "What changed where; approve it" },
+      ],
+    },
+    {
+      title: "Open elsewhere",
+      entries: [
+        { href: "https://www.figma.com/design/rGxt5J0qhiK759uEbaKgTO/WorkingDoc?node-id=692-56", label: "Figma file", note: "↗", hint: "All pages and card journeys" },
+        { href: "https://staging.audif1team.com/cms/admin/collections/badges", label: "Cards in the CMS", note: "↗", hint: "Staging admin" },
+      ],
+    },
+  ],
   "/images": [{ title: "CRM Images", entries: [{ href: "/images", label: "Overview", exact: true }] }],
   "/connector": [{ title: "Claude connector", entries: [{ href: "/connector", label: "Setup", exact: true }] }],
   "/suggest": [{ title: "Suggestion box", entries: [{ href: "/suggest", label: "Write a suggestion", exact: true }] }],
@@ -117,7 +132,10 @@ export default function Sidebar() {
               } as const;
               const inner = (
                 <>
-                  <span>{e.label}</span>
+                  <span style={{ display: "grid", gap: 1 }}>
+                    <span>{e.label}</span>
+                    {e.hint && <span style={{ color: "var(--muted)", fontSize: 11, lineHeight: 1.3 }}>{e.hint}</span>}
+                  </span>
                   {e.note && <span style={{ color: "var(--muted)", fontSize: 11 }}>{e.note}</span>}
                 </>
               );

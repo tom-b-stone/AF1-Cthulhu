@@ -125,6 +125,13 @@ export default function ToolHeader() {
           <span style={{ color: "var(--muted)", fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontSize: 11 }}>
             CMS: staging.audif1team.com
           </span>
+          <Link
+            href={`/suggest?from=${encodeURIComponent(pathname)}`}
+            title="Missing something or found a bug? Tell us."
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 999, border: "1px solid rgba(255,45,0,0.45)", background: "rgba(255,45,0,0.12)", color: "#fff", textDecoration: "none", fontSize: 12 }}
+          >
+            <span aria-hidden>💡</span> Add an idea
+          </Link>
           <Link href="/connector" className="link-line" style={{ color: "var(--muted)" }}>
             Connector
           </Link>
