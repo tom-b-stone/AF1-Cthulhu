@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Modal from "@/app/components/Modal";
+import { SideButton, SideSection, useSidebarContent } from "@/app/components/SidebarSlot";
 import type { KnowledgeEntry, KnowledgeKind } from "@/lib/teamKnowledge";
 
 // Team knowledge editor: people, terms, rules and alt-text patterns the
@@ -68,6 +69,30 @@ export default function KnowledgePage() {
 
   const shown = useMemo(() => (entries ?? []).filter((e) => (e.kind === "person" || e.kind === "term") && (filter === "all" || e.kind === filter)), [entries, filter]);
 
+  useSidebarContent(
+    <>
+      <SideSection title="Knowledge">
+        <SideButton primary onClick={() => setEditing({ ...EMPTY, kind: filter === "all" ? "person" : filter })}>
+          Add entry
+        </SideButton>
+        <SideButton onClick={() => entries && save(entries)} disabled={!dirty || state === "saving"} note={dirty ? "unsaved" : ""}>
+          {state === "saving" ? "Saving…" : "Save changes"}
+        </SideButton>
+      </SideSection>
+      <SideSection title="Show">
+        <SideButton onClick={() => setFilter("all")} active={filter === "all"} note={entries?.filter((e) => e.kind === "person" || e.kind === "term").length ?? ""}>
+          All
+        </SideButton>
+        {KINDS.map((k) => (
+          <SideButton key={k.k} onClick={() => setFilter(k.k)} active={filter === k.k} note={entries?.filter((e) => e.kind === k.k).length ?? ""}>
+            {k.label}
+          </SideButton>
+        ))}
+      </SideSection>
+    </>,
+    [entries, dirty, state, filter]
+  );
+
   return (
     <div style={{ maxWidth: 960 }}>
       <section className="page-head reveal">
@@ -79,26 +104,7 @@ export default function KnowledgePage() {
             too. Edit here, save once, it applies for everyone.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-          <button className="btn" onClick={() => setEditing({ ...EMPTY, kind: filter === "all" ? "person" : filter })}>
-            Add entry
-          </button>
-          <button className="btn btn-primary" onClick={() => entries && save(entries)} disabled={!dirty || state === "saving"}>
-            {state === "saving" ? "Saving…" : dirty ? "Save changes" : "Saved"}
-          </button>
-        </div>
       </section>
-
-      <div className="tabs reveal" style={{ marginBottom: 18 }}>
-        <button className={`tab${filter === "all" ? " is-active" : ""}`} onClick={() => setFilter("all")}>
-          All <span className="count">{entries?.filter((e) => e.kind === "person" || e.kind === "term").length ?? ""}</span>
-        </button>
-        {KINDS.map((k) => (
-          <button key={k.k} className={`tab${filter === k.k ? " is-active" : ""}`} onClick={() => setFilter(k.k)}>
-            {k.label} <span className="count">{entries?.filter((e) => e.kind === k.k).length ?? ""}</span>
-          </button>
-        ))}
-      </div>
 
       {seeded && (
         <div className="card reveal" style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)", marginBottom: 16 }}>
@@ -158,15 +164,6 @@ export default function KnowledgePage() {
           </section>
         );
       })}
-
-      {dirty && (
-        <div className="card" style={{ position: "sticky", bottom: 12, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8, background: "var(--surface)" }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>Unsaved changes. They apply for everyone once saved.</span>
-          <button className="btn btn-primary" onClick={() => entries && save(entries)} disabled={state === "saving"}>
-            {state === "saving" ? "Saving…" : "Save changes"}
-          </button>
-        </div>
-      )}
 
       {editing && <EntryForm entry={editing} onCancel={() => setEditing(null)} onSave={upsert} />}
     </div>
