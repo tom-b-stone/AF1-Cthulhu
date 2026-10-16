@@ -214,9 +214,19 @@ export async function stepJob(id: string, budgetMs = 40_000): Promise<Job> {
         continue;
       }
       const parent = p.parentProd ? job.pages.find((x) => x.prodId === p.parentProd)?.stg : undefined;
-      const created = await stg(`/pages?locale=en&draft=true`, { method: "POST", body: JSON.stringify({ title: p.title, slug: p.slug, ...(parent ? { parent } : {}), sections: [], _status: "draft" }) });
+      const make = (slug?: string) => stg(`/pages?locale=en&draft=true`, { method: "POST", body: JSON.stringify({ title: p.title, slug, ...(parent ? { parent } : {}), sections: [], _status: "draft" }) });
+      let created: Json;
+      try {
+        created = await make(p.slug);
+        job.log.push(`page created: /${p.url}`);
+      } catch (e) {
+        // slugs are unique across staging; an older test page may hold it
+        if (!/unique/i.test(e instanceof Error ? e.message : "")) throw e;
+        created = await make(`${p.slug}-2026`);
+        p.note = `slug taken on staging, created as ${p.slug}-2026`;
+        job.log.push(`page created with slug ${p.slug}-2026 (slug taken on staging by an older page): /${p.url}`);
+      }
       p.stg = created.doc.id;
-      job.log.push(`page created: /${p.url}`);
     }
     // 2 contents
     for (const p of job.pages) {
