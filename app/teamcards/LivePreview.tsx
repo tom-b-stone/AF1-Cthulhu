@@ -17,7 +17,7 @@ export type PreviewCard = {
   badgeTypeLabel?: string;
   raceLabel?: string;
   rewardType?: string;
-  preview?: { type?: string; options: { en: string[]; de: string[] } } | null;
+  preview?: { type?: string; options: { en: string[]; de: string[] }; image?: string; postImage?: string; overlay?: boolean; category?: { en: string; de: string } } | null;
 };
 
 const BACKSIDE = "https://www.audif1.com/_next/image?url=%2Fbadge-backside.png&w=1200&q=75";
@@ -38,8 +38,9 @@ export function build(view: string, vals: Vals, lang: Loc, card: PreviewCard) {
     return `<${tag} class="${cls}" data-k="${k}"${opt ? " data-opt" : ""} data-ph="${esc(ph)}"${opt && !v ? " hidden" : ""}>${esc(v)}</${tag}>`;
   };
   const img = abs(card.imageUrl) || BACKSIDE;
-  const engImg = abs(card.engagementImageUrl);
-  const race = esc(card.raceLabel ? `${card.raceLabel}` : "Audi Revolut F1® Team");
+  const engImg = abs(card.preview?.image || card.engagementImageUrl);
+  const postImg = abs(card.preview?.postImage) || engImg;
+  const race = esc(card.preview?.category?.[lang] || card.raceLabel || "Audi Revolut F1® Team");
   const options = card.preview?.options?.[lang]?.length ? card.preview.options[lang] : card.preview?.options?.en ?? [];
 
   const coin = (face: "front" | "back", reveal = false) => `
@@ -65,11 +66,11 @@ export function build(view: string, vals: Vals, lang: Loc, card: PreviewCard) {
         <button type="button" class="button text-copy-2 button-primary px-space-300 py-space-150 gap-space-150 min-h-size-1200 max-md:w-full">${T("submitLabel", "span", "text-copy-short-2 text-weight-normal", false, "Button")}</button>
       </div>`;
 
-  const widget = (inner: string, dim = false) => `
+  const widget = (inner: string, dim = false, bgImg = engImg) => `
     <section class="af1-container"><div class="widget-grid [--grid-max-col-count:2]!"><div class="@container relative rounded-sm col-span-2 row-span-3 bg-af1-graphite"><div class="@container-[size] aspect-widget-portrait"><div class="h-full">
       <div class="relative w-full h-full overflow-hidden rounded-sm">
-        ${engImg ? `<img alt="" class="object-cover" style="position:absolute;height:100%;width:100%;inset:0" src="${esc(engImg)}">` : ""}
-        <div style="background:linear-gradient(0deg, rgba(0, 0, 0, ${dim ? 0.7 : 0.4}) 0%, rgba(0, 0, 0, ${dim ? 0.7 : 0.4}) 100%)" class="absolute z-0 w-full h-full top-0 left-0 rounded-sm"></div>
+        ${bgImg ? `<img alt="" class="object-cover" style="position:absolute;height:100%;width:100%;inset:0" src="${esc(bgImg)}">` : ""}
+        <div style="background:linear-gradient(0deg, rgba(0, 0, 0, ${dim ? 0.7 : card.preview?.overlay === false ? 0 : 0.4}) 0%, rgba(0, 0, 0, ${dim ? 0.7 : card.preview?.overlay === false ? 0 : 0.4}) 100%)" class="absolute z-0 w-full h-full top-0 left-0 rounded-sm"></div>
         <div class="relative z-10 flex flex-1 p-space-150 w-full h-full flex-col justify-between">${inner}</div>
       </div>
     </div></div></div></div></section>`;
@@ -160,7 +161,7 @@ export function build(view: string, vals: Vals, lang: Loc, card: PreviewCard) {
       <div class="flex flex-col gap-space-100"><p class="text-copy-3 text-weight-normal text-af1-chalk">${race}</p></div>
       <div class="flex flex-col gap-space-100"><p class="text-headline-3 text-weight-normal text-af1-chalk">✓</p>
       ${T("postTitle", "h2", "text-headline-4-fixed text-weight-normal text-af1-chalk", false, "Title after the answer")}
-      ${T("postMessage", "p", "text-copy-2 text-weight-normal text-af1-chalk", false, "Message after the answer")}</div>`);
+      ${T("postMessage", "p", "text-copy-2 text-weight-normal text-af1-chalk", false, "Message after the answer")}</div>`, false, postImg);
 
   const reward = `<section class="bg-af1-chalk text-af1-graphite py-space-700"><div class="af1-container flex flex-col gap-space-200">${(
     [

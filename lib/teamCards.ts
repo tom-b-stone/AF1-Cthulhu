@@ -78,7 +78,7 @@ async function readDoc(rec: CardRecord, doc: DocKind, loc: Loc): Promise<Json> {
 
 // What the previews need beyond the editable texts: the question type and its
 // answer options (EN/DE), read live from the staging engagement.
-export type EngagementPreview = { type?: string; options: { en: string[]; de: string[] } };
+export type EngagementPreview = { type?: string; options: { en: string[]; de: string[] }; image?: string; postImage?: string; overlay?: boolean; category?: { en: string; de: string } };
 export async function engagementPreview(rec: CardRecord): Promise<EngagementPreview | null> {
   if (!rec.staging.engagementId) return null;
   const label = (o: Json) => (typeof o === "string" ? o : String(o?.text ?? o?.label ?? o?.answer ?? o?.title ?? o?.value ?? ""));
@@ -89,7 +89,18 @@ export async function engagementPreview(rec: CardRecord): Promise<EngagementPrev
   };
   const [en, de] = await Promise.all((["en", "de"] as Loc[]).map((l) => readDoc(rec, "engagement", l).catch(() => null)));
   const q = en?.questions?.[0];
-  return { type: String(q?.type ?? q?.questionType ?? q?.blockType ?? en?.type ?? ""), options: { en: opts(en), de: opts(de) } };
+  const mid = (m: Json) => (m && typeof m === "object" ? m.id : m) as string | undefined;
+  const bg = en?.background?.imageSettings ?? {};
+  const img = mid(bg.media ?? bg.mobileMedia ?? en?.assetId);
+  const post = mid(en?.postSubmissionMedia);
+  return {
+    type: String(en?.engagementType ?? q?.type ?? ""),
+    options: { en: opts(en), de: opts(de) },
+    image: img ? `/api/sitemap/media/${img}` : undefined,
+    postImage: post ? `/api/sitemap/media/${post}` : undefined,
+    overlay: bg.shouldHaveOverlay !== false,
+    category: { en: String(en?.category ?? ""), de: String(de?.category ?? en?.category ?? "") },
+  };
 }
 
 // Reads every field of a card from staging (both locales).
