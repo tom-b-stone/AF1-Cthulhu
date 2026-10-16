@@ -26,6 +26,7 @@ const SIDEBARS: Record<string, Section[]> = {
         { href: "/assets", label: "New batch", exact: true },
         { href: "/assets/batches", label: "Batches", note: "7 days" },
         { href: "/assets/knowledge", label: "Team knowledge", note: "people, cues" },
+        { href: "/assets/learn", label: "Learn from the library", note: "Claude" },
       ],
     },
     {
@@ -33,6 +34,17 @@ const SIDEBARS: Record<string, Section[]> = {
       entries: [{ href: "https://staging.audif1team.com/cms/admin/collections/media/payload-folders", label: "CMS: Media folders", note: "↗" }],
     },
   ],
+  "/photobook": [
+    {
+      title: "GP Mini-Zine",
+      entries: [
+        { href: "/photobook", label: "All zines", exact: true },
+        { href: "/pitch/gp-mini-zine.html", label: "Pitch deck", note: "full screen" },
+        { href: "https://slashlens.netlify.app/", label: "SlashLens", note: "↗" },
+      ],
+    },
+  ],
+  "/teamcards": [{ title: "Team Card Configurator", entries: [{ href: "/teamcards", label: "All cards", exact: true }, { href: "/teamcards/sitemap", label: "Sitemap Sync", note: "Figma ↔ CMS" }, { href: "https://www.figma.com/design/rGxt5J0qhiK759uEbaKgTO/WorkingDoc?node-id=692-56", label: "Figma sitemap", note: "↗" }, { href: "https://staging.audif1team.com/cms/admin/collections/badges", label: "Staging: cards", note: "↗" }, { href: "/suggest", label: "Add an idea" }] }],
   "/images": [{ title: "CRM Images", entries: [{ href: "/images", label: "Overview", exact: true }] }],
   "/connector": [{ title: "Claude connector", entries: [{ href: "/connector", label: "Setup", exact: true }] }],
   "/suggest": [{ title: "Suggestion box", entries: [{ href: "/suggest", label: "Write a suggestion", exact: true }] }],
@@ -42,6 +54,7 @@ const SIDEBARS: Record<string, Section[]> = {
       entries: [
         { href: "/admin/messages", label: "Message board", note: "suggestions" },
         { href: "/admin/credentials", label: "CMS credentials" },
+        { href: "/admin/anthropic", label: "Claude API", note: "in-tool generation" },
       ],
     },
   ],
@@ -110,7 +123,12 @@ export default function Sidebar() {
               );
               return (
                 <li key={e.href + e.label}>
-                  {external ? (
+                  {e.href.endsWith(".html") ? (
+                    // static page (e.g. a full-screen pitch deck): plain navigation, same tab
+                    <a href={e.href} style={style}>
+                      {inner}
+                    </a>
+                  ) : external ? (
                     <a href={e.href} target="_blank" rel="noreferrer" style={style}>
                       {inner}
                     </a>

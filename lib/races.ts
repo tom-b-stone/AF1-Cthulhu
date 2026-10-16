@@ -6,7 +6,7 @@ import { listMediaFolders } from "./payloadClient";
 // folders that exist; for a round without a folder yet, this map.
 const LOC_BY_COUNTRY: Record<string, string> = {
   australia: "AUS", china: "CHN", japan: "JPN", bahrain: "BHR", "saudi arabia": "SAU", "united states": "USA", canada: "CAN",
-  monaco: "MCO", spain: "ESP", austria: "AUT", "united kingdom": "GBR", "great britain": "GBR", belgium: "BEL", hungary: "HUN",
+  monaco: "MCO", spain: "ESP", england: "GBR", austria: "AUT", "united kingdom": "GBR", "great britain": "GBR", belgium: "BEL", hungary: "HUN",
   netherlands: "NED", italy: "ITA", azerbaijan: "AZE", singapore: "SIN", mexico: "MEX", brazil: "BRA", qatar: "QAT",
   "united arab emirates": "UAE", malaysia: "MYS",
 };
@@ -29,11 +29,27 @@ export type Race = {
 
 let cache: { at: number; races: Race[] } | null = null;
 
+// The calendar is read from the production site (public, read-only: it is
+// what audif1.com/races shows), because staging only carries a few test
+// rounds. Folders are read from the CMS the tool writes to (staging), and
+// the production folder names are the convention we follow.
+const PROD_API = process.env.PRODUCTION_CMS_API_URL ?? "https://www.audif1.com/cms/api";
+
 export async function listRaces(payloadFetch: (p: string) => Promise<Response>): Promise<Race[]> {
   if (cache && Date.now() - cache.at < 15 * 60_000) return cache.races;
-  const res = await payloadFetch(`/race-weekend?limit=60&depth=0`);
-  if (!res.ok) throw new Error(`race-weekend failed (${res.status})`);
-  const json = (await res.json()) as { docs: Record<string, unknown>[] };
+  let docs: Record<string, unknown>[] = [];
+  try {
+    const prod = await fetch(`${PROD_API}/race-weekend?limit=60&depth=0`, { cache: "no-store" });
+    if (prod.ok) docs = ((await prod.json()) as { docs: Record<string, unknown>[] }).docs;
+  } catch {
+    /* fall back to staging */
+  }
+  if (docs.length === 0) {
+    const res = await payloadFetch(`/race-weekend?limit=60&depth=0`);
+    if (!res.ok) throw new Error(`race-weekend failed (${res.status})`);
+    docs = ((await res.json()) as { docs: Record<string, unknown>[] }).docs;
+  }
+  const json = { docs };
   const folders = await listMediaFolders();
   const galleries = folders.filter((f) => f.path.startsWith("10_Media-Galleries/"));
 
