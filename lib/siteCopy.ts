@@ -9,7 +9,7 @@
 //      sections remapped to staging ids; EN + DE written; page published
 // Links to pages outside the copied set: resolved on staging by URL, else
 // turned into an external link to the production page. loyaltyId fields
-// (private collection on production) are dropped and reported.
+// (private collection on production) get new loyalty IDs on staging.
 import { kvGet, kvSet } from "./kv";
 import { createContentTag } from "./payloadClient";
 import { copyMedia, copyTeamCard, hasDe, isId, isLoc, MEDIA_KEYS, project, prod, setMediaFolder, stagingPageByUrl, stg, upsertLocalised, withIds, type CopyStep } from "./teamCardCopy";
@@ -28,6 +28,7 @@ export type Job = {
   badges: Record<string, string>;
   engagements: Record<string, string>;
   tags: Record<string, string>;
+  loyalty?: Record<string, string>; // production loyaltyId → new staging loyalty-id
   log: string[];
   finished: boolean;
   updatedAt: string;
@@ -59,7 +60,7 @@ export async function startJob(name: string, prodIds: string[], folder: string):
 }
 
 // ---- remapping -----------------------------------------------------------
-type Ctx = { job: Job; steps: CopyStep[]; media: Map<string, string>; deadline: number };
+type Ctx = { job: Job; steps: CopyStep[]; media: Map<string, string>; deadline: number; pageUrl?: string };
 
 async function mapDoc(ctx: Ctx, d: Json): Promise<Json | { external: string }> {
   if (!d || typeof d !== "object" || !isId(d.value)) return d;
@@ -144,7 +145,20 @@ async function remap(ctx: Ctx, v: Json, k = ""): Promise<Json> {
   const out: Json = {};
   for (const [kk, x] of Object.entries(v)) {
     if (kk === "loyaltyId") {
-      ctx.job.log.push(`loyaltyId dropped (production loyalty IDs are private): ${String(x)}`);
+      // production loyalty IDs are private: create a new one on staging,
+      // named after the page and the button, so tracking works there
+      if (isId(x)) {
+        ctx.job.loyalty ??= {};
+        if (!ctx.job.loyalty[x]) {
+          const slug = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+          const label = typeof v.label === "string" ? v.label : v.label?.en ?? "";
+          const value = `stg-${slug((ctx.pageUrl ?? "page").split("/").pop() ?? "page")}-${slug(label) || "cta"}`.slice(0, 80);
+          const found = await stg(`/loyalty-ids?where[value][equals]=${encodeURIComponent(value)}&limit=1&depth=0`).catch(() => null);
+          ctx.job.loyalty[x] = found?.docs?.[0]?.id ?? (await stg(`/loyalty-ids`, { method: "POST", body: JSON.stringify({ value }) })).doc.id;
+          ctx.job.log.push(`new staging loyalty ID "${value}"`);
+        }
+        out[kk] = ctx.job.loyalty[x];
+      }
       continue;
     }
     if (kk === "doc" && x && typeof x === "object") {
@@ -209,6 +223,7 @@ export async function stepJob(id: string, budgetMs = 40_000): Promise<Job> {
       if (p.done) continue;
       if (left() < 15000) return job;
       const all = await prod(`/pages/${p.prodId}?depth=0&locale=all&fallback-locale=none&draft=false`);
+      ctx.pageUrl = p.url;
       const { sections, meta, title, authRequirement, logoStyle, shouldDefaultToTransparent, iconColorInTransparentHeader } = all;
       const mapped = await remap(ctx, { sections, meta, title, authRequirement, logoStyle, shouldDefaultToTransparent, iconColorInTransparentHeader });
       for (const [k, v] of ctx.media) job.media[k] = v;
