@@ -221,7 +221,7 @@ addEventListener("message", (e) => {
 });
 `;
 
-export function LivePreview({ view, vals, lang, card, focus, onFocus }: { view: string; vals: Vals; lang: Loc; card: PreviewCard; focus?: string; onFocus: (k: string) => void }) {
+export function LivePreview({ view, vals, lang, card, focus, onFocus, active = false }: { view: string; vals: Vals; lang: Loc; card: PreviewCard; focus?: string; onFocus: (k: string) => void; active?: boolean }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const valsRef = useRef(vals);
   valsRef.current = vals;
@@ -270,8 +270,8 @@ export function LivePreview({ view, vals, lang, card, focus, onFocus }: { view: 
   }, [onFocus]);
 
   return (
-    <div style={{ width: 390, maxWidth: "100%", margin: "0 auto", borderRadius: 36, padding: 10, background: "#111", boxShadow: "0 20px 60px rgba(0,0,0,.35)" }}>
-      <div style={{ borderRadius: 28, overflow: "hidden", background: "#f5f2f2", height: 760 }}>
+    <div style={{ width: 390, flexShrink: 0, borderRadius: 36, padding: 10, background: "#111", boxShadow: active ? "0 0 0 2px #ff2d00, 0 20px 60px rgba(0,0,0,.35)" : "0 20px 60px rgba(0,0,0,.35)" }}>
+      <div style={{ borderRadius: 28, overflow: "hidden", background: "#f5f2f2", height: "max(560px, calc(100vh - 170px))" }}>
         <iframe
           ref={ref}
           title="Mobile preview"

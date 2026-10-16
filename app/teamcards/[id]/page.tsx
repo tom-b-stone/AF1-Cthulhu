@@ -77,6 +77,19 @@ const VIEW_KEYS: Record<string, string[]> = {
   earned: ["publicTitle", "description", "rewardDescription"],
   shelf: ["publicTitle"],
 };
+// the whole journey of a card, in the order fans see it
+const JOURNEY: { key: string; label: string }[] = [
+  { key: "module", label: "1 · On the page" },
+  { key: "question", label: "2 · The question" },
+  { key: "overlay", label: "3a · Answered, logged out" },
+  { key: "reveal", label: "3b · Card popup, logged out" },
+  { key: "post", label: "4a · Answered, logged in" },
+  { key: "collected", label: "4b · Card popup, collected" },
+  { key: "unearned", label: "5a · Collection, not yet collected" },
+  { key: "earned", label: "5b · Collection, collected" },
+  { key: "shelf", label: "5c · Trophy shelf" },
+  { key: "share", label: "6 · Shared" },
+];
 const words = (v: string) => v.trim().split(/\s+/).filter(Boolean).length;
 
 const get = (v: Values, f: FieldDef, l: Loc) => (f.localized ? ((v[f.key] as LocValue | undefined)?.[l] ?? "") : (v[f.key] as string | boolean | undefined));
@@ -95,6 +108,8 @@ export default function EditCard() {
   const [review, setReview] = useState<{ rows: DiffRow[]; errors: string[] } | null>(null);
   const [result, setResult] = useState<{ pushed: string[]; errors: string[] } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(true);
+  const [journey, setJourney] = useState(false);
 
   useEffect(() => {
     fetch(`/api/teamcards/${id}`)
@@ -122,6 +137,7 @@ export default function EditCard() {
   const pick = useCallback(
     (k: string) => {
       setFocus(k);
+      setFormOpen(true);
       setView((cur) => {
         if (VIEW_KEYS[cur]?.includes(k)) return cur;
         const inStep = VIEWS[step].find((v) => VIEW_KEYS[v.key]?.includes(k));
@@ -245,9 +261,9 @@ export default function EditCard() {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 430px", gap: 28, alignItems: "start", maxWidth: 1240 }}>
+    <div style={{ display: "grid", gridTemplateColumns: formOpen ? "minmax(340px, 440px) minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 24, alignItems: "start" }}>
       {/* ---- left: edit ---- */}
-      <div style={{ display: "grid", gap: 16, minWidth: 0 }}>
+      <div style={{ display: formOpen ? "grid" : "none", gap: 16, minWidth: 0 }}>
         <div>
           <Link href="/teamcards" style={{ fontSize: 12, color: "var(--muted)" }}>
             ← All Team Cards
@@ -416,21 +432,47 @@ export default function EditCard() {
         )}
       </div>
 
-      {/* ---- right: live mobile preview ---- */}
-      <div style={{ position: "sticky", top: 16, display: "grid", gap: 10 }}>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
-          {(views.length > 1 ? views : []).map((v) => (
-            <button key={v.key} className="btn" style={{ padding: "4px 10px", fontSize: 12, borderColor: view === v.key ? "var(--accent)" : undefined }} onClick={() => setView(v.key)}>
-              {v.label}
+      {/* ---- right: live mobile previews, side by side ---- */}
+      <div style={{ position: "sticky", top: 12, display: "grid", gap: 10, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <button className="btn" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => setFormOpen((x) => !x)}>
+            {formOpen ? "◀ Hide form" : "✎ Edit"}
+          </button>
+          {!formOpen && <b style={{ fontSize: 14, marginRight: 6 }}>{card.name}</b>}
+          <button className="btn" style={{ padding: "4px 12px", fontSize: 12, borderColor: !journey ? "var(--accent)" : undefined }} onClick={() => setJourney(false)}>
+            This step
+          </button>
+          <button className="btn" style={{ padding: "4px 12px", fontSize: 12, borderColor: journey ? "var(--accent)" : undefined }} onClick={() => setJourney(true)}>
+            Whole journey
+          </button>
+          <span style={{ flex: 1 }} />
+          {(["en", "de"] as Loc[]).map((l) => (
+            <button key={l} className="btn" style={{ padding: "4px 10px", fontSize: 12, borderColor: lang === l ? "var(--accent)" : undefined }} onClick={() => setLang(l)}>
+              {l.toUpperCase()}
             </button>
           ))}
         </div>
-        <LivePreview view={view || "module"} vals={vals} lang={lang} card={previewCard} focus={focus} onFocus={pick} />
-        <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>
-          Mobile, with the audif1.com production styles. Tap a text to edit it, tap the card to flip it, swipe popups to the back.
+        <div style={{ display: "flex", gap: 22, overflowX: "auto", paddingBottom: 10, alignItems: "flex-start" }}>
+          {(journey ? JOURNEY : views.length ? views : JOURNEY.slice(0, 1)).map((v, i, arr) => {
+            const active = (focus && VIEW_KEYS[v.key]?.includes(focus)) || (!focus && v.key === view);
+            return (
+              <div key={v.key} style={{ display: "flex", gap: 22, alignItems: "center", flexShrink: 0 }}>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: active ? "var(--accent)" : "var(--muted)", textAlign: "center", cursor: "pointer" }} onClick={() => setView(v.key)}>
+                    {v.label}
+                  </div>
+                  <LivePreview view={v.key} vals={vals} lang={lang} card={previewCard} focus={focus} onFocus={pick} active={!!active} />
+                </div>
+                {i < arr.length - 1 && <span style={{ color: "var(--muted)", fontSize: 18 }}>→</span>}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
+          Mobile, with the audif1.com production styles and staging content. Tap a text to edit it, tap the card to flip it, swipe popups to the back.
           {focusField && (
             <>
-              <br />
+              {" "}
               Editing: <b>{focusField.label}</b> ({lang === "en" ? "English" : "German"})
             </>
           )}
