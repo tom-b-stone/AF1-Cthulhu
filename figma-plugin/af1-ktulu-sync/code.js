@@ -286,13 +286,21 @@ async function moduleInstance(b) {
   return comp.createInstance();
 }
 
+async function placeholder(b) {
+  await loadFont({ family: "Inter", style: "Semi Bold" });
+  var f = autoLayout("VERTICAL"); f.paddingTop = f.paddingBottom = 40; f.paddingLeft = f.paddingRight = 24; f.fills = solid(0.878, 0.867, 0.867);
+  var t = figma.createText(); t.fontName = { family: "Inter", style: "Semi Bold" }; t.fontSize = 18; t.characters = b.blockType + " · no mobile module in the library yet"; f.appendChild(t);
+  return f;
+}
+
 async function buildPageFrame(sec, p, x, y) {
   var fr = autoLayout("VERTICAL"); fr.name = "Mobile / page:" + p.url; sec.appendChild(fr);
   fr.x = x; fr.y = y; fr.resize(375, 100); fr.counterAxisSizingMode = "FIXED"; fr.primaryAxisSizingMode = "AUTO"; fr.clipsContent = true; fr.fills = CHALK;
   writeData(fr, { type: "page", url: p.url, stagingId: p.id });
   for (var i = 0; i < p.blocks.length; i++) {
-    var b = p.blocks[i], node = await moduleInstance(b);
-    if (!node) { log("⚠ /" + p.url + ": no module for " + b.blockType); continue; }
+    var b = p.blocks[i], node = null;
+    try { node = await moduleInstance(b); } catch (e) { log("⚠ /" + p.url + " · " + b.blockType + ": " + (e && e.message ? e.message : e)); }
+    if (!node) node = await placeholder(b); // never drop a module: a labelled frame keeps the page order
     fr.appendChild(node); node.layoutSizingHorizontal = "FILL";
     node.name = (i < 9 ? "0" : "") + (i + 1) + " " + b.blockType + (b.hidden ? " (hidden in CMS)" : "") + " · " + b.id;
     if (b.hidden) node.opacity = 0.35;

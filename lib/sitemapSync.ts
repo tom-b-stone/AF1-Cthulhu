@@ -81,7 +81,6 @@ export const MODULES: Record<string, ModuleDef> = {
   "badge-engagement-teaser": { key: "680bea534dcfc57a2242dbe732252c4f895e6894", variant: "Background=Chalk", name: "Badge Engagement Teaser Mobile" },
   "logged-out-badge-reveal": { key: OVERLAY_KEY, variant: "State=Logged Out", name: "Team Card Overlay · Logged out" },
   "free-text": { key: "9cbc66e968681b26d36710315219542bff3405e2", variant: "Alignment=Left, Background=Light, Width=Full Witdh", variantByBg: { graphite: "Alignment=Left, Background=Black, Width=Full Witdh", chalk: "Alignment=Left, Background=Light, Width=Full Witdh" }, name: "Text Only Mobile" },
-  engagement: { key: "a7d8d4b60ed66ea25f7c7f291396dfd1e0fdf3cc", name: "AF1 Public Engagement Mobile" },
   "list-section": { local: "List Section Mobile", name: "List Section Mobile" },
   "iframe-embed": { local: "iFrame Mobile", name: "iFrame Mobile" },
 };
@@ -140,7 +139,7 @@ function blockFields(pageId: string, s: Json): Field[] {
   // the standard texts of every module; empty ones hide the sample text
   for (const [p, layer] of [
     ["category", "Kicker"],
-    ["headline", t === "hot-spot" || t === "gallery" ? "Headline|text" : "Headline"],
+    ["headline", "Headline"],
     ["subline", "Subline"],
     ["copy", "Copy"],
   ] as const) {
