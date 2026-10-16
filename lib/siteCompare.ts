@@ -35,6 +35,8 @@ type Target = { collection: "pages" | "engagements" | "badges"; id: string; loca
 const SKIP = new Set(["id", "createdAt", "updatedAt", "createdBy", "updatedBy", "internalId", "sortingTime", "_status", "slug", "generateSlug", "doc", "loyaltyId", "contentTags", "relationTo", "value", "url", "breadcrumbs", "parent", "meta", "loggedOutBadge", "mechanics", "badge", "engagement", "folder", "partnerTag", "raceTag", "season", "campaignTitle", "badgeType", "publishedAt", "blockName", "anchorId"]);
 
 const LOREM = /lorem ipsum|dolor sit amet|consectetu(?:e)?r adipisc|consectetuer/i;
+// CMS default texts that appear when a block is created without the field (never on production on purpose)
+const CMS_DEFAULT = /^By joining, you.ll get early access to exclusive content/i;
 const richText = (v: Json): string => (!v || typeof v !== "object" ? "" : typeof v.text === "string" ? v.text : Array.isArray(v.children) ? v.children.map(richText).join(" ") : v.root ? richText(v.root) : "");
 
 type Ctx = { media: Map<string, Json>; stgMedia: Map<string, Json>; seenEng: Set<string>; seenBadge: Set<string>; issues: Issue[]; page: string; deadline: number };
@@ -108,7 +110,10 @@ async function walk(ctx: Ctx, p: Json, s: Json, path: (string | number)[], targe
       const L = target.locale.toUpperCase();
       if (typeof sv === "string" && LOREM.test(sv) && !LOREM.test(pv)) ctx.issues.push({ page: ctx.page, where: w, kind: "placeholder", detail: `placeholder text on staging (${L}): "${sv.slice(0, 60)}" → production: "${pv.slice(0, 60)}"`, fix: { type: "text", value: pv, target: { ...target, path: here } } });
       else if (pv.trim() && (typeof sv !== "string" || !sv.trim())) ctx.issues.push({ page: ctx.page, where: w, kind: "empty-text", detail: `empty on staging (${L}): "${pv.slice(0, 60)}"`, fix: { type: "text", value: pv, target: { ...target, path: here } } });
-      else if (!pv.trim() && typeof sv === "string" && sv.trim()) ctx.issues.push({ page: ctx.page, where: w, kind: "extra-text", detail: `only on staging (${L}), empty on production: "${sv.slice(0, 60)}"` });
+      else if (!pv.trim() && typeof sv === "string" && sv.trim())
+        ctx.issues.push(CMS_DEFAULT.test(sv.trim())
+          ? { page: ctx.page, where: w, kind: "placeholder", detail: `CMS default text on staging (${L}), empty on production: "${sv.slice(0, 60)}"`, fix: { type: "text", value: "", target: { ...target, path: here } } }
+          : { page: ctx.page, where: w, kind: "extra-text", detail: `only on staging (${L}), empty on production: "${sv.slice(0, 60)}"` });
       else if (typeof sv === "string" && pv.trim() && sv.trim() && pv.trim() !== sv.trim()) ctx.issues.push({ page: ctx.page, where: w, kind: "text-differs", detail: `differs (${L}): staging "${sv.slice(0, 50)}" · production "${pv.slice(0, 50)}"` });
       continue;
     }
@@ -125,7 +130,7 @@ async function walk(ctx: Ctx, p: Json, s: Json, path: (string | number)[], targe
   // keys only on staging (production never had them): placeholders there are copy leftovers
   if (s && typeof s === "object" && !Array.isArray(s)) {
     for (const [k, sv] of Object.entries(s)) {
-      if (k in p || SKIP.has(k) || typeof sv !== "string" || !LOREM.test(sv)) continue;
+      if (k in p || SKIP.has(k) || typeof sv !== "string" || !(LOREM.test(sv) || CMS_DEFAULT.test(sv.trim()))) continue;
       ctx.issues.push({ page: ctx.page, where: `${where}${where ? "." : ""}${k}`, kind: "placeholder", detail: `placeholder text on staging (${target.locale.toUpperCase()}), not set on production: "${sv.slice(0, 60)}"`, fix: { type: "text", value: "", target: { ...target, path: [...path, k] } } });
     }
   }
