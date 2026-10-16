@@ -161,7 +161,11 @@ async function compareLink(ctx: Ctx, p: Json, s: Json, path: (string | number)[]
   if (p.linkType === "internal" && p.doc?.value) {
     const pslug = await slugOf("prod", idOf(p.doc.value) as string);
     if (!pslug) return;
-    if (s.linkType === "internal" && s.doc?.value && (await slugOf("stg", idOf(s.doc.value) as string)) === pslug) return;
+    if (s.linkType === "internal" && s.doc?.value) {
+      // same page, or the campaign's own copy of it (e.g. vegas-grand-prize → vegas-grand-prize-2026)
+      const sslug = await slugOf("stg", idOf(s.doc.value) as string);
+      if (sslug && (sslug === pslug || sslug.startsWith(`${pslug}-`) || sslug.endsWith(`/${pslug.split("/").pop()}`))) return;
+    }
     const sid = await stagingPageBySlug(pslug);
     if (!sid) {
       if (s.linkType === "external" && typeof s.url === "string" && s.url.includes(pslug.split("/").pop() ?? pslug)) return; // no staging copy: production URL is fine
