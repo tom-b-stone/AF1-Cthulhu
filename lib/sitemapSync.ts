@@ -36,6 +36,8 @@ export type Campaign = {
   mediaFolder: RegExp; // staging media folder for images placed in Figma
   contentTag: RegExp; // content tag for those uploads
   groups: Group[]; // one activation = one section in Figma
+  race: string; // shown on the card back
+  season: string;
 };
 
 const S = (u: string) => (u ? `unlock-singapore/${u}` : "unlock-singapore");
@@ -48,6 +50,8 @@ export const CAMPAIGNS: Record<string, Campaign> = {
     figmaPage: "692:56",
     mediaFolder: /sin|singapore/i,
     contentTag: /singapore gp/i,
+    race: "Singapore",
+    season: "2026",
     groups: [
       { key: "hub", title: "Campaign Hub", urls: [S("")], card: false, col: "center", note: "Entry from paid social. Shows every card, the Vegas raffle and the map." },
       { key: "vegas", title: "Vegas Grand Prize", urls: [S("vegas-grand-prize-2026")], card: true, col: "center", note: "Raffle card · Page view on the Hub" },
@@ -66,23 +70,25 @@ export const CAMPAIGNS: Record<string, Campaign> = {
 
 // Mobile modules (375 px) per CMS block type. "local" modules are built by the
 // plugin as components in the working file (not in the 07 library).
-export type ModuleDef = { key?: string; variant?: string; variantByBg?: Record<string, string>; local?: string; name: string };
+export type ModuleDef = { key?: string; variant?: string; variantByBg?: Record<string, string>; local?: string; name: string; desktop?: { key?: string; variant?: string; variantByBg?: Record<string, string>; local?: string } };
 export const OVERLAY_KEY = "6d6338d5b2a8bdfb03935037a19dec6672f80baa"; // Team_Card_Overlay_Mobile
+export const OVERLAY_DESKTOP_KEY = "2eaae66507bb063ee94a050f0cbdc26977be6dad"; // Team_Card_Overlay_Desktop
+const CAROUSEL_D = { key: "a472202a414cb600298f98531f9167a06fc7e274", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01" };
 export const MODULES: Record<string, ModuleDef> = {
-  hero: { key: "92f328fd4f4868c2c96ee2bc66df76f37909f02b", variant: "Position=Text bottom centered, Color Variant=Light, Size=XL", name: "Hero Image Mobile" },
-  "single-card-showcase": { key: "37a990fda306c3ff11d7c56a8a251fa685b60cc4", variant: "Background=Grey 01", name: "Single Card Showcase Mobile" },
-  "badges-grid": { key: "63028e426d41adf48eaf96ba5a717c66a7eb1853", variant: "Background=Chalk, Items=6", name: "Team Cards Grid Mobile" },
-  carousel: { key: "e98001eeafb9f5cc5920c3304af8c30a462fa620", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01", name: "Carousel Mobile" },
-  "carousel-tags": { key: "e98001eeafb9f5cc5920c3304af8c30a462fa620", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01", name: "Carousel Mobile (tags)" },
-  "call-to-action": { key: "918553ca6aa8215213e716b9e9af6d0ea64daa49", variant: "Alignment=Center, Background=Image, Width=Boxed, Text=Light", name: "Call to Action Mobile" },
-  "hot-spot": { key: "b267359bc26e0f4056e099e7db30d3772cbe4707", name: "Hotspot Mobile" },
-  teaser: { key: "291e2a3471c882c11668c7c763b6cc0e96b95b87", name: "Teaser Big Mobile" },
-  gallery: { key: "67bef93065cdc55535cd9b95add968beffebf056", name: "Gallery Grid Mobile" },
-  "badge-engagement-teaser": { key: "680bea534dcfc57a2242dbe732252c4f895e6894", variant: "Background=Chalk", name: "Badge Engagement Teaser Mobile" },
-  "logged-out-badge-reveal": { key: OVERLAY_KEY, variant: "State=Logged Out", name: "Team Card Overlay · Logged out" },
-  "free-text": { key: "9cbc66e968681b26d36710315219542bff3405e2", variant: "Alignment=Left, Background=Light, Width=Full Witdh", variantByBg: { graphite: "Alignment=Left, Background=Black, Width=Full Witdh", chalk: "Alignment=Left, Background=Light, Width=Full Witdh" }, name: "Text Only Mobile" },
-  "list-section": { local: "List Section Mobile", name: "List Section Mobile" },
-  "iframe-embed": { local: "iFrame Mobile", name: "iFrame Mobile" },
+  hero: { key: "92f328fd4f4868c2c96ee2bc66df76f37909f02b", variant: "Position=Text bottom centered, Color Variant=Light, Size=XL", name: "Hero Image Mobile", desktop: { key: "5ee339e839dcb119149a0f67fb900b965958f0da", variant: "Position=Text bottom centered, Color Variant=Light, Height=XL" } },
+  "single-card-showcase": { key: "37a990fda306c3ff11d7c56a8a251fa685b60cc4", variant: "Background=Grey 01", name: "Single Card Showcase Mobile", desktop: { key: "5b16f307e24c2273a71bed42d8f0baf2fc58dbc7", variant: "Background=Grey 01" } },
+  "badges-grid": { key: "63028e426d41adf48eaf96ba5a717c66a7eb1853", variant: "Background=Chalk, Items=6", name: "Team Cards Grid Mobile", desktop: { key: "5a8692c17f16afbd94ea9716e184f483fbf51de3", variant: "Background=Chalk, Items=8" } },
+  carousel: { key: "e98001eeafb9f5cc5920c3304af8c30a462fa620", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01", name: "Carousel Mobile", desktop: CAROUSEL_D },
+  "carousel-tags": { key: "e98001eeafb9f5cc5920c3304af8c30a462fa620", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01", name: "Carousel Mobile (tags)", desktop: CAROUSEL_D },
+  "call-to-action": { key: "918553ca6aa8215213e716b9e9af6d0ea64daa49", variant: "Alignment=Center, Background=Image, Width=Boxed, Text=Light", name: "Call to Action Mobile", desktop: { key: "bda814cd828f23d94c33acd3e3bf8dca0a223fbb", variant: "Alignment=Centred, Background=Image, Width=Boxed, Text=Light" } },
+  "hot-spot": { key: "b267359bc26e0f4056e099e7db30d3772cbe4707", name: "Hotspot Mobile", desktop: { key: "d4b790f9da77978870d8ee5d43750f439f2dd5bd", variant: "Text Position=Text Top, Image Ratio=Landscape, Variation=Boxed, Background=Light" } },
+  teaser: { key: "291e2a3471c882c11668c7c763b6cc0e96b95b87", name: "Teaser Big Mobile", desktop: { key: "30d2d414d9eda328c7dcc125ac5c0d26ce9ad468", variant: "Position=Text left /Image right, Height=XL, Background=Light" } },
+  gallery: { key: "67bef93065cdc55535cd9b95add968beffebf056", name: "Gallery Grid Mobile", desktop: { key: "f74a16f28ec70216258a0e33044806a32849f51e", variant: "Tile Variation=3, Color Variant=Light, Background=Chalk" } },
+  "badge-engagement-teaser": { key: "680bea534dcfc57a2242dbe732252c4f895e6894", variant: "Background=Chalk", name: "Badge Engagement Teaser Mobile", desktop: { key: "098eeeb4e031255abcdc974d6a4030c72a031a46", variant: "Background=Chalk" } },
+  "logged-out-badge-reveal": { key: OVERLAY_KEY, variant: "State=Logged Out", name: "Team Card Overlay · Logged out", desktop: { key: OVERLAY_DESKTOP_KEY, variant: "State=Logged Out" } },
+  "free-text": { key: "9cbc66e968681b26d36710315219542bff3405e2", variant: "Alignment=Left, Background=Light, Width=Full Witdh", variantByBg: { graphite: "Alignment=Left, Background=Black, Width=Full Witdh", chalk: "Alignment=Left, Background=Light, Width=Full Witdh" }, name: "Text Only Mobile", desktop: { key: "e1d29b6ab91578bc48c0c61d2e622c9eff6f7308", variant: "Alignment=Left, Background=Light, Width=Full Width", variantByBg: { graphite: "Alignment=Left, Background=Dark, Width=Full Width", chalk: "Alignment=Left, Background=Light, Width=Full Width" } } },
+  "list-section": { local: "List Section Mobile", name: "List Section Mobile", desktop: { local: "List Section Desktop" } },
+  "iframe-embed": { local: "iFrame Mobile", name: "iFrame Mobile", desktop: { local: "iFrame Desktop" } },
 };
 export const SKIP_BLOCKS = new Set(["spacer"]);
 
@@ -127,36 +133,31 @@ function blockFields(pageId: string, s: Json): Field[] {
   const text = (path: string, layer: string, value: unknown, readonly = false) => out.push({ key: k(path), path, layer, value: str(value), kind: "text", readonly });
   const image = (path: string, layer: string, value: unknown) => out.push({ key: k(path), path, layer, value: idOf(value), kind: "image" });
   const t = s.blockType;
-  if (t === "free-text") {
-    text("content", "text|Copy", lexicalText(s.content), true);
-    return out;
-  }
   if (t === "iframe-embed") {
     text("url", "URL", s.url, true);
     return out;
   }
   if (t === "logged-out-badge-reveal") return out; // card fields come from the badge
   // the standard texts of every module; empty ones hide the sample text
+  // Text Only: four layers all called "text" → told apart by their exact parent frame (^) and order (@n)
+  const ft = t === "free-text";
   for (const [p, layer] of [
-    ["category", "Kicker"],
-    ["headline", t === "gallery" ? "Typography/Headline>text" : "Headline"],
-    ["subline", t === "badge-engagement-teaser" ? "Description" : "Subline"],
-    ["copy", t === "gallery" ? "Typography/Copy>text" : "Copy"],
+    ["category", ft ? "^Category / Logo>text" : "Kicker"],
+    ["headline", ft ? "^HL + Sl>text@0" : t === "gallery" ? "Typography/Headline>text" : "Headline"],
+    ["subline", ft ? "^HL + Sl>text@1" : t === "badge-engagement-teaser" ? "Description|Subline" : "Subline"],
+    ["copy", ft ? "" : t === "gallery" ? "Typography/Copy>text" : "Copy"],
   ] as const) {
-    // the gallery module on audif1.com renders no headline/copy: keep them hidden in Figma too
-    if (typeof s[p] === "string" && !(t === "gallery" && (p === "headline" || p === "copy"))) text(p, layer, s[p]);
+    if (!layer) continue;
+    if (typeof s[p] === "string") text(p, layer, s[p]);
     else text(`_figma.${p}`, layer, "", true);
   }
-  let cta = false;
-  for (const arr of ["ctas", "unearnedBadgeCTA"]) {
-    const c = Array.isArray(s[arr]) ? s[arr][0] : null;
-    if (c && typeof c.label === "string") {
-      text(`${arr}.0.label`, "Learn more", c.label);
-      cta = true;
-      break;
-    }
-  }
-  if (!cta) text("_figma.cta", "Learn more", "", true);
+  if (ft) text("content", "^Copy>text", lexicalText(s.content), true);
+  // buttons: label i → the i-th visible button of the module; buttons without a label are hidden
+  const arr = Array.isArray(s.ctas) && s.ctas.length ? "ctas" : Array.isArray(s.unearnedBadgeCTA) && s.unearnedBadgeCTA.length ? "unearnedBadgeCTA" : null;
+  if (arr)
+    (s[arr] as Json[]).slice(0, 2).forEach((c, i) => {
+      if (c && typeof c.label === "string") text(`${arr}.${i}.label`, `@btn:${i}`, c.label);
+    });
   if (Array.isArray(s.carouselItems))
     s.carouselItems.slice(0, 4).forEach((it: Json, i: number) => {
       const ci = it?.carouselImage;
@@ -187,29 +188,52 @@ function blockFields(pageId: string, s: Json): Field[] {
 }
 
 // Team Card fields as they appear in the card journey.
-function badgeField(badgeId: string, b: Json, path: string, layer: string, kind: "text" | "image" = "text"): Field {
-  return { key: `badge:${badgeId}|card|${path}`, path, layer, value: kind === "image" ? idOf(b?.[path]) : str(b?.[path]), kind };
+const getPath = (o: Json, path: string) => path.split(".").reduce((a: Json, k) => (a == null ? a : a[/^\d+$/.test(k) ? Number(k) : k]), o);
+function badgeField(badgeId: string, b: Json, path: string, layer: string, kind: "text" | "image" = "text", readonly = false): Field {
+  const v = getPath(b, path);
+  return { key: `badge:${badgeId}|card|${path}`, path, layer, value: kind === "image" ? idOf(v) : str(v), kind, readonly };
 }
+// texts the overlay shows that are not a plain badge text (rich text, fixed site labels): Figma shows them, the CMS owns them
+function badgeShown(badgeId: string, name: string, layer: string, value: string): Field {
+  return { key: `badge:${badgeId}|card|_figma.${name}`, path: `_figma.${name}`, layer, value, kind: "text", readonly: true };
+}
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
-function cardStates(badgeId: string, b: Json): CardState[] {
+function cardStates(badgeId: string, b: Json, race: string, season: string): CardState[] {
   const name = badgeField(badgeId, b, "badgePopupTitle", "Badge Name");
   // one image layer per state: the plugin picks the visible one of the two
   const img = [badgeField(badgeId, b, "badgeImage", "Badge/Image|Badge mobile big", "image")];
+  const btn = (path: string | null, fixed?: string) => (path ? badgeField(badgeId, b, path, "@btn:0") : badgeShown(badgeId, "btn." + (fixed ?? "none").toLowerCase(), "@btn:0", fixed ?? ""));
   const states: CardState[] = [];
   const push = (state: string, label: string, note: string, extra: Field[]) => states.push({ state, label, note, fields: [name, ...img, ...extra] });
-  if (b.isTimebound) push("Announced", "Card announced", "Countdown · Payload: Is Timebound + Start Date", [badgeField(badgeId, b, "description", "Bottom Content>Description")]);
-  push("Logged Out", "Logged out", "Payload: Logged Out Reveal title + description", [badgeField(badgeId, b, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(badgeId, b, "loggedOutRevealDescription", "Logged Out · Description")]);
-  push("Default", "Not earned yet", "Payload: Reward Teaser Description + Unearned CTA", [badgeField(badgeId, b, "rewardTeaserDescription", "Bottom Content>Description")]);
+  if (b.isTimebound) push("Announced", "Card announced", "Countdown · Payload: Is Timebound + Start Date", [badgeField(badgeId, b, "description", "Bottom Content>Description"), btn(null)]);
+  push("Logged Out", "Logged out", "Payload: Logged Out Reveal title, description + button", [badgeField(badgeId, b, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(badgeId, b, "loggedOutRevealDescription", "Logged Out · Description"), btn("loggedOutRevealButtonLabel")]);
+  push("Default", "Not earned yet", "Payload: Reward Teaser Description + Unearned CTA", [badgeField(badgeId, b, "rewardTeaserDescription", "Bottom Content>Description"), btn(b.unearnedBadgeCTA?.[0] ? "unearnedBadgeCTA.0.label" : null)]);
   const earned = (state: string, label: string, note: string, extra: Field[] = []) => push(state, label, note, [badgeField(badgeId, b, "rewardDescription", "Bottom Content>Description"), ...extra]);
   const rt = str(b.rewardType);
   if (rt === "couponCode") earned("Code", "Earned · voucher code", "Reward Type: Coupon Code", [badgeField(badgeId, b, "couponCode", "Code")]);
   else if (rt === "raffleSignup") {
-    earned("Raffle", "Earned · raffle", "Reward Type: Raffle Signup");
-    earned("Raffle Entered", "Raffle entered", "After the raffle submit");
-    earned("Raffle Closed", "Raffle closed", "After the end date");
-  } else if (/download/i.test(rt)) earned("Download", "Earned · download", "Reward Type: Download Asset");
-  else earned("Link", "Earned · no reward / link", "Reward Type: No Reward (+ Reward CTA)");
-  states.push({ state: "Back", label: "Card back", note: "Flip from any earned state · Payload: Description, back image", fields: [name, badgeField(badgeId, b, "description", "Back · Info Text"), badgeField(badgeId, b, "description", "Bottom Content>Description"), badgeField(badgeId, b, "badgeBackImage", "Badge/Image", "image")] });
+    earned("Raffle", "Earned · raffle sign-up", "Reward Type: Raffle Signup · Payload: T&C checkbox, submit label, footer note", [badgeShown(badgeId, "raffleTerms", "Checkbox Text", lexicalText(b.raffleTermsAndConditions)), badgeShown(badgeId, "raffleFooter", "Legal Text", lexicalText(b.raffleFooterNote)), btn("raffleSubmitLabel")]);
+    earned("Raffle Entered", "Raffle entered", "After the submit · Payload: Raffle Confirmed CTA", [btn(b.raffleConfirmedCTA?.[0] ? "raffleConfirmedCTA.0.label" : null)]);
+    earned("Raffle Closed", "Raffle closed", "After the end date", [btn(null)]);
+  } else if (/download/i.test(rt)) earned("Download", "Earned · download", "Reward Type: Download Asset", [btn(null, "Download")]);
+  else earned("Link", "Earned · no reward / link", "Reward Type: No Reward (+ Reward CTA)", [btn(b.rewardCTA?.[0] ? "rewardCTA.0.label" : null)]);
+  states.push({
+    state: "Back",
+    label: "Card back",
+    note: "Flip from any earned state · Payload: Description, back image",
+    fields: [
+      name,
+      badgeField(badgeId, b, "description", "Back · Info Text"),
+      badgeField(badgeId, b, "description", "Bottom Content>Description"),
+      badgeField(badgeId, b, "badgeBackImage", "Badge/Image|Badge mobile big", "image"),
+      badgeShown(badgeId, "back.season", "Back · Season", season),
+      badgeShown(badgeId, "back.status", "Back · Status", "Earned"),
+      badgeShown(badgeId, "back.race", "Back · Race", race),
+      badgeShown(badgeId, "back.type", "Back · Type", cap(str(b.type))),
+      btn(null),
+    ],
+  });
   return states;
 }
 
@@ -247,10 +271,25 @@ export async function loadModel(c: Campaign): Promise<Model> {
       const bd = b.badge ? badges[b.badge] : null;
       if (!bd) continue;
       if (b.blockType === "logged-out-badge-reveal")
-        b.fields.push(badgeField(b.badge!, bd, "badgePopupTitle", "Badge Name"), badgeField(b.badge!, bd, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(b.badge!, bd, "loggedOutRevealDescription", "Logged Out · Description"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image|Badge mobile big", "image"));
+        b.fields.push(badgeField(b.badge!, bd, "badgePopupTitle", "Badge Name"), badgeField(b.badge!, bd, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(b.badge!, bd, "loggedOutRevealDescription", "Logged Out · Description"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image|Badge mobile big", "image"), badgeField(b.badge!, bd, "loggedOutRevealButtonLabel", "@btn:0"));
       if (b.blockType === "single-card-showcase") b.fields.push(badgeField(b.badge!, bd, "publicTitle", "Name / Year"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image", "image"));
       if (b.blockType === "badge-engagement-teaser") b.fields.push(badgeField(b.badge!, bd, "badgeImage", "Badge Image", "image"));
     }
+  // the engagement inside the teaser module: its question replaces the sample Hot or Not
+  const engIds = [...new Set(pages.flatMap((p) => p.blocks.map((b) => b.engagement).filter(Boolean) as string[]))];
+  if (engIds.length) {
+    const ew = encodeURIComponent(JSON.stringify({ id: { in: engIds } }));
+    const er = await stg(`/engagements?where=${ew}&limit=100&depth=0&locale=en&fallback-locale=none`).catch(() => ({ docs: [] }));
+    const engs: Record<string, Json> = Object.fromEntries((er.docs ?? []).map((e: Json) => [e.id, e]));
+    const TYPE: Record<string, string> = { "hot-or-not": "Hot or Not", survey: "Survey", "q-and-a": "Q&A", quiz: "Quiz" };
+    for (const p of pages)
+      for (const b of p.blocks) {
+        const e = b.engagement ? engs[b.engagement] : null;
+        if (!e) continue;
+        const sh = (name: string, layer: string, value: string): Field => ({ key: `engagement:${e.id}|eng|_figma.${name}`, path: `_figma.${name}`, layer, value, kind: "text", readonly: true });
+        b.fields.push(sh("question", "Would you wear those Shoes to the paddock?", str(e.questions?.[0]?.text)), sh("tag", "Stylecheck", ""), sh("type", "Hot or Not", TYPE[str(e.engagementType)] ?? cap(str(e.engagementType))));
+      }
+  }
   // groups, one card per group (the badge most used on its pages)
   const groups: (Group & { badgeId?: string })[] = c.groups.map((g) => {
     if (!g.card) return { ...g };
@@ -263,7 +302,7 @@ export async function loadModel(c: Campaign): Promise<Model> {
     .filter((g) => g.badgeId && badges[g.badgeId])
     .map((g) => {
       const b = badges[g.badgeId!];
-      return { badgeId: g.badgeId!, title: str(b.publicTitle || b.title), rewardType: str(b.rewardType), isTimebound: Boolean(b.isTimebound), group: g.key, states: cardStates(g.badgeId!, b) };
+      return { badgeId: g.badgeId!, title: str(b.publicTitle || b.title), rewardType: str(b.rewardType), isTimebound: Boolean(b.isTimebound), group: g.key, states: cardStates(g.badgeId!, b, c.race, c.season) };
     });
   // the Team Cards grid shows the campaign's cards
   const gridCards = cards.slice(0, 6);
@@ -437,7 +476,17 @@ export async function applySync(campaign: string, by: string, opts: { figma?: Fi
     if (docId.startsWith("badge:")) {
       const id = docId.slice(6);
       const body: Json = {};
-      for (const d of list) body[d.path] = d.figma ?? "";
+      // nested paths (e.g. unearnedBadgeCTA.0.label) patch the whole top-level field
+      const nested = list.some((d) => d.path.includes("."));
+      const cur = nested ? await stg(`/badges/${id}?locale=en&fallback-locale=none&depth=0&draft=true`) : null;
+      for (const d of list) {
+        if (!d.path.includes(".")) body[d.path] = d.figma ?? "";
+        else {
+          const top = d.path.split(".")[0];
+          if (!(top in body)) body[top] = cur?.[top] ?? [];
+          setPath(body, splitPath(d.path), d.figma ?? "");
+        }
+      }
       await stg(`/badges/${id}?locale=en`, { method: "PATCH", body: JSON.stringify(body) });
       touchedBadges.push(id);
       written.push(`Team Card ${list[0].page.replace("Team Card · ", "")}: ${list.length} field${list.length === 1 ? "" : "s"}`);

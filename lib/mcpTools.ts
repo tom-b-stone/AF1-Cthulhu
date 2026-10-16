@@ -411,7 +411,7 @@ ${SEO_WRITE_RECIPE}`);
     async run(args, actor) {
       const c = String(args.campaign ?? "sin");
       if (args.reset) await resetSync(c);
-      await queueCommand(c, "build", actor);
+      await queueCommand(c, "build-v4", actor); // only the v4 plugin (São Paulo layout) picks this up
       return text(`Queued: the plugin rebuilds all ${c} screens the next time it opens${args.reset ? " (sync state reset)" : ""}.`);
     },
   },

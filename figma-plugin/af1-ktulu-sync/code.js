@@ -85,16 +85,24 @@ async function swapFonts(node) {
 // ---- layers ---------------------------------------------------------------
 var ALIASES = { "Learn more": ["Learn more", "Button Label"], Kicker: ["Kicker", "Category"] };
 function shown(n, root) { var p = n; while (p && p !== root) { if (!p.visible) return false; p = p.parent; } return true; }
-function hasAncestor(n, root, part) { var p = n.parent; while (p && p !== root) { if (p.name.indexOf(part) >= 0) return true; p = p.parent; } return false; }
-// spec: "Name", "Scope>Name", or "A|B" (first visible match)
+// scope "Part" = an ancestor whose name contains Part, "^Part" = an ancestor named exactly Part
+function hasAncestor(n, root, part) {
+  var exact = part.charAt(0) === "^", want = exact ? part.slice(1) : part, p = n.parent;
+  while (p && p !== root) { if (exact ? p.name === want : p.name.indexOf(want) >= 0) return true; p = p.parent; }
+  return false;
+}
+function byPos(a, b) { var A = a.absoluteTransform, B = b.absoluteTransform; return Math.abs(A[1][2] - B[1][2]) > 4 ? A[1][2] - B[1][2] : A[0][2] - B[0][2]; }
+// spec: "Name", "Scope>Name", "^Scope>Name@1" (2nd visible match), or "A|B" (first visible match)
+function parseSpec(o) { var m = o.match(/^(.*)@(\d+)$/), idx = m ? Number(m[2]) : null; if (m) o = m[1]; var parts = o.split(">"); return { leaf: parts[parts.length - 1], scope: parts.length > 1 ? parts[0] : null, idx: idx }; }
 function findLayer(inst, spec, kind) {
   var options = spec.split("|");
   var fallback = null;
   for (var o = 0; o < options.length; o++) {
-    var parts = options[o].split(">"), leaf = parts[parts.length - 1], scope = parts.length > 1 ? parts[0] : null;
-    var names = ALIASES[leaf] || [leaf];
+    var sp = parseSpec(options[o]);
+    var names = ALIASES[sp.leaf] || [sp.leaf];
     for (var i = 0; i < names.length; i++) {
-      var hits = inst.findAll(function (x) { return x.name === names[i] && (kind === "TEXT" ? x.type === "TEXT" : "fills" in x && x.type !== "TEXT") && (!scope || hasAncestor(x, inst, scope)); });
+      var hits = inst.findAll(function (x) { return x.name === names[i] && (kind === "TEXT" ? x.type === "TEXT" : "fills" in x && x.type !== "TEXT") && (!sp.scope || hasAncestor(x, inst, sp.scope)); });
+      if (sp.idx !== null) { var vis = hits.filter(function (h) { return shown(h, inst); }).sort(byPos); if (vis[sp.idx]) return vis[sp.idx]; continue; }
       for (var h = 0; h < hits.length; h++) { if (shown(hits[h], inst)) return hits[h]; if (!fallback) fallback = hits[h]; }
     }
   }
@@ -102,15 +110,42 @@ function findLayer(inst, spec, kind) {
 }
 function propKey(inst, layer) { var props = inst.componentProperties || {}; for (var k in props) if (props[k].type === "TEXT" && k.split("#")[0] === layer) return k; return null; }
 
+// buttons: the visible button instances of a module (the ones with a Label property), top to bottom
+function propOf(n, name, type) { var p = n.componentProperties || {}; for (var k in p) if (p[k].type === type && k.split("#")[0] === name) return k; return null; }
+function buttonsOf(inst) {
+  return inst.findAll(function (x) { return x.type === "INSTANCE" && !!propOf(x, "Label", "TEXT") && !hasAncestor(x, inst, "Tile ") && shown(x, inst); }).sort(byPos);
+}
+function btnIndex(layer) { var m = /^@btn:(\d+)$/.exec(layer); return m ? Number(m[1]) : -1; }
+// a button the sync placed carries its index, so it stays found even while hidden
+function btnMap(inst) { try { return JSON.parse(inst.getSharedPluginData(NS, "btns") || "{}"); } catch (e) { return {}; } }
+function taggedButton(inst, i) { var id = btnMap(inst)[i]; return id ? inst.findOne(function (x) { return x.id === id; }) : null; }
+function isTagged(inst, b) { var m = btnMap(inst); for (var k in m) if (m[k] === b.id) return true; return false; }
+function setButton(inst, i, value) {
+  var b = taggedButton(inst, i);
+  if (!b) { b = buttonsOf(inst).filter(function (x) { return !isTagged(inst, x); })[0]; if (!b) return false; var m = btnMap(inst); m[i] = b.id; inst.setSharedPluginData(NS, "btns", JSON.stringify(m)); }
+  var o = {}; o[propOf(b, "Label", "TEXT")] = value || " ";
+  var st = propOf(b, "Show Text", "BOOLEAN"); if (st) o[st] = true;
+  b.setProperties(o);
+  b.visible = !!value;
+  return true;
+}
+function getButton(inst, i) {
+  var b = taggedButton(inst, i);
+  if (!b) return undefined;
+  return b.visible ? String(b.componentProperties[propOf(b, "Label", "TEXT")].value).trim() : "";
+}
+
 // every visible layer with that name gets the text (some modules repeat a layer, e.g. Description)
 function allTextLayers(inst, layer) {
   var first = findLayer(inst, layer, "TEXT"); if (!first) return [];
-  if (layer.indexOf("|") >= 0) return [first];
-  var parts = layer.split(">"), scope = parts.length > 1 ? parts[0] : null;
-  var out = inst.findAll(function (x) { return x.type === "TEXT" && x.name === first.name && shown(x, inst) && (!scope || hasAncestor(x, inst, scope)); });
+  if (layer.indexOf("|") >= 0 || /@\d+$/.test(layer)) return [first];
+  var sp = parseSpec(layer);
+  var out = inst.findAll(function (x) { return x.type === "TEXT" && x.name === first.name && shown(x, inst) && (!sp.scope || hasAncestor(x, inst, sp.scope)); });
   return out.length ? out : [first];
 }
 async function setText(inst, layer, value) {
+  var bi = btnIndex(layer);
+  if (bi >= 0) return setButton(inst, bi, value);
   var many = allTextLayers(inst, layer);
   if (many.length > 1) { for (var m = 1; m < many.length; m++) await setOne(inst, many[m], value); }
   return setOne(inst, many[0] || null, value, layer);
@@ -125,16 +160,19 @@ async function setOne(inst, t, value, layer) {
     if (owner) { var p = {}; p[ref] = v; owner.setProperties(p); }
   } else { await loadFonts(t); t.characters = v; }
   t.visible = value !== "";
+  MAPPED[t.id] = true;
   return true;
 }
 function getText(inst, layer) {
+  var bi = btnIndex(layer);
+  if (bi >= 0) return getButton(inst, bi);
   var t = findLayer(inst, layer, "TEXT");
   if (t) return t.visible ? t.characters : "";
   var pk = propKey(inst, layer); return pk ? String(inst.componentProperties[pk].value) : undefined;
 }
 function imageHashOf(node) { var f = node && node.fills; if (!f || f === figma.mixed) return null; for (var i = 0; i < f.length; i++) if (f[i].type === "IMAGE") return f[i].imageHash; return null; }
 
-var imageCache = {};
+var imageCache = {}, MAPPED = {};
 async function coverPaint(node, hash, mediaId) {
   var f = (state.data && state.data.media && state.data.media[mediaId]) || { fx: 50, fy: 50 };
   try {
@@ -158,19 +196,50 @@ async function setImage(inst, layer, mediaId) {
   return hash;
 }
 
-async function applyFields(node, values) {
+// sample texts of the library that never belong on a page: hidden when nothing maps onto them
+var SAMPLE = /lorem ipsum|consectetuer|^\s*(label|button ?0?\d|link button ?0?\d|earn now|posting \d+|first item|badge name|campaigne)\s*$|optional caption|consumption & emission|^join the team$|unlock your exclusive|a unique racing experience|by joining, you.ll get|get a badge and win|a new era of electric|audi type wide|mit nur einem klick|\d+ days \d+ hrs|experience every second|team card name|get your badge/i;
+function hideSamples(node) {
+  var n = 0;
+  var texts = node.findAll(function (x) { return x.type === "TEXT" && shown(x, node) && !MAPPED[x.id] && SAMPLE.test(x.characters); });
+  texts.forEach(function (t) { t.visible = false; n++; });
+  // a button without a visible label is hidden as a whole
+  node.findAll(function (x) { return x.type === "INSTANCE" && !!propOf(x, "Label", "TEXT") && shown(x, node); }).forEach(function (b) {
+    var tx = b.findAll(function (x) { return x.type === "TEXT"; });
+    if (tx.length && !tx.some(function (x) { return shown(x, b) && x.characters.trim(); })) { b.visible = false; n++; }
+  });
+  return n;
+}
+var LS = String.fromCharCode(8232);
+var normT = function (s) { return String(s == null ? "" : s).split(LS).join("\n").replace(/\r/g, "\n").replace(/[ \t]+\n/g, "\n").trim(); };
+
+// writes the values; a field whose layer is not in this module (or shows something else) is untracked here,
+// so a missing layer can never look like an edit made in Figma
+async function applyFields(node, values, fresh) {
   var d = readData(node); if (!d || !d.fields) return [];
   d.last = d.last || {}; d.imgs = d.imgs || {};
   await preloadFonts(node);
-  var done = [];
+  var done = [], keep = [];
   for (var i = 0; i < d.fields.length; i++) {
     var f = d.fields[i];
-    if (!(f.key in values)) continue;
+    if (!(f.key in values)) { keep.push(f); continue; }
     try {
-      if (f.kind === "image") { var h = await setImage(node, f.layer, values[f.key]); if (h) d.imgs[f.key] = { hash: h, id: values[f.key] }; }
-      else await setText(node, f.layer, values[f.key]);
-      d.last[f.key] = values[f.key]; done.push(f.key);
-    } catch (e) { log("⚠ " + node.name + " · " + f.layer + ": " + (e && e.message ? e.message : e)); }
+      if (f.kind === "image") {
+        var h = await setImage(node, f.layer, values[f.key]);
+        if (h) { d.imgs[f.key] = { hash: h, id: values[f.key] }; d.last[f.key] = values[f.key]; keep.push(f); done.push(f.key); }
+        else if (!fresh) keep.push(f);
+        continue;
+      }
+      await setText(node, f.layer, values[f.key]);
+      var rb = getText(node, f.layer);
+      if (rb === undefined || normT(rb) !== normT(values[f.key])) { if (!fresh) keep.push(f); continue; }
+      d.last[f.key] = rb; keep.push(f); done.push(f.key);
+    } catch (e) { log("⚠ " + node.name + " · " + f.layer + ": " + (e && e.message ? e.message : e)); keep.push(f); }
+  }
+  d.fields = keep;
+  if (fresh) {
+    // buttons nothing maps onto are hidden too
+    buttonsOf(node).forEach(function (b) { if (!isTagged(node, b)) b.visible = false; });
+    hideSamples(node);
   }
   await swapFonts(node);
   writeData(node, d);
@@ -248,20 +317,20 @@ async function localComponent(name) {
   await p.loadAsync();
   var c = p.findOne(function (n) { return n.type === "COMPONENT" && n.name === name; });
   if (c) return (localCache[name] = c);
+  var desk = / Desktop$/.test(name), W = desk ? 1440 : 375, PX = desk ? 120 : 24, K = desk ? 1.4 : 1;
   c = figma.createComponent(); c.name = name; p.appendChild(c);
-  c.layoutMode = "VERTICAL"; c.primaryAxisSizingMode = "AUTO"; c.counterAxisSizingMode = "FIXED"; c.resize(375, 100);
-  c.paddingLeft = c.paddingRight = 24; c.itemSpacing = 16; c.x = p.children.length * 475;
-  if (name === "Free Text Mobile") { c.paddingTop = c.paddingBottom = 32; c.fills = GRAPH; await newText(c, "Copy", "Rich text", "Wide Normal", 14, CHALK); }
-  else if (name === "List Section Mobile") {
-    c.paddingTop = c.paddingBottom = 48; c.fills = CHALK; c.itemSpacing = 12;
-    await newText(c, "Headline", "Headline", "Extended Normal", 28); await newText(c, "Subline", "Subline", "Wide Normal", 16); await newText(c, "Copy", "Copy", "Wide Normal", 14, MUTED);
+  c.layoutMode = "VERTICAL"; c.primaryAxisSizingMode = "AUTO"; c.counterAxisSizingMode = "FIXED"; c.resize(W, 100);
+  c.paddingLeft = c.paddingRight = PX; c.itemSpacing = 16; c.x = p.children.length * 1600;
+  if (/^List Section/.test(name)) {
+    c.paddingTop = c.paddingBottom = desk ? 96 : 48; c.fills = CHALK; c.itemSpacing = 12;
+    await newText(c, "Headline", "Headline", "Extended Normal", Math.round(28 * K)); await newText(c, "Subline", "Subline", "Wide Normal", Math.round(16 * K)); await newText(c, "Copy", "Copy", "Wide Normal", 14, MUTED);
     for (var i = 1; i <= 6; i++) {
       var it = autoLayout("VERTICAL"); it.name = "Item " + i; c.appendChild(it); it.layoutSizingHorizontal = "FILL"; it.paddingTop = 16; it.itemSpacing = 6;
       it.strokes = solid(0.878, 0.867, 0.867); it.strokeTopWeight = 1; it.strokeBottomWeight = 0; it.strokeLeftWeight = 0; it.strokeRightWeight = 0;
-      await newText(it, "Item " + i + " · Label", "Label", "Extended Normal", 18); await newText(it, "Item " + i + " · Caption", "Caption", "Wide Normal", 14, MUTED);
+      await newText(it, "Item " + i + " · Label", "Item", "Extended Normal", 18); await newText(it, "Item " + i + " · Caption", "Caption", "Wide Normal", 14, MUTED);
     }
-  } else if (name === "iFrame Mobile") {
-    c.paddingTop = c.paddingBottom = 240; c.fills = GRAPH; c.counterAxisAlignItems = "CENTER";
+  } else if (/^iFrame/.test(name)) {
+    c.paddingTop = c.paddingBottom = desk ? 320 : 240; c.fills = GRAPH; c.counterAxisAlignItems = "CENTER";
     await newText(c, "Label", "iFrame embed", "Extended Normal", 20, CHALK); await newText(c, "URL", "https://", "Wide Normal", 12, solid(0.7, 0.7, 0.7));
   }
   c.description = "AF1 " + name + " · built by AF1 Ktulu Sync (not in the 07 library yet).";
@@ -269,6 +338,10 @@ async function localComponent(name) {
 }
 
 // ---- build ----------------------------------------------------------------
+// layout like 05-1 AF1 Design Loyalty · São Paulo: one section per landing page, stacked under the
+// overview; DESKTOP on top, MOBILE (in a phone) below, the Team Card journey to the right of the phone
+var SP_BG = solid(0.226, 0.233, 0.224), PHONE = solid(0.07, 0.07, 0.07);
+var COL0 = 2040, COLW = 1840, ROWH = 1093;
 var setCache = {};
 async function variantOf(key, variant) {
   if (!setCache[key]) setCache[key] = await figma.importComponentSetByKeyAsync(key);
@@ -279,20 +352,41 @@ function valuesOf(fields) { var o = {}; fields.forEach(function (f) { o[f.key] =
 function tagFields(fields) { return fields.map(function (f) { return { key: f.key, layer: f.layer, kind: f.kind }; }); }
 async function label(parent, chars, size, style, fills, x, y, w) {
   await loadFont({ family: "Inter", style: style });
-  var t = figma.createText(); parent.appendChild(t); t.fontName = { family: "Inter", style: style }; t.fontSize = size; t.characters = chars; t.fills = fills || GRAPH; t.x = x; t.y = y;
+  var t = figma.createText(); parent.appendChild(t); t.fontName = { family: "Inter", style: style }; t.fontSize = size; t.characters = chars; t.fills = fills || ON_DARK; t.x = x; t.y = y;
   if (w) { t.resize(w, t.height); t.textAutoResize = "HEIGHT"; }
   return t;
 }
-async function arrow(parent, pts, color, dash, text) {
+// arrow from a to b ([x,y] points, optional bend points between); the label sits over the middle
+async function arrow(parent, pts, text, dash) {
   var v = figma.createVector(); parent.appendChild(v); v.name = "Arrow";
   var mx = Math.min.apply(null, pts.map(function (p) { return p[0]; })), my = Math.min.apply(null, pts.map(function (p) { return p[1]; }));
   await v.setVectorNetworkAsync({ vertices: pts.map(function (p, i) { return { x: p[0] - mx, y: p[1] - my, strokeCap: i === pts.length - 1 ? "ARROW_LINES" : "NONE" }; }), segments: pts.slice(1).map(function (_, i) { return { start: i, end: i + 1 }; }), regions: [] });
-  v.x = mx; v.y = my; v.strokes = color; v.strokeWeight = 3; v.dashPattern = dash || [];
-  if (text) { var t = await label(parent, text, 22, "Semi Bold", color, pts[0][0] + 24, pts[0][1] - 36); t.name = "Arrow label"; }
+  v.x = mx; v.y = my; v.strokes = ON_DARK; v.strokeWeight = 4; v.dashPattern = dash || [];
+  if (text) {
+    var a = pts[pts.length - 2], b = pts[pts.length - 1], t = await label(parent, text, 20, "Bold", ON_DARK, 0, 0);
+    t.name = "Arrow label";
+    if (Math.abs(a[0] - b[0]) < 2) { t.x = a[0] + 14; t.y = (a[1] + b[1]) / 2 - t.height / 2; }
+    else { t.x = (a[0] + b[0]) / 2 - t.width / 2; t.y = (a[1] + b[1]) / 2 - t.height - 12; }
+  }
+  return v;
+}
+// a stylized phone around a mobile screen
+function phone(parent, child, x, y) {
+  var ph = autoLayout("VERTICAL"); ph.name = "Phone"; parent.appendChild(ph);
+  ph.paddingTop = ph.paddingBottom = ph.paddingLeft = ph.paddingRight = 12; ph.cornerRadius = 52; ph.fills = PHONE;
+  ph.strokes = solid(0.32, 0.32, 0.32); ph.strokeWeight = 2; ph.strokeAlign = "OUTSIDE";
+  ph.effects = [{ type: "DROP_SHADOW", color: { r: 0, g: 0, b: 0, a: 0.45 }, offset: { x: 0, y: 30 }, radius: 60, spread: 0, visible: true, blendMode: "NORMAL" }];
+  ph.appendChild(child); child.cornerRadius = 40; child.clipsContent = true;
+  var notch = figma.createRectangle(); ph.appendChild(notch); notch.name = "Notch"; notch.layoutPositioning = "ABSOLUTE";
+  notch.resize(120, 30); notch.cornerRadius = 15; notch.fills = PHONE; notch.x = (375 + 24) / 2 - 60; notch.y = 24;
+  ph.x = x - 12; ph.y = y - 12;
+  return ph;
 }
 
-async function moduleInstance(b) {
+async function moduleInstance(b, desk) {
   var def = state.data.modules[b.blockType];
+  if (!def) return null;
+  if (desk) def = def.desktop;
   if (!def) return null;
   var variant = (def.variantByBg && b.bg && def.variantByBg[b.bg]) || def.variant;
   var comp = def.local ? await localComponent(def.local) : await variantOf(def.key, variant);
@@ -300,33 +394,34 @@ async function moduleInstance(b) {
   return comp.createInstance();
 }
 
-async function placeholder(b) {
+async function placeholder(b, desk) {
   await loadFont({ family: "Inter", style: "Semi Bold" });
-  var f = autoLayout("VERTICAL"); f.paddingTop = f.paddingBottom = 40; f.paddingLeft = f.paddingRight = 24; f.fills = solid(0.878, 0.867, 0.867);
-  var t = figma.createText(); t.fontName = { family: "Inter", style: "Semi Bold" }; t.fontSize = 18; t.characters = b.blockType + " · no mobile module in the library yet"; f.appendChild(t);
+  var f = autoLayout("VERTICAL"); f.paddingTop = f.paddingBottom = 40; f.paddingLeft = f.paddingRight = desk ? 120 : 24; f.fills = solid(0.878, 0.867, 0.867);
+  var t = figma.createText(); t.fontName = { family: "Inter", style: "Semi Bold" }; t.fontSize = 18; t.characters = b.blockType + " · no " + (desk ? "desktop" : "mobile") + " module in the library yet"; f.appendChild(t);
   return f;
 }
 
-async function buildPageFrame(sec, p, x, y) {
-  var fr = autoLayout("VERTICAL"); fr.name = "Mobile / page:" + p.url; sec.appendChild(fr);
-  fr.x = x; fr.y = y; fr.resize(375, 100); fr.counterAxisSizingMode = "FIXED"; fr.primaryAxisSizingMode = "AUTO"; fr.clipsContent = true; fr.fills = CHALK;
-  writeData(fr, { type: "page", url: p.url, stagingId: p.id });
+async function buildPageFrame(sec, p, x, y, desk) {
+  var W = desk ? 1440 : 375;
+  var fr = autoLayout("VERTICAL"); fr.name = (desk ? "Desktop / page:" : "Mobile / page:") + p.url; sec.appendChild(fr);
+  fr.x = x; fr.y = y; fr.resize(W, 100); fr.counterAxisSizingMode = "FIXED"; fr.primaryAxisSizingMode = "AUTO"; fr.clipsContent = true; fr.fills = solid(1, 1, 1);
+  writeData(fr, { type: desk ? "page-desktop" : "page", url: p.url, stagingId: p.id });
   for (var i = 0; i < p.blocks.length; i++) {
     var b = p.blocks[i], node = null;
-    try { node = await moduleInstance(b); } catch (e) { log("⚠ /" + p.url + " · " + b.blockType + ": " + (e && e.message ? e.message : e)); }
-    if (!node) node = await placeholder(b); // never drop a module: a labelled frame keeps the page order
+    if (b.hidden) continue; // hidden in the CMS: not on the page, not in Figma
+    try { node = await moduleInstance(b, desk); } catch (e) { log("⚠ /" + p.url + " · " + b.blockType + (desk ? " (desktop)" : "") + ": " + (e && e.message ? e.message : e)); }
+    if (!node) node = await placeholder(b, desk); // never drop a module: a labelled frame keeps the page order
     fr.appendChild(node); node.layoutSizingHorizontal = "FILL";
-    node.name = (i < 9 ? "0" : "") + (i + 1) + " " + b.blockType + (b.hidden ? " (hidden in CMS)" : "") + " · " + b.id;
-    if (b.hidden) node.opacity = 0.35;
-    writeData(node, { type: "block", pageId: p.id, blockId: b.id, blockType: b.blockType, fields: tagFields(b.fields), last: {}, imgs: {} });
-    await applyFields(node, valuesOf(b.fields));
+    node.name = (i < 9 ? "0" : "") + (i + 1) + " " + b.blockType + " · " + b.id;
+    writeData(node, { type: "block", pageId: p.id, blockId: b.id, blockType: b.blockType, badge: b.badge || "", fields: tagFields(b.fields), last: {}, imgs: {} });
+    await applyFields(node, valuesOf(b.fields), true);
     if (b.blockType === "list-section") for (var k = 1; k <= 6; k++) { var lf = b.fields.filter(function (x) { return x.layer === "Item " + k + " · Label"; })[0]; var it = node.findOne(function (x) { return x.name === "Item " + k && x.type === "FRAME"; }); if (it) it.visible = !!(lf && lf.value); }
   }
   return fr;
 }
 
 // a small pill next to every module that only logged-in or logged-out users see
-async function authPills(sec, fr, p) {
+async function authPills(sec, fr, p, x0) {
   await loadFont({ family: "Inter", style: "Bold" });
   var kids = fr.children;
   for (var i = 0; i < kids.length; i++) {
@@ -337,71 +432,145 @@ async function authPills(sec, fr, p) {
     var pill = autoLayout("HORIZONTAL"); pill.name = "Visibility · " + txt; pill.paddingTop = pill.paddingBottom = 6; pill.paddingLeft = pill.paddingRight = 10; pill.cornerRadius = 999;
     pill.fills = b.auth === "LOGGED_OUT" ? solid(0.9, 0.9, 0.9) : LAVA;
     var t = figma.createText(); t.fontName = { family: "Inter", style: "Bold" }; t.fontSize = 12; t.characters = txt; t.fills = b.auth === "LOGGED_OUT" ? GRAPH : solid(1, 1, 1); pill.appendChild(t);
-    sec.appendChild(pill); pill.x = fr.x - pill.width - 12; pill.y = fr.y + kids[i].y + 16;
+    sec.appendChild(pill); pill.x = x0 - pill.width - 16; pill.y = fr.absoluteTransform[1][2] - sec.absoluteTransform[1][2] + kids[i].y + 16;
   }
 }
 
 function cleanTitle(t) { return String(t || "").replace(/^\s*SIN\s*\|\s*/i, ""); }
 
+// one Team Card state: a phone with the overlay, title + Payload note above
+async function stateScreen(sec, card, s, n, x, y) {
+  var comp = await variantOf(state.data.overlayKey, "State=" + s.state); await preloadFonts(comp);
+  var inst = comp.createInstance(); inst.name = "Team Card Overlay · " + s.state;
+  var scr = autoLayout("VERTICAL"); scr.name = "Mobile / " + n + " " + s.label; scr.fills = []; scr.appendChild(inst);
+  var ph = phone(sec, scr, x, y);
+  writeData(inst, { type: "card", badgeId: card.badgeId, state: s.state, fields: tagFields(s.fields), last: {}, imgs: {} });
+  await applyFields(inst, valuesOf(s.fields), true);
+  await label(sec, n + " · " + s.label, 28, "Bold", ON_DARK, x, y - 130);
+  await label(sec, s.note, 18, "Regular", ON_DARK_MUTED, x, y - 86, 520);
+  return { node: ph, x: x, y: y, w: 375, h: ph.height - 24, cy: y + (ph.height - 24) / 2 };
+}
+async function decision(sec, x, y) {
+  var f = figma.createFrame(); sec.appendChild(f); f.name = "Decision · Logged in?"; f.resize(375, 200); f.x = x; f.y = y; f.fills = [];
+  f.strokes = ON_DARK; f.strokeWeight = 3; f.dashPattern = [12, 8]; f.cornerRadius = 24;
+  var a = await label(f, "Logged in /\nregistered?", 30, "Bold", ON_DARK, 0, 0); a.textAlignHorizontal = "CENTER"; a.x = (375 - a.width) / 2; a.y = 46;
+  var b = await label(f, "System check when the card opens", 18, "Regular", ON_DARK_MUTED, 0, 0); b.x = (375 - b.width) / 2; b.y = 132;
+  return { x: x, y: y, w: 375, h: 200, cy: y + 100 };
+}
+var R = function (n) { return [n.x + n.w + 20, n.cy]; }, L = function (n) { return [n.x - 20, n.cy]; };
+
+// the card journey: (announced) → logged in? → no: logged out → login → not earned yet → earned (reward branch of this card) → back
+async function journey(sec, card, from, Y) {
+  var st = {}; card.states.forEach(function (s) { st[s.state] = s; });
+  var col = 0, n = 2, right = COL0;
+  var num = function () { return String(n++).padStart(2, "0"); };
+  var X = function (c) { return COL0 + c * COLW; };
+  var prev = from, prevLabel = "Card tapped";
+  if (st.Announced) {
+    var an = await stateScreen(sec, card, st.Announced, num(), X(col), Y);
+    await arrow(sec, [R(from), [an.x - 20, an.cy]], "Card announced (countdown)");
+    prev = an; prevLabel = "Card goes live"; col++;
+  }
+  var dc = await decision(sec, X(col), Y + 793 / 2 - 100);
+  await arrow(sec, [R(prev), L(dc)], prevLabel);
+  var lo = st["Logged Out"] ? await stateScreen(sec, card, st["Logged Out"], num(), X(col), Y + ROWH) : null;
+  if (lo) await arrow(sec, [[dc.x + 187, dc.y + dc.h + 20], [dc.x + 187, lo.y - 150]], "No");
+  col++;
+  var df = await stateScreen(sec, card, st.Default, num(), X(col), Y);
+  await arrow(sec, [R(dc), L(df)], "Yes");
+  if (lo) await arrow(sec, [R(lo), [df.x - 20, df.cy + 120]], "After login / registration");
+  col++;
+  var earnedKeys = ["Link", "Download", "Code", "Raffle"].filter(function (k) { return st[k]; });
+  var main = null;
+  for (var i = 0; i < earnedKeys.length; i++) {
+    var e = await stateScreen(sec, card, st[earnedKeys[i]], num(), X(col), Y + i * ROWH);
+    await arrow(sec, [R(df), L(e)], i === 0 ? "Card earned (Reward Type)" : null);
+    if (!main) main = e;
+  }
+  var last = col;
+  if (st.Raffle) {
+    var ent = st["Raffle Entered"] ? await stateScreen(sec, card, st["Raffle Entered"], num(), X(col + 1), Y) : null;
+    if (ent) await arrow(sec, [R(main), L(ent)], "Entry submitted");
+    var cl = st["Raffle Closed"] ? await stateScreen(sec, card, st["Raffle Closed"], num(), X(col + 1), Y + ROWH) : null;
+    if (cl) await arrow(sec, [R(main), L(cl)], "After the end date", [16, 10]);
+    last = col + 1;
+  }
+  if (st.Back) {
+    var bk = await stateScreen(sec, card, st.Back, num(), X(last + 1), Y);
+    await arrow(sec, [R(main || df), [bk.x - 20, bk.cy]], "Flip card");
+    last++;
+  }
+  right = X(last) + 375;
+  var rows = lo || (st["Raffle Closed"]) || earnedKeys.length > 1 ? Math.max(2, earnedKeys.length) : 1;
+  return { right: right, bottom: Y + (rows - 1) * ROWH + 793 };
+}
+
 // one section per landing page; the activation page also gets the card journey
 async function buildSection(p, num, card, group, isMain, mainUrl, ov) {
   var sec = figma.createSection(); sec.name = "SIN · " + String(num).padStart(2, "0") + " · " + cleanTitle(p.title);
-  sec.fills = DARK; sec.x = -50000; sec.y = 0;
+  sec.fills = SP_BG; sec.x = -60000; sec.y = 0;
   writeData(sec, { type: "section", url: p.url, group: group.key });
   try {
-    if (ov) { var back = await label(sec, "← Back to the overview", 26, "Semi Bold", LAVA, 200, 70); back.hyperlink = { type: "NODE", value: ov.id }; }
-    await label(sec, "MOBILE", 24, "Bold", ON_DARK_MUTED, 200, 140);
-    await label(sec, String(num).padStart(2, "0") + " · " + cleanTitle(p.title), 48, "Bold", ON_DARK, 200, 180);
-    await label(sec, "/" + p.url + (group.note ? "   ·   " + group.note : ""), 22, "Regular", ON_DARK_MUTED, 200, 250);
-    progress("Building /" + p.url + " …");
-    var Y = 460;
-    var fr = await buildPageFrame(sec, p, 260, Y);
-    await authPills(sec, fr, p);
-    var right = 635, maxH = fr.height;
+    var title = String(num).padStart(2, "0") + " · " + cleanTitle(p.title), sub = "/" + p.url + (group.note ? "   ·   " + group.note : "");
+    if (ov) { var back = await label(sec, "↑ Back to the overview", 24, "Semi Bold", LAVA, 200, 60); back.hyperlink = { type: "NODE", value: ov.id }; }
+    progress("Building /" + p.url + " · desktop …");
+    await label(sec, "DESKTOP", 24, "Bold", ON_DARK, 200, 140);
+    await label(sec, title, 40, "Regular", ON_DARK, 200, 190);
+    await label(sec, sub, 20, "Regular", ON_DARK_MUTED, 200, 250);
+    var dk = await buildPageFrame(sec, p, 200, 320, true);
+    await authPills(sec, dk, p, 200);
+    progress("Building /" + p.url + " · mobile …");
+    var Y = 320 + dk.height + 700;
+    await label(sec, "MOBILE", 24, "Bold", ON_DARK, 200, Y - 180);
+    await label(sec, title, 40, "Regular", ON_DARK, 200, Y - 130);
+    var fr = await buildPageFrame(sec, p, 0, 0, false);
+    var ph = phone(sec, fr, 200, Y);
+    await authPills(sec, fr, p, 188);
+    var right = 1640, bottom = Y + fr.height;
     var hasCard = card && p.blocks.some(function (b) { return b.badge === card.badgeId; });
     if (!isMain && hasCard) {
-      var note = await label(sec, "Same Team Card as /" + mainUrl + " → its journey is shown there", 24, "Semi Bold", LAVA, 735, Y, 900);
+      var note = await label(sec, "Same Team Card as /" + mainUrl + " → its journey is shown there", 28, "Semi Bold", LAVA, COL0, Y, 1100);
       note.name = "Same card note";
-      right = 1635;
+      right = Math.max(right, COL0 + 1100);
     }
     if (isMain && card) {
-      var x = 1035;
-      await arrow(sec, [[635, Y + 120], [x - 20, Y + 120]], LAVA, [], "Card tapped");
-      for (var i = 0; i < card.states.length; i++) {
-        var s = card.states[i];
-        var comp = await variantOf(state.data.overlayKey, "State=" + s.state); await preloadFonts(comp);
-        var inst = comp.createInstance(); sec.appendChild(inst); inst.x = x; inst.y = Y;
-        inst.name = "Mobile / " + String(i + 2).padStart(2, "0") + " " + s.label;
-        writeData(inst, { type: "card", badgeId: card.badgeId, state: s.state, fields: tagFields(s.fields), last: {}, imgs: {} });
-        await applyFields(inst, valuesOf(s.fields));
-        await label(sec, String(i + 2).padStart(2, "0") + " · " + s.label, 32, "Bold", ON_DARK, x, Y - 120);
-        await label(sec, s.note, 20, "Regular", ON_DARK_MUTED, x, Y - 70, 600);
-        if (i < card.states.length - 1) await arrow(sec, [[x + 375 + 10, Y + 396], [x + 775 - 20, Y + 396]], ON_DARK, [], null);
-        maxH = Math.max(maxH, inst.height); x += 775; right = x;
-      }
+      progress("Building /" + p.url + " · Team Card journey …");
+      // the arrow starts at the module that carries the card
+      var at = fr.children.filter(function (c) { var d = readData(c); return d && d.badge === card.badgeId; })[0];
+      var cy = at ? Y + at.y + Math.min(at.height / 2, 400) : Y + 400;
+      var j = await journey(sec, card, { x: 200, w: 375 + 12, cy: cy }, Y);
+      await label(sec, "→ Team Card journey of " + (card.title || "this card") + " · only the reward branch it uses (" + (card.rewardType || "no reward") + ")", 28, "Regular", ON_DARK, COL0, 190);
+      right = Math.max(right, j.right); bottom = Math.max(bottom, j.bottom);
     }
-    sec.resizeWithoutConstraints(right + 200, Y + maxH + 240);
+    sec.resizeWithoutConstraints(right + 300, bottom + 400);
     return sec;
   } catch (e) { sec.remove(); throw e; }
 }
 
 function overviewSection(page) { return page.findOne(function (n) { return n.type === "SECTION" && /Flow_Overview$/.test(n.name); }); }
 
-// left activations | hub column | right activations, the overview on top
-function arrange(page, rows) {
-  var ov = overviewSection(page), GAP = 400;
-  var colW = { left: 0, center: 0, right: 0 };
-  rows.forEach(function (r) { var w = r.secs.reduce(function (a, s) { return a + s.width; }, 0) + GAP * (r.secs.length - 1); colW[r.col] = Math.max(colW[r.col], w); });
-  var x0 = 0, x1 = colW.left + 1200, x2 = x1 + colW.center + 1200;
-  var top = (ov ? ov.height : 0) + 1600, y = { left: top, center: top, right: top };
-  if (ov) { ov.x = x1 + colW.center / 2 - ov.width / 2; ov.y = 0; }
-  rows.forEach(function (r) {
-    var h = Math.max.apply(null, r.secs.map(function (s) { return s.height; }));
-    var w = r.secs.reduce(function (a, s) { return a + s.width; }, 0) + GAP * (r.secs.length - 1);
-    var x = r.col === "left" ? x0 + colW.left - w : r.col === "center" ? x1 + (colW.center - w) / 2 : x2;
-    r.secs.forEach(function (s) { s.x = x; s.y = y[r.col] + (h - s.height) * 0; x += s.width + GAP; });
-    y[r.col] += h + GAP;
+// the overview on top, every section under it (like the São Paulo file)
+function arrange(page, secs) {
+  var ov = overviewSection(page), GAP = 1200;
+  if (ov) { ov.x = 0; ov.y = 0; }
+  var y = ov ? ov.height + GAP : 0;
+  secs.forEach(function (s) { s.x = 0; s.y = y; y += s.height + GAP; });
+}
+
+// a contents list right of the overview: one link per section
+async function contents(page, secs, ov) {
+  page.children.filter(function (n) { return n.name === "AF1 Contents"; }).forEach(function (n) { n.remove(); });
+  var f = autoLayout("VERTICAL"); f.name = "AF1 Contents"; page.appendChild(f);
+  f.paddingTop = f.paddingBottom = 48; f.paddingLeft = f.paddingRight = 56; f.itemSpacing = 14; f.cornerRadius = 24; f.fills = SP_BG;
+  await loadFont({ family: "Inter", style: "Bold" }); await loadFont({ family: "Inter", style: "Regular" });
+  var h = figma.createText(); f.appendChild(h); h.fontName = { family: "Inter", style: "Bold" }; h.fontSize = 36; h.characters = "Contents"; h.fills = ON_DARK;
+  var s2 = figma.createText(); f.appendChild(s2); s2.fontName = { family: "Inter", style: "Regular" }; s2.fontSize = 18; s2.characters = "Click a page to jump to its desktop, mobile and Team Card journey."; s2.fills = ON_DARK_MUTED;
+  secs.forEach(function (s) {
+    var t = figma.createText(); f.appendChild(t); t.fontName = { family: "Inter", style: "Regular" }; t.fontSize = 26;
+    t.characters = s.name.replace(/^SIN · /, ""); t.fills = ON_DARK; t.textDecoration = "UNDERLINE"; t.hyperlink = { type: "NODE", value: s.id };
   });
+  f.x = ov ? ov.x + ov.width + 300 : -1200; f.y = 0;
+  return f;
 }
 
 // overview titles → the screens, tiles → the activation page
@@ -430,31 +599,29 @@ async function buildAll() {
   // a full rebuild: remove every screen section (the overview stays)
   page.children.filter(function (n) { return n.type === "SECTION" && !/Flow_Overview$/.test(n.name); }).forEach(function (n) { n.remove(); });
   var ov = overviewSection(page);
-  var d = state.data, num = 0, rows = [], secByUrl = {}, built = 0;
-  // sitemap order: left groups (QR page outside, activation inside), hub column, right groups
+  var d = state.data, num = 0, secs = [], secByUrl = {}, built = 0;
+  // sitemap order: hub column first, then the activations (activation page, then its QR page)
   var order = d.groups.filter(function (g) { return g.col === "center"; }).concat(d.groups.filter(function (g) { return g.col !== "center"; }));
   for (var gi = 0; gi < order.length; gi++) {
     var g = order[gi], card = d.cards.filter(function (c) { return c.group === g.key; })[0];
-    var row = { col: g.col, secs: [] };
     for (var ui = 0; ui < g.urls.length; ui++) {
       var p = d.pages.filter(function (x) { return x.url === g.urls[ui]; })[0]; if (!p) continue;
       num++;
       try {
         var s = await buildSection(p, num, card, g, ui === 0, g.urls[0], ov);
-        secByUrl[p.url] = s; built++;
-        if (g.col === "left") row.secs.unshift(s); else row.secs.push(s); // QR pages on the outside
+        secByUrl[p.url] = s; built++; secs.push(s);
       } catch (e) { log("⚠ /" + p.url + " not built: " + (e && e.message ? e.message : e)); }
     }
-    if (row.secs.length) rows.push(row);
   }
-  arrange(page, rows);
+  arrange(page, secs);
   // QR pages: their note links to the activation page
   page.findAll(function (n) { return n.type === "TEXT" && n.name === "Same card note"; }).forEach(function (t) {
     var m = t.characters.match(/\/(unlock-singapore[^ ]*)/); if (m && secByUrl[m[1]]) t.hyperlink = { type: "NODE", value: secByUrl[m[1]].id };
   });
   var links = await linkOverview(page, secByUrl);
+  await contents(page, secs, ov);
   if (ov) figma.viewport.scrollAndZoomIntoView([ov]);
-  log("Built " + built + " pages, linked " + links + " overview titles.");
+  log("Built " + built + " pages (desktop + mobile), linked " + links + " overview titles.");
   await api("POST", { action: "ack-command" });
   progress("Recording the state …");
   await sync({}, null, true);
@@ -504,7 +671,7 @@ setInterval(async function () {
   try {
     // a rebuild queued in the AF1 Tool runs even while the plugin stays open
     var d0 = await api("GET"); state.data = d0;
-    if (d0.command && d0.command.command === "build") { log("A full rebuild was requested in the AF1 Tool, building now …"); await buildAll(); await check(); return; }
+    if (d0.command && /^build/.test(d0.command.command)) { log("A full rebuild was requested in the AF1 Tool, building now …"); await buildAll(); await check(); return; }
     var r = await sync({}, null, true); if (r.toCms.length || r.toFigma.length) await check();
   }
   catch (e) { /* stay quiet in the background */ }
@@ -523,7 +690,7 @@ figma.ui.onmessage = async function (msg) {
       send("token", { token: state.token });
       if (state.token) {
         var pre = await api("GET"); state.data = pre;
-        if (pre.command && pre.command.command === "build") { log("A full rebuild was requested in the AF1 Tool, building now …"); await buildAll(); }
+        if (pre.command && /^build/.test(pre.command.command)) { log("A full rebuild was requested in the AF1 Tool, building now …"); await buildAll(); }
         await check();
       }
     }
