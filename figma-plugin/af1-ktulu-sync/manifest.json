@@ -1,0 +1,13 @@
+{
+  "name": "AF1 Ktulu Sync",
+  "id": "af1-ktulu-sync-dev",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["https://af1-ktulu.vercel.app"],
+    "reasoning": "Reads and writes the campaign texts through the AF1 Tool (staging CMS)."
+  }
+}

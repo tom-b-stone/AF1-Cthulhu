@@ -45,6 +45,7 @@ const SIDEBARS: Record<string, Section[]> = {
     },
   ],
   "/teamcards": [{ title: "Team Card Configurator", entries: [{ href: "/teamcards", label: "All cards", exact: true }, { href: "https://staging.audif1team.com/cms/admin/collections/badges", label: "Staging: cards", note: "↗" }, { href: "/suggest", label: "Add an idea" }] }],
+  "/sitemap": [{ title: "Sitemap Sync", entries: [{ href: "/sitemap", label: "Unlock Singapore", exact: true }, { href: "https://www.figma.com/design/GTdJnVBixOYab3V4qzKcEC/05-1_AF1_Design_Loyalty?node-id=3186-2", label: "Figma sitemap", note: "↗" }] }],
   "/images": [{ title: "CRM Images", entries: [{ href: "/images", label: "Overview", exact: true }] }],
   "/connector": [{ title: "Claude connector", entries: [{ href: "/connector", label: "Setup", exact: true }] }],
   "/suggest": [{ title: "Suggestion box", entries: [{ href: "/suggest", label: "Write a suggestion", exact: true }] }],

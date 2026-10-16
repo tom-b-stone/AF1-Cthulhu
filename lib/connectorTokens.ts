@@ -48,3 +48,32 @@ export async function resolveConnectorToken(token: string): Promise<TokenRecord 
   const raw = await kvGet(tokenKey(hash(token)));
   return raw ? (JSON.parse(raw) as TokenRecord) : null;
 }
+
+// Figma plugin tokens (AF1 Ktulu Sync). Same idea, separate keys, so minting
+// one never breaks the claude.ai connector link.
+const pluginTokenKey = (h: string) => `figmaplugin:token:${h}`;
+const pluginUserKey = (email: string) => `figmaplugin:user:${email.toLowerCase()}`;
+
+export async function createPluginToken(email: string): Promise<string> {
+  const old = await kvGet(pluginUserKey(email));
+  if (old) await kvDel(pluginTokenKey(old));
+  const token = randomBytes(24).toString("base64url");
+  await kvSet(pluginTokenKey(hash(token)), JSON.stringify({ email, createdAt: new Date().toISOString() }));
+  await kvSet(pluginUserKey(email), hash(token));
+  return token;
+}
+
+export async function pluginTokenStatus(email: string): Promise<string | null> {
+  const h = await kvGet(pluginUserKey(email));
+  if (!h) return null;
+  const raw = await kvGet(pluginTokenKey(h));
+  return raw ? (JSON.parse(raw) as TokenRecord).createdAt : null;
+}
+
+// Accepts a plugin token, or the connector token as a fallback.
+export async function resolvePluginToken(token: string): Promise<TokenRecord | null> {
+  if (!token || token.length < 16) return null;
+  const raw = await kvGet(pluginTokenKey(hash(token)));
+  if (raw) return JSON.parse(raw) as TokenRecord;
+  return resolveConnectorToken(token);
+}
