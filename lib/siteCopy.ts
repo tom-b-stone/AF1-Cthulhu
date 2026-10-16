@@ -18,7 +18,7 @@ type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const PROD_SITE = (process.env.PRODUCTION_CMS_API_URL ?? "https://www.audif1.com/cms/api").replace(/\/cms\/api\/?$/, "");
 const ADMIN = "https://staging.audif1team.com/cms/admin/collections";
 
-export type JobPage = { prodId: string; url: string; title: string; slug?: string; parentProd?: string | null; stg?: string; done?: boolean; note?: string };
+export type JobPage = { prodId: string; url: string; title: string; slug?: string; parentProd?: string | null; stg?: string; live?: boolean; done?: boolean; note?: string };
 export type Job = {
   id: string;
   name: string;
@@ -155,7 +155,9 @@ async function remap(ctx: Ctx, v: Json, k = ""): Promise<Json> {
     return v;
   }
   const out: Json = {};
+  let forced: string | null = null; // linkType decided by an unresolved doc
   for (const [kk, x] of Object.entries(v)) {
+    if (kk === "linkType" && forced) continue;
     if (kk === "loyaltyId") {
       // production loyalty IDs are private: create a new one on staging,
       // named after the page and the button, so tracking works there
@@ -183,14 +185,14 @@ async function remap(ctx: Ctx, v: Json, k = ""): Promise<Json> {
           else per[l] = m;
         }
         if (ext && !Object.keys(per).length) {
-          out.linkType = k === "fields" ? "custom" : "external";
+          out.linkType = forced = k === "fields" ? "custom" : "external";
           out.url = ext;
         } else out.doc = per;
       } else {
         const m = await mapDoc(ctx, x);
         if (m && "external" in m) {
           // rich-text links call it "custom", link buttons "external"
-          out.linkType = k === "fields" ? "custom" : "external";
+          out.linkType = forced = k === "fields" ? "custom" : "external";
           out.url = m.external;
         } else out.doc = m;
       }
@@ -240,6 +242,14 @@ export async function stepJob(id: string, budgetMs = 40_000): Promise<Job> {
         job.log.push(`page created with slug ${p.slug}-2026 (slug taken on staging by an older page): /${p.url}`);
       }
       p.stg = created.doc.id;
+    }
+    // 1b shells published, so rich-text links between the pages validate
+    //    (Payload refuses links to documents that exist only as drafts)
+    for (const p of job.pages) {
+      if (p.live || !p.stg) continue;
+      if (left() < 5000) return job;
+      await stg(`/pages/${p.stg}?locale=en`, { method: "PATCH", body: JSON.stringify({ _status: "published" }) }).catch((e) => job.log.push(`publish shell /${p.url}: ${e instanceof Error ? e.message.slice(0, 160) : e}`));
+      p.live = true;
     }
     // 2 contents
     for (const p of job.pages) {

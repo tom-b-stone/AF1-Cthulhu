@@ -38,7 +38,7 @@ export async function prod(path: string): Promise<Json> {
 export async function stg(path: string, init: RequestInit = {}): Promise<Json> {
   const res = await stagingRequest(path, init);
   const text = await res.text();
-  if (!res.ok) throw new Error(`staging ${init.method ?? "GET"} ${path.split("?")[0]}: ${res.status} ${text.slice(0, 300)}`);
+  if (!res.ok) throw new Error(`staging ${init.method ?? "GET"} ${path.split("?")[0]}: ${res.status} ${text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 900)}`);
   return text ? JSON.parse(text) : {};
 }
 
