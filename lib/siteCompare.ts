@@ -20,7 +20,7 @@ type Loc = "en" | "de";
 export type Issue = {
   page: string;
   where: string; // human readable path
-  kind: "image-missing" | "image-file" | "image-focal" | "engagement" | "badge" | "empty-text" | "placeholder" | "text-differs" | "extra-text" | "items" | "block-missing";
+  kind: "image-missing" | "image-file" | "image-focal" | "engagement" | "badge" | "empty-text" | "placeholder" | "text-differs" | "extra-text" | "link" | "items" | "block-missing";
   detail: string;
   fix?: Fix;
 };
@@ -29,7 +29,8 @@ type Fix =
   | { type: "media-copy"; prodMedia: string; target: Target }
   | { type: "text"; value: string; target: Target }
   | { type: "engagement"; prodId: string; stagingId: string }
-  | { type: "badge-media"; prodMedia: string; target: Target };
+  | { type: "badge-media"; prodMedia: string; target: Target }
+  | { type: "link"; value: Json; target: Target };
 type Target = { collection: "pages" | "engagements" | "badges"; id: string; locale: Loc; path: (string | number)[] };
 
 const SKIP = new Set(["id", "createdAt", "updatedAt", "createdBy", "updatedBy", "internalId", "sortingTime", "_status", "slug", "generateSlug", "doc", "loyaltyId", "contentTags", "relationTo", "value", "url", "breadcrumbs", "parent", "meta", "loggedOutBadge", "mechanics", "badge", "engagement", "folder", "partnerTag", "raceTag", "season", "campaignTitle", "badgeType", "publishedAt", "blockName", "anchorId"]);
@@ -86,7 +87,9 @@ async function walk(ctx: Ctx, p: Json, s: Json, path: (string | number)[], targe
     return;
   }
   if (!p || typeof p !== "object") return;
+  if (p.blockType === "link-button" && s && typeof s === "object") await compareLink(ctx, p, s, path, target, where);
   for (const [k, pv] of Object.entries(p)) {
+    if (p.blockType === "link-button" && ["linkType", "url", "anchor", "doc"].includes(k)) continue;
     const sv = s ? s[k] : undefined;
     const here = [...path, k];
     const w = `${where}${where ? "." : ""}${k}`;
@@ -114,7 +117,7 @@ async function walk(ctx: Ctx, p: Json, s: Json, path: (string | number)[], targe
         ctx.issues.push(CMS_DEFAULT.test(sv.trim())
           ? { page: ctx.page, where: w, kind: "placeholder", detail: `CMS default text on staging (${L}), empty on production: "${sv.slice(0, 60)}"`, fix: { type: "text", value: "", target: { ...target, path: here } } }
           : { page: ctx.page, where: w, kind: "extra-text", detail: `only on staging (${L}), empty on production: "${sv.slice(0, 60)}"` });
-      else if (typeof sv === "string" && pv.trim() && sv.trim() && pv.trim() !== sv.trim()) ctx.issues.push({ page: ctx.page, where: w, kind: "text-differs", detail: `differs (${L}): staging "${sv.slice(0, 50)}" · production "${pv.slice(0, 50)}"` });
+      else if (typeof sv === "string" && pv.trim() && sv.trim() && pv.trim() !== sv.trim() && !(isId(pv) && isId(sv))) ctx.issues.push({ page: ctx.page, where: w, kind: "text-differs", detail: `differs (${L}): staging "${sv.slice(0, 50)}" · production "${pv.slice(0, 50)}"` });
       continue;
     }
     if (pv && typeof pv === "object") {
@@ -136,6 +139,37 @@ async function walk(ctx: Ctx, p: Json, s: Json, path: (string | number)[], targe
   }
 }
 
+// production page id → the staging copy of that page (same slug)
+const pageMap = new Map<string, string | null>();
+async function stagingPageFor(prodPageId: string): Promise<string | null> {
+  if (pageMap.has(prodPageId)) return pageMap.get(prodPageId)!;
+  const pp = await prod(`/pages/${prodPageId}?depth=0`).catch(() => null);
+  let id: string | null = null;
+  if (pp?.slug) {
+    const r = await stg(`/pages?where[slug][equals]=${encodeURIComponent(pp.slug)}&limit=1&depth=0&draft=true`).catch(() => null);
+    id = r?.docs?.[0]?.id ?? null;
+  }
+  pageMap.set(prodPageId, id);
+  return id;
+}
+// a link must work like on production: same type, anchor and url, internal links to the staging copy
+async function compareLink(ctx: Ctx, p: Json, s: Json, path: (string | number)[], target: Omit<Target, "path">, where: string) {
+  const want: Json = { linkType: p.linkType };
+  if (p.anchor != null) want.anchor = p.anchor;
+  if (p.url != null) want.url = p.url;
+  if (p.linkType === "internal" && p.doc?.value) {
+    const sid = await stagingPageFor(idOf(p.doc.value) as string);
+    if (sid) want.doc = { relationTo: p.doc.relationTo ?? "pages", value: sid };
+    else want.url = undefined;
+  }
+  const same = s.linkType === want.linkType && (want.anchor == null || s.anchor === want.anchor) && (p.linkType !== "external" || s.url === want.url) && (!want.doc || idOf(s.doc?.value) === want.doc.value);
+  if (same) return;
+  const fixed = { ...s, ...want };
+  if (want.linkType !== "external") delete fixed.url;
+  if (want.linkType !== "internal") delete fixed.doc;
+  ctx.issues.push({ page: ctx.page, where: where || label(path), kind: "link", detail: `link "${p.label ?? ""}" (${target.locale.toUpperCase()}): staging ${s.linkType}${s.url ? " " + s.url : ""}${s.anchor ? " " + s.anchor : ""} · production ${p.linkType}${p.anchor ? " " + p.anchor : ""}${p.url ? " " + p.url : ""}`, fix: target.collection === "pages" ? { type: "link", value: fixed, target: { ...target, path } } : undefined });
+}
+
 async function compareEngagement(ctx: Ctx, pid: string, sid: string | null, where: string) {
   const key = `${pid}>${sid}`;
   if (ctx.seenEng.has(key)) return;
@@ -154,7 +188,8 @@ async function compareEngagement(ctx: Ctx, pid: string, sid: string | null, wher
     }
     await walk(ctx, pe, se, [], { collection: "engagements", id: sid, locale: loc }, `${where} "${pe.title ?? ""}"`);
   }
-  const found = ctx.issues.length - before;
+  // only real copy faults (fixable ones) justify a re-copy; reported text differences may be edits made on staging
+  const found = ctx.issues.slice(before).filter((i) => i.fix).length;
   if (found) {
     // one complete re-copy fixes them all
     for (let i = before; i < ctx.issues.length; i++) delete ctx.issues[i].fix;
@@ -308,6 +343,12 @@ export async function repairCampaign(issues: Issue[], budgetMs = 45000) {
         e.sets.push({ path: f.target.path, value: id });
         patches.set(k, e);
         done.push(`${it.page} ${it.where}: image copied again`);
+      } else if (f.type === "link") {
+        const k = `${f.target.collection}/${f.target.id}/${f.target.locale}`;
+        const e = patches.get(k) ?? { target: { collection: f.target.collection, id: f.target.id, locale: f.target.locale }, sets: [] };
+        e.sets.push({ path: f.target.path, value: f.value });
+        patches.set(k, e);
+        done.push(`${it.page} ${it.where}: link set like on production`);
       } else if (f.type === "text") {
         const k = `${f.target.collection}/${f.target.id}/${f.target.locale}`;
         const e = patches.get(k) ?? { target: { collection: f.target.collection, id: f.target.id, locale: f.target.locale }, sets: [] };
