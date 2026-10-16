@@ -139,35 +139,50 @@ async function walk(ctx: Ctx, p: Json, s: Json, path: (string | number)[], targe
   }
 }
 
-// production page id → the staging copy of that page (same slug)
-const pageMap = new Map<string, string | null>();
-async function stagingPageFor(prodPageId: string): Promise<string | null> {
-  if (pageMap.has(prodPageId)) return pageMap.get(prodPageId)!;
-  const pp = await prod(`/pages/${prodPageId}?depth=0`).catch(() => null);
-  let id: string | null = null;
-  if (pp?.slug) {
-    const r = await stg(`/pages?where[slug][equals]=${encodeURIComponent(pp.slug)}&limit=1&depth=0&draft=true`).catch(() => null);
-    id = r?.docs?.[0]?.id ?? null;
-  }
-  pageMap.set(prodPageId, id);
-  return id;
+// slugs of linked pages (production / staging), to compare internal links across both systems
+const slugCache = new Map<string, string | null>();
+async function slugOf(sys: "prod" | "stg", id: string): Promise<string | null> {
+  const key = `${sys}:${id}`;
+  if (slugCache.has(key)) return slugCache.get(key)!;
+  const d = await (sys === "prod" ? prod(`/pages/${id}?depth=0`) : stg(`/pages/${id}?depth=0&draft=true`)).catch(() => null);
+  const v = d?.slug ?? null;
+  slugCache.set(key, v);
+  return v;
 }
-// a link must work like on production: same type, anchor and url, internal links to the staging copy
+async function stagingPageBySlug(slug: string): Promise<string | null> {
+  const r = await stg(`/pages?where[slug][equals]=${encodeURIComponent(slug)}&limit=5&depth=0&draft=true&sort=-updatedAt`).catch(() => null);
+  return r?.docs?.[0]?.id ?? null;
+}
+// a link must work like on production: same type and anchor; internal links go to the staging page
+// with the same slug. Production pages that have no staging copy may be linked externally (audif1.com).
 async function compareLink(ctx: Ctx, p: Json, s: Json, path: (string | number)[], target: Omit<Target, "path">, where: string) {
-  const want: Json = { linkType: p.linkType };
-  if (p.anchor != null) want.anchor = p.anchor;
-  if (p.url != null) want.url = p.url;
+  const L = target.locale.toUpperCase();
+  const push = (detail: string, fixed?: Json) => ctx.issues.push({ page: ctx.page, where: where || label(path), kind: "link", detail: `link "${p.label ?? ""}" (${L}): ${detail}`, fix: fixed && target.collection === "pages" ? { type: "link", value: fixed, target: { ...target, path } } : undefined });
   if (p.linkType === "internal" && p.doc?.value) {
-    const sid = await stagingPageFor(idOf(p.doc.value) as string);
-    if (sid) want.doc = { relationTo: p.doc.relationTo ?? "pages", value: sid };
-    else want.url = undefined;
+    const pslug = await slugOf("prod", idOf(p.doc.value) as string);
+    if (!pslug) return;
+    if (s.linkType === "internal" && s.doc?.value && (await slugOf("stg", idOf(s.doc.value) as string)) === pslug) return;
+    const sid = await stagingPageBySlug(pslug);
+    if (!sid) {
+      if (s.linkType === "external" && typeof s.url === "string" && s.url.includes(pslug.split("/").pop() ?? pslug)) return; // no staging copy: production URL is fine
+      return push(`goes to ${s.linkType} ${s.url ?? ""}, production links /${pslug} (no staging copy)`);
+    }
+    const fixed = { ...s, linkType: "internal", doc: { relationTo: p.doc.relationTo ?? "pages", value: sid } };
+    delete fixed.url;
+    return push(`staging ${s.linkType}${s.url ? " " + s.url : ""} · production internal /${pslug}`, fixed);
   }
-  const same = s.linkType === want.linkType && (want.anchor == null || s.anchor === want.anchor) && (p.linkType !== "external" || s.url === want.url) && (!want.doc || idOf(s.doc?.value) === want.doc.value);
-  if (same) return;
-  const fixed = { ...s, ...want };
-  if (want.linkType !== "external") delete fixed.url;
-  if (want.linkType !== "internal") delete fixed.doc;
-  ctx.issues.push({ page: ctx.page, where: where || label(path), kind: "link", detail: `link "${p.label ?? ""}" (${target.locale.toUpperCase()}): staging ${s.linkType}${s.url ? " " + s.url : ""}${s.anchor ? " " + s.anchor : ""} · production ${p.linkType}${p.anchor ? " " + p.anchor : ""}${p.url ? " " + p.url : ""}`, fix: target.collection === "pages" ? { type: "link", value: fixed, target: { ...target, path } } : undefined });
+  if (p.linkType === "anchor" || (p.linkType && p.linkType !== "internal" && p.linkType !== "external")) {
+    if (s.linkType === p.linkType && s.anchor === p.anchor) return;
+    const fixed = { ...s, linkType: p.linkType, anchor: p.anchor };
+    delete fixed.url;
+    delete fixed.doc;
+    return push(`staging ${s.linkType}${s.url ? " " + s.url : ""} · production ${p.linkType} ${p.anchor ?? ""}`, fixed);
+  }
+  if (p.linkType === "external" && (s.linkType !== "external" || s.url !== p.url)) {
+    const fixed = { ...s, linkType: "external", url: p.url };
+    delete fixed.doc;
+    return push(`staging ${s.linkType} ${s.url ?? ""} · production external ${p.url}`, fixed);
+  }
 }
 
 async function compareEngagement(ctx: Ctx, pid: string, sid: string | null, where: string) {
