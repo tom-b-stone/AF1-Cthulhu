@@ -208,7 +208,7 @@ function cardStates(badgeId: string, b: Json): CardState[] {
     earned("Raffle Closed", "Raffle closed", "After the end date");
   } else if (/download/i.test(rt)) earned("Download", "Earned · download", "Reward Type: Download Asset");
   else earned("Link", "Earned · no reward / link", "Reward Type: No Reward (+ Reward CTA)");
-  states.push({ state: "Back", label: "Card back", note: "Flip from any earned state · Payload: Description, back image", fields: [name, badgeField(badgeId, b, "description", "Back · Info Text"), badgeField(badgeId, b, "badgeBackImage", "Badge/Image", "image")] });
+  states.push({ state: "Back", label: "Card back", note: "Flip from any earned state · Payload: Description, back image", fields: [name, badgeField(badgeId, b, "description", "Back · Info Text|Description"), badgeField(badgeId, b, "badgeBackImage", "Badge/Image", "image")] });
   return states;
 }
 
