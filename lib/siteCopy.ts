@@ -183,13 +183,14 @@ async function remap(ctx: Ctx, v: Json, k = ""): Promise<Json> {
           else per[l] = m;
         }
         if (ext && !Object.keys(per).length) {
-          out.linkType = "external";
+          out.linkType = k === "fields" ? "custom" : "external";
           out.url = ext;
         } else out.doc = per;
       } else {
         const m = await mapDoc(ctx, x);
         if (m && "external" in m) {
-          out.linkType = "external";
+          // rich-text links call it "custom", link buttons "external"
+          out.linkType = k === "fields" ? "custom" : "external";
           out.url = m.external;
         } else out.doc = m;
       }
@@ -203,7 +204,7 @@ async function remap(ctx: Ctx, v: Json, k = ""): Promise<Json> {
     out[kk] = await remap(ctx, x, kk);
   }
   // a link whose doc became external
-  if (out.linkType === "external" && out.doc !== undefined) delete out.doc;
+  if ((out.linkType === "external" || out.linkType === "custom") && out.doc !== undefined) delete out.doc;
   return out;
 }
 
