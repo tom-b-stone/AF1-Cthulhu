@@ -20,6 +20,7 @@ import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetN
 import { copyTeamCard } from "./teamCardCopy";
 import { jobSummary, readJob, startJob, stepJob } from "./siteCopy";
 import { status as sitemapStatus, cardsForConfigurator } from "./sitemapSync";
+import { compareCampaign, loadIssues, repairCampaign, saveIssues } from "./siteCompare";
 import { importCampaignCards } from "./teamCards";
 import { FIELDS, applyChanges, diff, getCard, listCards, readChangeset, saveChangeset, stagingLinks, type Change, type LocValue } from "./teamCards";
 
@@ -360,6 +361,43 @@ ${SEO_WRITE_RECIPE}`);
         const r = await importCampaignCards(c.toUpperCase(), list, "Singapore");
         console.log(`[connector] ${actor} imported ${list.length} cards for ${c}`);
         return text(`${list.length} cards: ${list.map((x) => x.title).join(", ")}. New records: ${r.added.join(", ") || "none"}. List now has ${r.total} cards.`);
+      } catch (e) {
+        return text(e instanceof Error ? e.message : "failed", true);
+      }
+    },
+  },
+  {
+    name: "sitecopy_compare",
+    annotations: { title: "Compare production pages with their staging copies", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description: "Compares a copied campaign (production vs staging, EN + DE): modules, images (same file, focal point/crop), engagements, Team Cards and texts that are empty on staging. Saves the issue list for sitecopy_repair. Run with root (e.g. unlock-singapore); continue with from=<next> until next is null.",
+    inputSchema: { type: "object", properties: { root: { type: "string" }, from: { type: "number" } } },
+    async run(args) {
+      try {
+        const root = String(args.root ?? "unlock-singapore");
+        const from = Number(args.from ?? 0);
+        const r = await compareCampaign(root, { from });
+        await saveIssues(root, r.issues, from > 0);
+        const all = await loadIssues(root);
+        const lines = r.issues.map((x) => `- ${x.page} · ${x.where} · ${x.kind}: ${x.detail}${x.fix ? " [fixable]" : ""}`);
+        return text(`Pages ${from + 1}–${r.next ?? r.pages} of ${r.pages}: ${r.issues.length} issues (${all.length} saved so far). next=${r.next ?? "null"}\n${lines.join("\n").slice(0, 14000)}`);
+      } catch (e) {
+        return text(e instanceof Error ? e.message : "failed", true);
+      }
+    },
+  },
+  {
+    name: "sitecopy_repair",
+    annotations: { title: "Repair the staging copy from the saved compare", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description: "Fixes the issues saved by sitecopy_compare on STAGING: copies missing/wrong images again, sets focal points, copies incomplete engagements again, fills empty texts, then republishes the pages on staging. Production is only read. Run again while issues are left.",
+    inputSchema: { type: "object", properties: { root: { type: "string" } } },
+    async run(args, actor) {
+      try {
+        const root = String(args.root ?? "unlock-singapore");
+        const issues = await loadIssues(root);
+        const r = await repairCampaign(issues);
+        await saveIssues(root, r.left, false);
+        console.log(`[connector] ${actor} sitecopy repair ${root}: ${r.done.length} done, ${r.failed.length} failed`);
+        return text(`${r.done.length} fixed, ${r.failed.length} failed, ${r.left.length} left.\nFixed:\n${r.done.join("\n").slice(0, 8000)}\nFailed:\n${r.failed.join("\n")}`);
       } catch (e) {
         return text(e instanceof Error ? e.message : "failed", true);
       }
