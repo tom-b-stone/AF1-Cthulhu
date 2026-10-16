@@ -229,7 +229,12 @@ export async function stepJob(id: string, budgetMs = 40_000): Promise<Job> {
         job.log.push(`page exists on staging, will be updated: /${p.url}`);
         continue;
       }
-      const parent = p.parentProd ? job.pages.find((x) => x.prodId === p.parentProd)?.stg : undefined;
+      // staging strips "/" from slugs: "paulaner-pro/brewery" becomes slug
+      // "brewery" under the page at the parent URL, so the URL stays the same
+      const parentUrl = p.url.split("/").slice(0, -1).join("/");
+      const byUrl = parentUrl ? job.pages.find((x) => x.url === parentUrl)?.stg : undefined;
+      const parent = byUrl ?? (p.parentProd ? job.pages.find((x) => x.prodId === p.parentProd)?.stg : undefined);
+      if (p.slug?.includes("/")) p.slug = p.slug.split("/").pop();
       const make = (slug?: string) => stg(`/pages?locale=en&draft=true`, { method: "POST", body: JSON.stringify({ title: p.title, slug, ...(parent ? { parent } : {}), sections: [], _status: "draft" }) });
       let created: Json;
       try {
