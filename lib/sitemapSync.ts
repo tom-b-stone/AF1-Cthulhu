@@ -66,7 +66,7 @@ export const CAMPAIGNS: Record<string, Campaign> = {
 
 // Mobile modules (375 px) per CMS block type. "local" modules are built by the
 // plugin as components in the working file (not in the 07 library).
-export type ModuleDef = { key?: string; variant?: string; local?: string; name: string };
+export type ModuleDef = { key?: string; variant?: string; variantByBg?: Record<string, string>; local?: string; name: string };
 export const OVERLAY_KEY = "6d6338d5b2a8bdfb03935037a19dec6672f80baa"; // Team_Card_Overlay_Mobile
 export const MODULES: Record<string, ModuleDef> = {
   hero: { key: "92f328fd4f4868c2c96ee2bc66df76f37909f02b", variant: "Position=Text bottom centered, Color Variant=Light, Size=XL", name: "Hero Image Mobile" },
@@ -80,7 +80,8 @@ export const MODULES: Record<string, ModuleDef> = {
   gallery: { key: "67bef93065cdc55535cd9b95add968beffebf056", name: "Gallery Grid Mobile" },
   "badge-engagement-teaser": { key: "680bea534dcfc57a2242dbe732252c4f895e6894", variant: "Background=Chalk", name: "Badge Engagement Teaser Mobile" },
   "logged-out-badge-reveal": { key: OVERLAY_KEY, variant: "State=Logged Out", name: "Team Card Overlay · Logged out" },
-  "free-text": { local: "Free Text Mobile", name: "Free Text Mobile" },
+  "free-text": { key: "9cbc66e968681b26d36710315219542bff3405e2", variant: "Alignment=Left, Background=Light, Width=Full Witdh", variantByBg: { graphite: "Alignment=Left, Background=Black, Width=Full Witdh", chalk: "Alignment=Left, Background=Light, Width=Full Witdh" }, name: "Text Only Mobile" },
+  engagement: { key: "a7d8d4b60ed66ea25f7c7f291396dfd1e0fdf3cc", name: "AF1 Public Engagement Mobile" },
   "list-section": { local: "List Section Mobile", name: "List Section Mobile" },
   "iframe-embed": { local: "iFrame Mobile", name: "iFrame Mobile" },
 };
@@ -128,7 +129,7 @@ function blockFields(pageId: string, s: Json): Field[] {
   const image = (path: string, layer: string, value: unknown) => out.push({ key: k(path), path, layer, value: idOf(value), kind: "image" });
   const t = s.blockType;
   if (t === "free-text") {
-    text("content", "Copy", lexicalText(s.content), true);
+    text("content", "text|Copy", lexicalText(s.content), true);
     return out;
   }
   if (t === "iframe-embed") {

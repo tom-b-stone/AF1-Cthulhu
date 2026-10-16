@@ -280,7 +280,8 @@ async function arrow(parent, pts, color, dash, text) {
 async function moduleInstance(b) {
   var def = state.data.modules[b.blockType];
   if (!def) return null;
-  var comp = def.local ? await localComponent(def.local) : await variantOf(def.key, def.variant);
+  var variant = (def.variantByBg && b.bg && def.variantByBg[b.bg]) || def.variant;
+  var comp = def.local ? await localComponent(def.local) : await variantOf(def.key, variant);
   await preloadFonts(comp);
   return comp.createInstance();
 }
@@ -295,7 +296,6 @@ async function buildPageFrame(sec, p, x, y) {
     fr.appendChild(node); node.layoutSizingHorizontal = "FILL";
     node.name = (i < 9 ? "0" : "") + (i + 1) + " " + b.blockType + (b.hidden ? " (hidden in CMS)" : "") + " · " + b.id;
     if (b.hidden) node.opacity = 0.35;
-    if (b.blockType === "free-text" && b.bg && b.bg !== "graphite") { node.fills = CHALK; var ct = node.findOne(function (x) { return x.type === "TEXT"; }); if (ct) { await loadFonts(ct); ct.fills = GRAPH; } }
     writeData(node, { type: "block", pageId: p.id, blockId: b.id, blockType: b.blockType, fields: tagFields(b.fields), last: {}, imgs: {} });
     await applyFields(node, valuesOf(b.fields));
     if (b.blockType === "list-section") for (var k = 1; k <= 6; k++) { var lf = b.fields.filter(function (x) { return x.layer === "Item " + k + " · Label"; })[0]; var it = node.findOne(function (x) { return x.name === "Item " + k && x.type === "FRAME"; }); if (it) it.visible = !!(lf && lf.value); }
