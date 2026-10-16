@@ -76,6 +76,22 @@ async function readDoc(rec: CardRecord, doc: DocKind, loc: Loc): Promise<Json> {
   return (page.sections ?? []).find((s: Json) => s.id === rec.staging.blockId) ?? null;
 }
 
+// What the previews need beyond the editable texts: the question type and its
+// answer options (EN/DE), read live from the staging engagement.
+export type EngagementPreview = { type?: string; options: { en: string[]; de: string[] } };
+export async function engagementPreview(rec: CardRecord): Promise<EngagementPreview | null> {
+  if (!rec.staging.engagementId) return null;
+  const label = (o: Json) => (typeof o === "string" ? o : String(o?.text ?? o?.label ?? o?.answer ?? o?.title ?? o?.value ?? ""));
+  const opts = (d: Json): string[] => {
+    const q = d?.questions?.[0];
+    const list = q?.options ?? q?.answers ?? q?.choices ?? q?.answerOptions ?? [];
+    return Array.isArray(list) ? list.map(label).filter(Boolean) : [];
+  };
+  const [en, de] = await Promise.all((["en", "de"] as Loc[]).map((l) => readDoc(rec, "engagement", l).catch(() => null)));
+  const q = en?.questions?.[0];
+  return { type: String(q?.type ?? q?.questionType ?? q?.blockType ?? en?.type ?? ""), options: { en: opts(en), de: opts(de) } };
+}
+
 // Reads every field of a card from staging (both locales).
 export async function loadFromStaging(rec: CardRecord): Promise<CardRecord> {
   const docs: Record<string, Json> = {};

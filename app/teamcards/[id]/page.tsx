@@ -1,14 +1,16 @@
 "use client";
 
-// Guided edit of one Team Card. Each step shows the real frontend view(s)
-// where its texts appear, large and editable in place (WYSIWYG), with a
-// short dialog that says what to do, the step's status, and ask-backs
-// (German after English, rule issues). Nothing is written before Review.
+// Guided edit of one Team Card, in two columns: the step's fields on the left,
+// a live mobile preview on the right that renders the texts in the real
+// audif1.com frontend (production CSS and module markup, see LivePreview).
+// Typing on the left updates the preview; clicking a text in the preview
+// selects its field. Ask-backs (German after English, rule issues) stay.
+// Nothing is written before Review.
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FIELDS, STEPS, fieldIssues, type FieldDef, type Loc, type LocValue } from "@/lib/teamCardFields";
-import { CardBack, CardFront, EngagementView, ModuleView, OverlayView, PostView, RewardView, ShareView, ShelfView, WysStyles, type EditCtx } from "../Frontend";
+import { LivePreview, type PreviewCard } from "../LivePreview";
 
 type Values = Record<string, LocValue | string | boolean | undefined>;
 type Card = {
@@ -23,6 +25,7 @@ type Card = {
   raceLabel?: string;
   values: Values;
   links: { badge: string; engagement?: string; page?: string };
+  preview?: PreviewCard["preview"];
   log: { at: string; by: string; summary: string }[];
 };
 type DiffRow = { card: string; key: string; label: string; locale: Loc | null; before: unknown; after: unknown; issues: string[] };
@@ -57,9 +60,24 @@ const VIEWS: Record<Step, { key: string; label: string }[]> = {
     { key: "shelf", label: "In the collection" },
   ],
   Reward: [{ key: "reward", label: "Reward" }],
-  Settings: [],
-  Review: [],
+  Settings: [{ key: "module", label: "On the page" }],
+  Review: [{ key: "module", label: "On the page" }],
 };
+
+// which preview screen shows a field (first match wins)
+const VIEW_KEYS: Record<string, string[]> = {
+  module: ["modCategory", "modHeadline", "modSubline", "modCopy", "modBackground", "question"],
+  question: ["question", "submitLabel"],
+  overlay: ["overlayTitle", "overlaySubtitle"],
+  post: ["postTitle", "postMessage"],
+  share: ["shareTitle", "shareText"],
+  reveal: ["revealTitle", "revealDescription", "revealButton", "rewardTeaser"],
+  collected: ["badgePopupTitle", "rewardDescription", "description"],
+  unearned: ["publicTitle", "rewardTeaser", "ctaLabel", "description"],
+  earned: ["publicTitle", "description", "rewardDescription"],
+  shelf: ["publicTitle"],
+};
+const words = (v: string) => v.trim().split(/\s+/).filter(Boolean).length;
 
 const get = (v: Values, f: FieldDef, l: Loc) => (f.localized ? ((v[f.key] as LocValue | undefined)?.[l] ?? "") : (v[f.key] as string | boolean | undefined));
 
@@ -100,6 +118,21 @@ export default function EditCard() {
     return out;
   }, [vals, card]);
 
+  // select a field; the preview follows to a screen that shows it
+  const pick = useCallback(
+    (k: string) => {
+      setFocus(k);
+      setView((cur) => {
+        if (VIEW_KEYS[cur]?.includes(k)) return cur;
+        const inStep = VIEWS[step].find((v) => VIEW_KEYS[v.key]?.includes(k));
+        const any = Object.keys(VIEW_KEYS).find((v) => VIEW_KEYS[v].includes(k));
+        return inStep?.key ?? any ?? cur;
+      });
+      setTimeout(() => document.getElementById(`f-${k}`)?.focus(), 0);
+    },
+    [step],
+  );
+
   if (!card) return <div style={{ color: "var(--muted)" }}>Loading card…</div>;
 
   const fieldsOf = (s: Step) => FIELDS.filter((f) => f.step === s);
@@ -116,17 +149,6 @@ export default function EditCard() {
     const f = FIELDS.find((x) => x.key === key);
     if (!f) return;
     setVals((cur) => ({ ...cur, [key]: f.localized ? { ...((cur[key] as LocValue) ?? {}), [l]: String(value) } : value }));
-  };
-
-  const ctx: EditCtx = {
-    vals,
-    lang,
-    focus,
-    issues: Object.fromEntries(FIELDS.map((f) => [f.key, issuesOf(f, lang)])),
-    onEdit: (k, v) => edit(k, v),
-    onFocus: (k) => setFocus(k),
-    imageUrl: card.imageUrl,
-    engagementImageUrl: card.engagementImageUrl,
   };
 
   const go = (s: Step) => {
@@ -165,288 +187,204 @@ export default function EditCard() {
     setBusy(null);
   }
 
-  const screen: Record<string, ReactNode> = {
-    module: <ModuleView c={ctx} />,
-    question: <EngagementView c={ctx} />,
-    overlay: <OverlayView c={ctx} />,
-    post: <PostView c={ctx} />,
-    share: <ShareView c={ctx} />,
-    reveal: (
-      <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", padding: "28px 12px", background: "#1f1d1d" }}>
-        <CardFront c={ctx} title="revealTitle" text="revealDescription" button="revealButton" label="Front · right after the task" />
-        <CardBack c={ctx} text="rewardTeaser" button="revealButton" label="Back · swipe" typeLabel={card.badgeTypeLabel} race={card.raceLabel} />
-      </div>
-    ),
-    collected: (
-      <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", padding: "28px 12px", background: "#1f1d1d" }}>
-        <CardFront c={ctx} title="badgePopupTitle" text="rewardDescription" buttonText={lang === "de" ? "Zur Collection" : "Go to Trophy Cabinet"} label="Front · after logging in" />
-        <CardBack c={ctx} text="description" buttonText={lang === "de" ? "Zur Collection" : "Go to Trophy Cabinet"} label="Back · swipe" typeLabel={card.badgeTypeLabel} race={card.raceLabel} />
-      </div>
-    ),
-    unearned: (
-      <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", padding: "28px 12px", background: "#1f1d1d" }}>
-        <CardFront c={ctx} title="publicTitle" text="rewardTeaser" button="ctaLabel" label="Front · opened from the collection" />
-        <CardBack c={ctx} text="description" button="ctaLabel" label="Back · swipe" typeLabel={card.badgeTypeLabel} race={card.raceLabel} />
-      </div>
-    ),
-    earned: (
-      <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", padding: "28px 12px", background: "#1f1d1d" }}>
-        <CardFront c={ctx} title="publicTitle" text="description" buttonText={lang === "de" ? "Alle Team Cards ansehen" : "Check out all Team Cards"} label="Front · already collected" />
-        <CardBack c={ctx} text="rewardDescription" buttonText={lang === "de" ? "Alle Team Cards ansehen" : "Check out all Team Cards"} label="Back · swipe" typeLabel={card.badgeTypeLabel} race={card.raceLabel} />
-      </div>
-    ),
-    shelf: (
-      <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", padding: 24, background: "#e9e6e6" }}>
-        <ShelfView c={ctx} earned={false} />
-        <ShelfView c={ctx} earned />
-      </div>
-    ),
-    reward: <RewardView rewardType={card.rewardType} />,
-  };
-
   const st = stepState(step);
   const fs = fieldsOf(step);
   const focusField = FIELDS.find((f) => f.key === focus);
 
-  return (
-    <div style={{ display: "grid", gap: 18, maxWidth: 1100 }}>
-      <WysStyles />
-      <div>
-        <Link href="/teamcards" style={{ fontSize: 12, color: "var(--muted)" }}>
-          ← All Team Cards
-        </Link>
-        <h1 style={{ margin: "4px 0 2px" }}>{card.name}</h1>
-        <div style={{ color: "var(--muted)", fontSize: 13 }}>
-          {card.id} · {card.status} · on staging: <a href={card.links.badge} target="_blank" rel="noreferrer">card</a>
-          {card.links.engagement && (
-            <>
-              {" · "}
-              <a href={card.links.engagement} target="_blank" rel="noreferrer">engagement</a>
-            </>
-          )}
-          {card.links.page && (
-            <>
-              {" · "}
-              <a href={card.links.page} target="_blank" rel="noreferrer">page</a>
-            </>
-          )}
-        </div>
-      </div>
+  const previewCard: PreviewCard = { imageUrl: card.imageUrl, engagementImageUrl: card.engagementImageUrl, badgeTypeLabel: card.badgeTypeLabel, raceLabel: card.raceLabel, rewardType: card.rewardType, preview: card.preview };
+  const views = VIEWS[step];
 
-      {/* stepper with status */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {ALL.map((s, i) => {
-          const x = s === "Review" ? { changed: changes.length, problems: [] as string[] } : stepState(s);
-          const mark = x.problems.length ? "!" : x.changed ? "●" : "✓";
-          const col = x.problems.length ? "#e06c5b" : x.changed ? "var(--accent)" : "#6fcf7c";
-          return (
-            <button key={s} className="btn" onClick={() => go(s)} style={{ padding: "6px 12px", borderColor: s === step ? "var(--accent)" : undefined }}>
-              <span style={{ color: col, fontWeight: 700 }}>{s === "Review" ? (changes.length ? changes.length : "·") : mark}</span> {i + 1}. {s}
+  const fieldEditor = (f: FieldDef) => {
+    const v = get(vals, f, f.localized ? lang : "en");
+    const iss = issuesOf(f, f.localized ? lang : "en");
+    const changed = changes.some((c) => c.key === f.key);
+    const inPreview = Object.values(VIEW_KEYS).some((ks) => ks.includes(f.key));
+    return (
+      <div key={f.key} style={{ display: "grid", gap: 5, padding: "10px 12px", borderRadius: 10, border: `1px solid ${focus === f.key ? "var(--accent)" : "var(--border)"}`, background: focus === f.key ? "rgba(227,62,26,0.05)" : "transparent" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+          <label htmlFor={`f-${f.key}`} style={{ fontSize: 13, fontWeight: 600, cursor: inPreview ? "pointer" : undefined }} onClick={() => pick(f.key)}>
+            {f.label}
+            {changed && <span style={{ color: "var(--accent)", fontWeight: 400 }}> · changed</span>}
+          </label>
+          <span style={{ fontSize: 11, color: f.maxWords && typeof v === "string" && words(v) > f.maxWords ? "#e06c5b" : "var(--muted)" }}>
+            {f.maxWords && typeof v === "string" ? `${words(v)}/${f.maxWords} words` : f.localized ? (lang === "en" ? "EN" : "DE") : ""}
+          </span>
+        </div>
+        {f.kind === "select" ? (
+          <select id={`f-${f.key}`} className="input" value={String(v ?? "")} onFocus={() => pick(f.key)} onChange={(e) => edit(f.key, e.target.value, "en")}>
+            {(f.options ?? []).map((o) => (
+              <option key={o}>{o}</option>
+            ))}
+          </select>
+        ) : (
+          <textarea
+            id={`f-${f.key}`}
+            className="input"
+            rows={f.kind === "textarea" ? 3 : 1}
+            style={{ width: "100%", resize: "vertical", fontSize: 14, lineHeight: 1.45 }}
+            value={String(v ?? "")}
+            onFocus={() => pick(f.key)}
+            onChange={(e) => edit(f.key, e.target.value)}
+          />
+        )}
+        {f.help && <div style={{ fontSize: 11, color: "var(--muted)" }}>{f.help}</div>}
+        {iss.length > 0 && <div style={{ fontSize: 12, color: "#e06c5b" }}>{iss.join(" · ")}</div>}
+        {deMissing(f) && (
+          <div style={{ fontSize: 12, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            English changed. German too?
+            <button className="btn" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => { setLang("de"); pick(f.key); }}>
+              Show German
             </button>
-          );
-        })}
-      </div>
-
-      {/* dialog */}
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-        <div style={{ width: 34, height: 34, borderRadius: 99, background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, flexShrink: 0 }}>TC</div>
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "4px 14px 14px 14px", padding: "12px 16px", fontSize: 15, lineHeight: 1.5, maxWidth: 760 }}>
-          {TALK[step]}
-          {step !== "Review" && step !== "Settings" && step !== "Reward" && (
-            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>
-              {st.problems.length ? `${st.problems.length} thing${st.problems.length === 1 ? "" : "s"} to look at in this step.` : st.changed ? `${st.changed} change${st.changed === 1 ? "" : "s"} so far, all fine.` : "Nothing changed yet. Everything here is complete."}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* big preview */}
-      {VIEWS[step].length > 0 && (
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {VIEWS[step].length > 1 &&
-                VIEWS[step].map((v) => (
-                  <button key={v.key} className="btn" style={{ padding: "5px 12px", borderColor: view === v.key ? "var(--accent)" : undefined }} onClick={() => setView(v.key)}>
-                    {v.label}
-                  </button>
-                ))}
-            </div>
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 4 }}>You are editing</span>
-              {(["en", "de"] as Loc[]).map((l) => (
-                <button key={l} className="btn" style={{ padding: "5px 12px", borderColor: lang === l ? "var(--accent)" : undefined }} onClick={() => setLang(l)}>
-                  {l === "en" ? "English" : "German"}
-                </button>
-              ))}
-            </div>
+            <button className="btn" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => setKeepDe((k) => ({ ...k, [f.key]: true }))}>
+              Keep it
+            </button>
           </div>
-          <div className="af-frame">{screen[view]}</div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>
-            Module and engagement recreated from audif1.com, card popups and collection from the final Figma designs (261001_AF1_Badges). Click a text to edit it; a red wavy line means a rule issue (hover for the reason).
-            {focusField && (
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 430px", gap: 28, alignItems: "start", maxWidth: 1240 }}>
+      {/* ---- left: edit ---- */}
+      <div style={{ display: "grid", gap: 16, minWidth: 0 }}>
+        <div>
+          <Link href="/teamcards" style={{ fontSize: 12, color: "var(--muted)" }}>
+            ← All Team Cards
+          </Link>
+          <h1 style={{ margin: "4px 0 2px" }}>{card.name}</h1>
+          <div style={{ color: "var(--muted)", fontSize: 13 }}>
+            {card.id} · {card.status} · on staging: <a href={card.links.badge} target="_blank" rel="noreferrer">card</a>
+            {card.links.engagement && (
               <>
-                {" "}
-                Editing: <b>{focusField.label}</b>
-                {focusField.maxWords ? ` · ${String(get(vals, focusField, lang)).trim().split(/\s+/).filter(Boolean).length}/${focusField.maxWords} words` : ""}
+                {" · "}
+                <a href={card.links.engagement} target="_blank" rel="noreferrer">engagement</a>
+              </>
+            )}
+            {card.links.page && (
+              <>
+                {" · "}
+                <a href={card.links.page} target="_blank" rel="noreferrer">page</a>
               </>
             )}
           </div>
         </div>
-      )}
 
-      {/* German ask-back */}
-      {fs.filter(deMissing).map((f) => (
-        <div key={f.key} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <div style={{ width: 34, flexShrink: 0 }} />
-          <div style={{ background: "rgba(227,62,26,0.08)", border: "1px solid rgba(227,62,26,0.35)", borderRadius: "4px 14px 14px 14px", padding: "10px 14px", fontSize: 14, display: "grid", gap: 8 }}>
-            <div>
-              You changed the English <b>{f.label.toLowerCase()}</b>. Shall we change the German too?
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                className="btn"
-                style={{ padding: "4px 12px" }}
-                onClick={() => {
-                  setLang("de");
-                  setFocus(f.key);
-                }}
-              >
-                Yes, show me the German
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {ALL.map((s, i) => {
+            const x = s === "Review" ? { changed: changes.length, problems: [] as string[] } : stepState(s);
+            const mark = x.problems.length ? "!" : x.changed ? "●" : "✓";
+            const col = x.problems.length ? "#e06c5b" : x.changed ? "var(--accent)" : "#6fcf7c";
+            return (
+              <button key={s} className="btn" onClick={() => go(s)} style={{ padding: "5px 11px", borderColor: s === step ? "var(--accent)" : undefined }}>
+                <span style={{ color: col, fontWeight: 700 }}>{s === "Review" ? (changes.length ? changes.length : "·") : mark}</span> {i + 1}. {s}
               </button>
-              <button className="btn" style={{ padding: "4px 12px" }} onClick={() => setKeepDe((k) => ({ ...k, [f.key]: true }))}>
-                No, keep it
-              </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      ))}
 
-      {/* settings step */}
-      {step === "Settings" &&
-        fs.map((f) => (
-          <label key={f.key} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14 }}>
-            <input type="checkbox" checked={Boolean(get(vals, f, "en"))} onChange={(e) => edit(f.key, e.target.checked, "en")} /> {f.label}
-            <span style={{ color: "var(--muted)", fontSize: 12 }}>{f.help}</span>
-          </label>
-        ))}
-
-      {/* status of this step + form fallback */}
-      {step !== "Review" && fs.length > 0 && step !== "Settings" && (
-        <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 14, display: "grid", gap: 8 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Status of this step</div>
-            <button className="btn" style={{ padding: "4px 10px" }} onClick={() => setShowForm((x) => !x)}>
-              {showForm ? "Hide form" : "Edit as form"}
-            </button>
-          </div>
-          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-            <tbody>
-              {fs.map((f) => {
-                const en = issuesOf(f, "en");
-                const de = f.localized ? issuesOf(f, "de") : [];
-                const changed = changes.some((c) => c.key === f.key);
-                return (
-                  <tr key={f.key} style={{ borderTop: "1px solid var(--border)", verticalAlign: "top" }}>
-                    <td style={{ padding: "6px 4px", width: 200 }}>
-                      <span style={{ cursor: "pointer", textDecoration: focus === f.key ? "underline" : undefined }} onClick={() => setFocus(f.key)}>
-                        {f.label}
-                      </span>
-                    </td>
-                    <td style={{ padding: "6px 4px", width: 90 }}>{changed ? <span style={{ color: "var(--accent)" }}>● changed</span> : <span style={{ color: "var(--muted)" }}>as is</span>}</td>
-                    <td style={{ padding: "6px 4px", color: en.length || de.length ? "#e06c5b" : "#6fcf7c" }}>{[...en, ...de.map((x) => `${x} (DE)`)].join(" · ") || "ok"}</td>
-                    {showForm && (
-                      <td style={{ padding: "6px 4px", width: "45%" }}>
-                        {f.localized ? (
-                          (["en", "de"] as Loc[]).map((l) => (
-                            <textarea key={l} className="input" rows={f.kind === "textarea" ? 2 : 1} style={{ width: "100%", marginBottom: 4 }} placeholder={l.toUpperCase()} value={String(get(vals, f, l))} onFocus={() => { setFocus(f.key); setLang(l); }} onChange={(e) => edit(f.key, e.target.value, l)} />
-                          ))
-                        ) : f.kind === "select" ? (
-                          <select className="input" value={String(get(vals, f, "en") ?? "")} onChange={(e) => edit(f.key, e.target.value, "en")}>
-                            {(f.options ?? []).map((o) => (
-                              <option key={o}>{o}</option>
-                            ))}
-                          </select>
-                        ) : null}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* review */}
-      {step === "Review" && (
-        <div style={{ display: "grid", gap: 12 }}>
-          {busy && <div style={{ color: "var(--muted)" }}>{busy}</div>}
-          {review && review.rows.length === 0 && !result && <div style={{ color: "var(--muted)" }}>Nothing changed yet. Pick a step above and click into a text.</div>}
-          {review && review.rows.length > 0 && (
-            <>
-              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 11 }}>
-                    <th style={{ padding: 6 }}>Field</th>
-                    <th style={{ padding: 6 }}>Before</th>
-                    <th style={{ padding: 6 }}>After</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {review.rows.map((r, i) => (
-                    <tr key={i} style={{ borderTop: "1px solid var(--border)", verticalAlign: "top" }}>
-                      <td style={{ padding: 6 }}>
-                        {r.label}
-                        {r.locale ? ` · ${r.locale === "en" ? "English" : "German"}` : ""}
-                        {r.issues.length > 0 && <div style={{ color: "#e06c5b", fontSize: 12 }}>{r.issues.join(" · ")}</div>}
-                      </td>
-                      <td style={{ padding: 6, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{String(r.before ?? "")}</td>
-                      <td style={{ padding: 6, whiteSpace: "pre-wrap" }}>{String(r.after ?? "")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ fontSize: 13, color: "var(--muted)" }}>Apply writes these {review.rows.length} changes to the card, engagement and module on staging. The staging page is republished.</div>
-              <div>
-                <button className="btn btn-primary" disabled={!!busy} onClick={apply}>
-                  Yes, apply to staging
-                </button>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ width: 30, height: 30, borderRadius: 99, background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>TC</div>
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "4px 14px 14px 14px", padding: "10px 14px", fontSize: 14, lineHeight: 1.5 }}>
+            {TALK[step]}
+            {step !== "Review" && step !== "Settings" && step !== "Reward" && (
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                {st.problems.length ? `${st.problems.length} thing${st.problems.length === 1 ? "" : "s"} to look at in this step.` : st.changed ? `${st.changed} change${st.changed === 1 ? "" : "s"} so far, all fine.` : "Nothing changed yet. Everything here is complete."}
               </div>
-            </>
-          )}
-          {result && (
-            <div style={{ display: "grid", gap: 6, fontSize: 14 }}>
-              {result.pushed.map((p, i) => (
-                <div key={i}>✓ {p}</div>
-              ))}
-              {result.errors.map((p, i) => (
-                <div key={i} style={{ color: "#e06c5b" }}>
-                  ✗ {p}
-                </div>
-              ))}
-              <div style={{ fontWeight: 600, marginTop: 6 }}>What next?</div>
-              <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
-                {card.links.page && (
-                  <li>
-                    <a href={card.links.page} target="_blank" rel="noreferrer">Look at it on staging ↗</a>
-                  </li>
-                )}
-                <li>
-                  Same wording elsewhere? Use <Link href="/teamcards#replace">Search and replace</Link> on the overview to change it on all cards at once.
-                </li>
-                <li>Once the client has approved, the card is rebuilt on production (comes with the publish step).</li>
-              </ul>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      )}
 
-      {/* ask-back before moving on */}
-      {ask && (
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ width: 34, flexShrink: 0 }} />
-          <div style={{ border: "1px solid rgba(227,62,26,0.35)", borderRadius: "4px 14px 14px 14px", padding: "10px 14px", fontSize: 14, display: "grid", gap: 8 }}>
+        {step !== "Review" && step !== "Settings" && fs.length > 0 && (
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 4 }}>You are editing</span>
+              {(["en", "de"] as Loc[]).map((l) => (
+                <button key={l} className="btn" style={{ padding: "4px 12px", borderColor: lang === l ? "var(--accent)" : undefined }} onClick={() => setLang(l)}>
+                  {l === "en" ? "English" : "German"}
+                </button>
+              ))}
+            </div>
+            {fs.map(fieldEditor)}
+          </div>
+        )}
+
+        {step === "Reward" && fs.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)" }}>Raffle and voucher fields appear once a card needs them. The preview shows how this card works.</div>}
+
+        {step === "Settings" &&
+          fs.map((f) => (
+            <label key={f.key} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14 }}>
+              <input type="checkbox" checked={Boolean(get(vals, f, "en"))} onChange={(e) => edit(f.key, e.target.checked, "en")} /> {f.label}
+              <span style={{ color: "var(--muted)", fontSize: 12 }}>{f.help}</span>
+            </label>
+          ))}
+
+        {step === "Review" && (
+          <div style={{ display: "grid", gap: 12 }}>
+            {busy && <div style={{ color: "var(--muted)" }}>{busy}</div>}
+            {review && review.rows.length === 0 && !result && <div style={{ color: "var(--muted)" }}>Nothing changed yet. Pick a step above and click into a text.</div>}
+            {review && review.rows.length > 0 && (
+              <>
+                <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 11 }}>
+                      <th style={{ padding: 6 }}>Field</th>
+                      <th style={{ padding: 6 }}>Before</th>
+                      <th style={{ padding: 6 }}>After</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {review.rows.map((r, i) => (
+                      <tr key={i} style={{ borderTop: "1px solid var(--border)", verticalAlign: "top", cursor: "pointer" }} onClick={() => pick(r.key)}>
+                        <td style={{ padding: 6 }}>
+                          {r.label}
+                          {r.locale ? ` · ${r.locale === "en" ? "English" : "German"}` : ""}
+                          {r.issues.length > 0 && <div style={{ color: "#e06c5b", fontSize: 12 }}>{r.issues.join(" · ")}</div>}
+                        </td>
+                        <td style={{ padding: 6, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{String(r.before ?? "")}</td>
+                        <td style={{ padding: 6, whiteSpace: "pre-wrap" }}>{String(r.after ?? "")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: 13, color: "var(--muted)" }}>Apply writes these {review.rows.length} changes to the card, engagement and module on staging. The staging page is republished.</div>
+                <div>
+                  <button className="btn btn-primary" disabled={!!busy} onClick={apply}>
+                    Yes, apply to staging
+                  </button>
+                </div>
+              </>
+            )}
+            {result && (
+              <div style={{ display: "grid", gap: 6, fontSize: 14 }}>
+                {result.pushed.map((p, i) => (
+                  <div key={i}>✓ {p}</div>
+                ))}
+                {result.errors.map((p, i) => (
+                  <div key={i} style={{ color: "#e06c5b" }}>
+                    ✗ {p}
+                  </div>
+                ))}
+                <div style={{ fontWeight: 600, marginTop: 6 }}>What next?</div>
+                <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
+                  {card.links.page && (
+                    <li>
+                      <a href={card.links.page} target="_blank" rel="noreferrer">Look at it on staging ↗</a>
+                    </li>
+                  )}
+                  <li>
+                    Same wording elsewhere? Use <Link href="/teamcards#replace">Search and replace</Link> on the overview to change it on all cards at once.
+                  </li>
+                  <li>The Figma sitemap picks the change up on its next sync.</li>
+                  <li>Once the client has approved, the card is rebuilt on production (comes with the publish step).</li>
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {ask && (
+          <div style={{ border: "1px solid rgba(227,62,26,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 14, display: "grid", gap: 8 }}>
             <div>Before we go on, have a look at {ask.length === 1 ? "this" : `these ${ask.length}`}:</div>
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
               {ask.map((x, i) => (
@@ -462,21 +400,42 @@ export default function EditCard() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {step !== "Review" && (
-        <div style={{ display: "flex", gap: 8 }}>
-          {ALL.indexOf(step) > 0 && (
-            <button className="btn" onClick={() => go(ALL[ALL.indexOf(step) - 1])}>
-              Back
+        {step !== "Review" && (
+          <div style={{ display: "flex", gap: 8 }}>
+            {ALL.indexOf(step) > 0 && (
+              <button className="btn" onClick={() => go(ALL[ALL.indexOf(step) - 1])}>
+                Back
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => next()}>
+              {ALL[ALL.indexOf(step) + 1] === "Review" ? "Review my changes" : `Next: ${ALL[ALL.indexOf(step) + 1]}`}
             </button>
-          )}
-          <button className="btn btn-primary" onClick={() => next()}>
-            {ALL[ALL.indexOf(step) + 1] === "Review" ? "Review my changes" : `Next: ${ALL[ALL.indexOf(step) + 1]}`}
-          </button>
+          </div>
+        )}
+      </div>
+
+      {/* ---- right: live mobile preview ---- */}
+      <div style={{ position: "sticky", top: 16, display: "grid", gap: 10 }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
+          {(views.length > 1 ? views : []).map((v) => (
+            <button key={v.key} className="btn" style={{ padding: "4px 10px", fontSize: 12, borderColor: view === v.key ? "var(--accent)" : undefined }} onClick={() => setView(v.key)}>
+              {v.label}
+            </button>
+          ))}
         </div>
-      )}
+        <LivePreview view={view || "module"} vals={vals} lang={lang} card={previewCard} focus={focus} onFocus={pick} />
+        <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>
+          Mobile, with the audif1.com production styles. Tap a text to edit it, tap the card to flip it, swipe popups to the back.
+          {focusField && (
+            <>
+              <br />
+              Editing: <b>{focusField.label}</b> ({lang === "en" ? "English" : "German"})
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
