@@ -31,7 +31,7 @@
   <div class="row">
     <label class="choice" style="margin:0"><input type="checkbox" id="live"> <span><span class="dot" id="liveDot"></span> Live sync every 20 s while open</span></label>
   </div>
-  <div class="row"><button id="check">Check again</button><button class="primary" id="sync">Sync now</button><button id="fonts">Fix fonts</button></div>
+  <div class="row"><button id="changeToken">Change token</button><button id="check">Check again</button><button class="primary" id="sync">Sync now</button><button id="fonts">Fix fonts</button></div>
   <div id="buildBox"></div>
   <div id="diffBox"></div>
 </div>
@@ -47,6 +47,7 @@
   let lastDiffs = [];
 
   $("saveToken").onclick = () => { log("Connecting …"); post("save-token", { token: $("token").value }); };
+  $("changeToken").onclick = () => { $("tokenBox").hidden = false; $("token").focus(); };
   $("check").onclick = () => { log("Checking …"); post("check"); };
   $("fonts").onclick = () => { log("Swapping fonts …"); post("fix-fonts"); };
   $("live").onchange = (e) => { $("liveDot").className = "dot" + (e.target.checked ? "" : " off"); post("live", { on: e.target.checked }); };
@@ -108,7 +109,7 @@
     if (m.type === "checked") { render(m); log("Checked."); }
     if (m.type === "synced") log(`${m.quiet ? "Live sync" : "Synced"}: ${m.toCms} to the CMS, ${m.toFigma} into Figma, ${m.open.length} open.` + (m.written.length ? "\n" + m.written.join("\n") : ""));
     if (m.type === "log") log(m.msg);
-    if (m.type === "error") log(m.msg, true);
+    if (m.type === "error") { log(m.msg, true); if (/token/i.test(m.msg)) { $("tokenBox").hidden = false; $("token").value = ""; $("token").focus(); } }
   };
   post("init");
 </script>
