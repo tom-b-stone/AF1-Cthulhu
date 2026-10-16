@@ -11,7 +11,7 @@
 // turned into an external link to the production page. loyaltyId fields
 // (private collection on production) get new loyalty IDs on staging.
 import { kvGet, kvSet } from "./kv";
-import { createContentTag } from "./payloadClient";
+import { createContentTag, listContentTags } from "./payloadClient";
 import { copyMedia, copyTeamCard, hasDe, isId, isLoc, MEDIA_KEYS, project, prod, setMediaFolder, stagingPageByUrl, stg, upsertLocalised, withIds, type CopyStep } from "./teamCardCopy";
 
 type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -28,7 +28,8 @@ export type Job = {
   badges: Record<string, string>;
   engagements: Record<string, string>;
   tags: Record<string, string>;
-  loyalty?: Record<string, string>; // production loyaltyId → new staging loyalty-id
+  loyalty?: Record<string, string>;
+  keyword?: string; // for content tag fallback // production loyaltyId → new staging loyalty-id
   log: string[];
   finished: boolean;
   updatedAt: string;
@@ -86,13 +87,24 @@ async function mapDoc(ctx: Ctx, d: Json): Promise<Json | { external: string }> {
   return { external: PROD_SITE };
 }
 
+// Content tags are private on production (403), so their titles can't be
+// read. Fallback: the staging tags whose title contains the campaign
+// keyword (e.g. "singapore"), so tag-driven carousels still fill on staging.
 async function tagId(ctx: Ctx, prodId: string): Promise<string | null> {
   if (ctx.job.tags[prodId]) return ctx.job.tags[prodId];
   const t = await prod(`/content-tags/${prodId}?depth=0`).catch(() => null);
-  if (!t?.title) return null;
-  const s = await createContentTag(t.title);
-  ctx.job.tags[prodId] = s.id;
-  return s.id;
+  if (t?.title) {
+    const s = await createContentTag(t.title);
+    ctx.job.tags[prodId] = s.id;
+    return s.id;
+  }
+  const kw = (ctx.job.keyword ?? "singapore").toLowerCase();
+  const tags = await listContentTags().catch(() => []);
+  const hit = tags.find((x) => x.title.toLowerCase().startsWith("gp |") && x.title.toLowerCase().includes(kw)) ?? tags.find((x) => x.title.toLowerCase().includes(kw));
+  if (!hit) return null;
+  ctx.job.tags[prodId] = hit.id;
+  ctx.job.log.push(`content tag ${prodId} is private on production: used staging tag "${hit.title}"`);
+  return hit.id;
 }
 
 async function badgeId(ctx: Ctx, prodId: string): Promise<string | null> {
@@ -124,7 +136,7 @@ async function engagementId(ctx: Ctx, prodId: string): Promise<string | null> {
 // walks a production structure and swaps every reference for staging's
 async function remap(ctx: Ctx, v: Json, k = ""): Promise<Json> {
   if (Array.isArray(v)) {
-    if (k === "contentTags" && v.every(isId)) return (await Promise.all(v.map((x) => tagId(ctx, x)))).filter(Boolean);
+    if (k === "contentTags" && v.every(isId)) return [...new Set((await Promise.all(v.map((x) => tagId(ctx, x)))).filter(Boolean))];
     if ((k === "badges" || k === "badgeList") && v.every(isId)) return (await Promise.all(v.map((x) => badgeId(ctx, x)))).filter(Boolean);
     const out = [];
     for (const x of v) out.push(await remap(ctx, x));
