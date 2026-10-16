@@ -19,6 +19,7 @@ import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 import { copyTeamCard } from "./teamCardCopy";
 import { jobSummary, readJob, startJob, stepJob } from "./siteCopy";
+import { status as sitemapStatus } from "./sitemapSync";
 import { FIELDS, applyChanges, diff, getCard, listCards, readChangeset, saveChangeset, stagingLinks, type Change, type LocValue } from "./teamCards";
 
 export type ToolResult = { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[]; isError?: boolean };
@@ -344,6 +345,22 @@ ${SEO_WRITE_RECIPE}`);
       console.log(`[connector] ${actor} copied team card ${id} to staging: ${r.ok}`);
       const lines = r.steps.map((s) => `${s.ok ? "✓" : "✗"} ${s.step}${s.detail ? ` (${s.detail})` : ""}${s.link ? ` ${s.link}` : ""}`);
       return text(`${r.ok ? "Done" : "Finished with issues"}\n${lines.join("\n")}`, !r.ok);
+    },
+  },
+  {
+    name: "sitemap_status",
+    annotations: { title: "Sitemap sync status (Figma ↔ tool ↔ staging)", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description: "Shows a campaign's sitemap sync state: staging pages with their modules and synced texts, the last Figma plugin report and the open differences (Figma newer, CMS newer, conflicts). Campaign key: sin.",
+    inputSchema: { type: "object", properties: { campaign: { type: "string", description: "Campaign key, default sin" } } },
+    async run(args) {
+      try {
+        const s = await sitemapStatus(String(args.campaign ?? "sin"));
+        const pages = s.pages.map((p) => `- /${p.url} (${p.id}) · ${p.blocks.length} modules · ${p.blocks.reduce((n, b) => n + b.fields.length, 0)} texts`).join("\n");
+        const diffs = s.diffs.filter((d) => d.state !== "missing-in-figma").slice(0, 40).map((d) => `- ${d.state} · /${d.page} · ${d.block} · ${d.layer}: figma=${JSON.stringify(d.figma)} cms=${JSON.stringify(d.cms)}`).join("\n");
+        return text(`${s.campaign.name}: ${s.pages.length} pages, ${s.inSync}/${s.total} texts in sync, last sync ${s.syncedAt ?? "never"}, Figma report ${s.figma?.reportedAt ?? "none"}, ${s.pending} pending for Figma.\n${pages}\n\nDifferences:\n${diffs || "none"}`);
+      } catch (e) {
+        return text(e instanceof Error ? e.message : "failed", true);
+      }
     },
   },
   {
