@@ -105,8 +105,9 @@ function propKey(inst, layer) { var props = inst.componentProperties || {}; for 
 // every visible layer with that name gets the text (some modules repeat a layer, e.g. Description)
 function allTextLayers(inst, layer) {
   var first = findLayer(inst, layer, "TEXT"); if (!first) return [];
-  if (layer.indexOf(">") >= 0 || layer.indexOf("|") >= 0) return [first]; // scoped: exactly that layer
-  var out = inst.findAll(function (x) { return x.type === "TEXT" && x.name === first.name && shown(x, inst); });
+  if (layer.indexOf("|") >= 0) return [first];
+  var parts = layer.split(">"), scope = parts.length > 1 ? parts[0] : null;
+  var out = inst.findAll(function (x) { return x.type === "TEXT" && x.name === first.name && shown(x, inst) && (!scope || hasAncestor(x, inst, scope)); });
   return out.length ? out : [first];
 }
 async function setText(inst, layer, value) {
