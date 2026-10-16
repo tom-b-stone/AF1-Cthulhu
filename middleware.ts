@@ -5,7 +5,7 @@ import { getToken } from "next-auth/jwt";
 // never by a browser with a session cookie. It authenticates itself with the
 // per-user token in its path (lib/connectorTokens.ts).
 // /p/<slug> is the public photobook share page (QR code on the printed book).
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/mcp", "/api/figma", "/p", "/zine"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/mcp", "/api/figma", "/p", "/zine", "/af1-live"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
