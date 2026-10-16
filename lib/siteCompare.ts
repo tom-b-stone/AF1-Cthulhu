@@ -8,6 +8,8 @@
 //   focal point differs            → staging media focal point updated
 //   engagement incomplete          → engagement content copied again from production
 //   text empty on staging          → production text written
+//   placeholder (lorem) on staging → production text written ("" if production has none)
+// Also reported (no auto-fix): texts that differ, texts only on staging.
 import { MEDIA_KEYS, isId, prod, project, stg, withIds, hasDe } from "./teamCardCopy";
 import { kvGet, kvSet } from "./kv";
 import { stagingRequest } from "./payloadClient";
@@ -18,7 +20,7 @@ type Loc = "en" | "de";
 export type Issue = {
   page: string;
   where: string; // human readable path
-  kind: "image-missing" | "image-file" | "image-focal" | "engagement" | "badge" | "empty-text" | "items" | "block-missing";
+  kind: "image-missing" | "image-file" | "image-focal" | "engagement" | "badge" | "empty-text" | "placeholder" | "text-differs" | "extra-text" | "items" | "block-missing";
   detail: string;
   fix?: Fix;
 };
@@ -31,6 +33,9 @@ type Fix =
 type Target = { collection: "pages" | "engagements" | "badges"; id: string; locale: Loc; path: (string | number)[] };
 
 const SKIP = new Set(["id", "createdAt", "updatedAt", "createdBy", "updatedBy", "internalId", "sortingTime", "_status", "slug", "generateSlug", "doc", "loyaltyId", "contentTags", "relationTo", "value", "url", "breadcrumbs", "parent", "meta", "loggedOutBadge", "mechanics", "badge", "engagement", "folder", "partnerTag", "raceTag", "season", "campaignTitle", "badgeType", "publishedAt", "blockName", "anchorId"]);
+
+const LOREM = /lorem ipsum|dolor sit amet|consectetu(?:e)?r adipisc|consectetuer/i;
+const richText = (v: Json): string => (!v || typeof v !== "object" ? "" : typeof v.text === "string" ? v.text : Array.isArray(v.children) ? v.children.map(richText).join(" ") : v.root ? richText(v.root) : "");
 
 type Ctx = { media: Map<string, Json>; stgMedia: Map<string, Json>; seenEng: Set<string>; seenBadge: Set<string>; issues: Issue[]; page: string; deadline: number };
 
@@ -100,12 +105,28 @@ async function walk(ctx: Ctx, p: Json, s: Json, path: (string | number)[], targe
     }
     if (SKIP.has(k)) continue;
     if (typeof pv === "string") {
-      if (pv.trim() && (typeof sv !== "string" || !sv.trim())) ctx.issues.push({ page: ctx.page, where: w, kind: "empty-text", detail: `empty on staging (${target.locale.toUpperCase()}): "${pv.slice(0, 60)}"`, fix: { type: "text", value: pv, target: { ...target, path: here } } });
+      const L = target.locale.toUpperCase();
+      if (typeof sv === "string" && LOREM.test(sv) && !LOREM.test(pv)) ctx.issues.push({ page: ctx.page, where: w, kind: "placeholder", detail: `placeholder text on staging (${L}): "${sv.slice(0, 60)}" → production: "${pv.slice(0, 60)}"`, fix: { type: "text", value: pv, target: { ...target, path: here } } });
+      else if (pv.trim() && (typeof sv !== "string" || !sv.trim())) ctx.issues.push({ page: ctx.page, where: w, kind: "empty-text", detail: `empty on staging (${L}): "${pv.slice(0, 60)}"`, fix: { type: "text", value: pv, target: { ...target, path: here } } });
+      else if (!pv.trim() && typeof sv === "string" && sv.trim()) ctx.issues.push({ page: ctx.page, where: w, kind: "extra-text", detail: `only on staging (${L}), empty on production: "${sv.slice(0, 60)}"` });
+      else if (typeof sv === "string" && pv.trim() && sv.trim() && pv.trim() !== sv.trim()) ctx.issues.push({ page: ctx.page, where: w, kind: "text-differs", detail: `differs (${L}): staging "${sv.slice(0, 50)}" · production "${pv.slice(0, 50)}"` });
       continue;
     }
     if (pv && typeof pv === "object") {
-      if ((pv as Json).root) continue; // rich text: skip (links differ by design)
+      if ((pv as Json).root) {
+        // rich text: links differ by design, but placeholders must not
+        const st = richText(sv);
+        if (LOREM.test(st) && !LOREM.test(richText(pv))) ctx.issues.push({ page: ctx.page, where: w, kind: "placeholder", detail: `placeholder rich text on staging (${target.locale.toUpperCase()}): "${st.slice(0, 60)}"` });
+        continue;
+      }
       await walk(ctx, pv, sv, here, target, w);
+    }
+  }
+  // keys only on staging (production never had them): placeholders there are copy leftovers
+  if (s && typeof s === "object" && !Array.isArray(s)) {
+    for (const [k, sv] of Object.entries(s)) {
+      if (k in p || SKIP.has(k) || typeof sv !== "string" || !LOREM.test(sv)) continue;
+      ctx.issues.push({ page: ctx.page, where: `${where}${where ? "." : ""}${k}`, kind: "placeholder", detail: `placeholder text on staging (${target.locale.toUpperCase()}), not set on production: "${sv.slice(0, 60)}"`, fix: { type: "text", value: "", target: { ...target, path: [...path, k] } } });
     }
   }
 }
@@ -287,7 +308,7 @@ export async function repairCampaign(issues: Issue[], budgetMs = 45000) {
         const e = patches.get(k) ?? { target: { collection: f.target.collection, id: f.target.id, locale: f.target.locale }, sets: [] };
         e.sets.push({ path: f.target.path, value: f.value });
         patches.set(k, e);
-        done.push(`${it.page} ${it.where}: text filled`);
+        done.push(`${it.page} ${it.where}: ${it.kind === "placeholder" ? "placeholder replaced" : "text filled"}`);
       } else if (f.type === "engagement") {
         const all = await prod(`/engagements/${f.prodId}?depth=0&locale=all&fallback-locale=none`);
         const { loggedOutBadge: _l, ...rest } = all;
