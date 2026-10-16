@@ -161,7 +161,7 @@ export async function copyMedia(prodId: string, cache: Map<string, string>, step
   return id;
 }
 
-export const MEDIA_KEYS = new Set(["media", "image", "badgeImage", "badgeBackImage", "imagePreview", "video", "poster", "thumbnail", "dialogImage", "mobileImage", "desktopImage", "backgroundImage", "logo", "icon"]);
+export const MEDIA_KEYS = new Set(["media", "image", "assetId", "postSubmissionMedia", "asset", "mobileMedia", "badgeImage", "badgeBackImage", "imagePreview", "video", "poster", "thumbnail", "dialogImage", "mobileImage", "desktopImage", "backgroundImage", "logo", "icon"]);
 
 // Walks a document and swaps every production media id for its staging copy.
 export async function remapMedia(v: Json, cache: Map<string, string>, steps: CopyStep[]): Promise<Json> {
