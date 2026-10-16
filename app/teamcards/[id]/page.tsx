@@ -220,7 +220,7 @@ export default function EditCard() {
           <textarea
             id={`f-${f.key}`}
             className="input"
-            rows={f.kind === "textarea" ? 3 : 1}
+            rows={Math.max(f.kind === "textarea" ? 3 : 1, Math.ceil(String(v ?? "").length / 70))}
             style={{ width: "100%", resize: "vertical", fontSize: 14, lineHeight: 1.45 }}
             value={String(v ?? "")}
             onFocus={() => pick(f.key)}

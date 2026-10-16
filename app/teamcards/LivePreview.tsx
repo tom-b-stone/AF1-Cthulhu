@@ -38,7 +38,7 @@ export function build(view: string, vals: Vals, lang: Loc, card: PreviewCard) {
     return `<${tag} class="${cls}" data-k="${k}"${opt ? " data-opt" : ""} data-ph="${esc(ph)}"${opt && !v ? " hidden" : ""}>${esc(v)}</${tag}>`;
   };
   const img = abs(card.imageUrl) || BACKSIDE;
-  const engImg = abs(card.engagementImageUrl) || img;
+  const engImg = abs(card.engagementImageUrl);
   const race = esc(card.raceLabel ? `${card.raceLabel}` : "Audi Revolut F1® Team");
   const options = card.preview?.options?.[lang]?.length ? card.preview.options[lang] : card.preview?.options?.en ?? [];
 
@@ -68,7 +68,7 @@ export function build(view: string, vals: Vals, lang: Loc, card: PreviewCard) {
   const widget = (inner: string, dim = false) => `
     <section class="af1-container"><div class="widget-grid [--grid-max-col-count:2]!"><div class="@container relative rounded-sm col-span-2 row-span-3 bg-af1-graphite"><div class="@container-[size] aspect-widget-portrait"><div class="h-full">
       <div class="relative w-full h-full overflow-hidden rounded-sm">
-        <img alt="" class="object-cover" style="position:absolute;height:100%;width:100%;inset:0" src="${esc(engImg)}">
+        ${engImg ? `<img alt="" class="object-cover" style="position:absolute;height:100%;width:100%;inset:0" src="${esc(engImg)}">` : ""}
         <div style="background:linear-gradient(0deg, rgba(0, 0, 0, ${dim ? 0.7 : 0.4}) 0%, rgba(0, 0, 0, ${dim ? 0.7 : 0.4}) 100%)" class="absolute z-0 w-full h-full top-0 left-0 rounded-sm"></div>
         <div class="relative z-10 flex flex-1 p-space-150 w-full h-full flex-col justify-between">${inner}</div>
       </div>
@@ -86,8 +86,8 @@ export function build(view: string, vals: Vals, lang: Loc, card: PreviewCard) {
       <div class="flex flex-col items-center px-space-350 text-center">
         ${T("modCategory", "p", "text-copy-3 text-weight-normal pb-space-150", true)}
         ${T("modHeadline", "h2", "text-headline-1 text-weight-normal pb-space-150", false, "Headline")}
-        ${T("modSubline", "p", "text-headline-4 text-weight-normal pb-space-150", true)}
-        ${T("modCopy", "p", "text-copy-2 text-weight-normal", false, "Copy")}
+        ${T("modSubline", "p", "text-copy-2 text-weight-normal pb-space-150", true)}
+        ${T("modCopy", "p", "text-copy-2 text-weight-normal", true)}
       </div>
       <div class="mt-space-400 w-full">${coin("back")}</div>
       <div class="mt-space-400">${question}</div>
