@@ -29,13 +29,13 @@ type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type CopyStep = { step: string; ok: boolean; detail?: string; link?: string };
 export type CopyResult = { ok: boolean; steps: CopyStep[]; badgeId?: string; engagementId?: string; pageId?: string };
 
-async function prod(path: string): Promise<Json> {
+export async function prod(path: string): Promise<Json> {
   const res = await fetch(`${PROD_API}${path}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`production ${path.split("?")[0]}: ${res.status}`);
   return res.json();
 }
 
-async function stg(path: string, init: RequestInit = {}): Promise<Json> {
+export async function stg(path: string, init: RequestInit = {}): Promise<Json> {
   const res = await stagingRequest(path, init);
   const text = await res.text();
   if (!res.ok) throw new Error(`staging ${init.method ?? "GET"} ${path.split("?")[0]}: ${res.status} ${text.slice(0, 300)}`);
@@ -43,7 +43,7 @@ async function stg(path: string, init: RequestInit = {}): Promise<Json> {
 }
 
 // ---- locale helpers -------------------------------------------------------
-const isLoc = (v: unknown): v is Record<string, unknown> =>
+export const isLoc = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0 && Object.keys(v).every((k) => k === "en" || k === "de");
 
 // internalId is the key the loyalty backend registers a document under; a
@@ -72,7 +72,7 @@ export function project(v: Json, loc: Loc): Json {
 
 // Array rows and blocks keep their ids between the EN write and the DE
 // write, otherwise Payload treats DE rows as new ones.
-function withIds(target: Json, saved: Json): Json {
+export function withIds(target: Json, saved: Json): Json {
   if (Array.isArray(target) && Array.isArray(saved)) return target.map((t, i) => withIds(t, saved[i]));
   if (target && typeof target === "object" && saved && typeof saved === "object" && !Array.isArray(target)) {
     const out: Json = { ...target };
@@ -83,7 +83,7 @@ function withIds(target: Json, saved: Json): Json {
   return target;
 }
 
-const hasDe = (v: Json): boolean => {
+export const hasDe = (v: Json): boolean => {
   if (isLoc(v)) return v.de !== undefined && v.de !== null && v.de !== "";
   if (Array.isArray(v)) return v.some(hasDe);
   if (v && typeof v === "object") return Object.values(v).some(hasDe);
@@ -92,7 +92,7 @@ const hasDe = (v: Json): boolean => {
 
 // Create or update a document in both locales. `find` = where query for
 // an existing copy (idempotency).
-async function upsertLocalised(collection: string, all: Json, findWhere: string, steps: CopyStep[], label: string): Promise<string> {
+export async function upsertLocalised(collection: string, all: Json, findWhere: string, steps: CopyStep[], label: string): Promise<string> {
   const found = await stg(`/${collection}?${findWhere}&limit=10&depth=0&sort=-createdAt`);
   const en = project(all, "en");
   // reuse an earlier copy when it can still be updated; a broken one (unknown
@@ -118,21 +118,28 @@ async function upsertLocalised(collection: string, all: Json, findWhere: string,
 }
 
 // ---- media ---------------------------------------------------------------
-let folderId: string | null | undefined;
+const folderIds = new Map<string, string | null>();
+let mediaFolderName = "Team Cards";
+export function setMediaFolder(name: string) {
+  mediaFolderName = name;
+}
 async function teamCardFolder(): Promise<string | null> {
-  if (folderId !== undefined) return folderId;
+  const name = mediaFolderName;
+  if (folderIds.has(name)) return folderIds.get(name)!;
+  let id: string | null = null;
   try {
     const all = await listMediaFolders();
-    folderId = all.find((f) => f.name === "Team Cards" && !f.parent)?.id ?? (await createMediaFolder("Team Cards", null)).id;
+    id = all.find((f) => f.name === name && !f.parent)?.id ?? (await createMediaFolder(name, null)).id;
   } catch {
-    folderId = null;
+    id = null;
   }
-  return folderId;
+  folderIds.set(name, id);
+  return id;
 }
 
-const isId = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{24}$/.test(v);
+export const isId = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{24}$/.test(v);
 
-async function copyMedia(prodId: string, cache: Map<string, string>, steps: CopyStep[]): Promise<string> {
+export async function copyMedia(prodId: string, cache: Map<string, string>, steps: CopyStep[]): Promise<string> {
   if (cache.has(prodId)) return cache.get(prodId)!;
   const m = await prod(`/media/${prodId}?depth=0&locale=en`);
   const there = await stg(`/media?where[filename][equals]=${encodeURIComponent(m.filename)}&limit=1&depth=0`);
@@ -154,10 +161,10 @@ async function copyMedia(prodId: string, cache: Map<string, string>, steps: Copy
   return id;
 }
 
-const MEDIA_KEYS = new Set(["media", "image", "badgeImage", "badgeBackImage", "imagePreview", "video", "poster", "thumbnail"]);
+export const MEDIA_KEYS = new Set(["media", "image", "badgeImage", "badgeBackImage", "imagePreview", "video", "poster", "thumbnail", "dialogImage", "mobileImage", "desktopImage", "backgroundImage", "logo", "icon"]);
 
 // Walks a document and swaps every production media id for its staging copy.
-async function remapMedia(v: Json, cache: Map<string, string>, steps: CopyStep[]): Promise<Json> {
+export async function remapMedia(v: Json, cache: Map<string, string>, steps: CopyStep[]): Promise<Json> {
   if (Array.isArray(v)) {
     const out = [];
     for (const x of v) out.push(await remapMedia(x, cache, steps));
@@ -198,7 +205,7 @@ async function badgeType(t: Json, steps: CopyStep[]): Promise<string | undefined
   return doc.id;
 }
 
-async function stagingPageByUrl(url: string, slug: string): Promise<Json | null> {
+export async function stagingPageByUrl(url: string, slug: string): Promise<Json | null> {
   const byUrl = await stg(`/pages?where[url][equals]=${encodeURIComponent(url)}&limit=1&depth=0&draft=true`);
   if (byUrl.docs?.[0]) return byUrl.docs[0];
   const bySlug = await stg(`/pages?where[slug][equals]=${encodeURIComponent(slug)}&limit=5&depth=0&draft=true`);
@@ -206,11 +213,11 @@ async function stagingPageByUrl(url: string, slug: string): Promise<Json | null>
 }
 
 // ---- main -----------------------------------------------------------------
-export type CopyOptions = { badgeId: string; keepDraft?: boolean; withPageBlock?: boolean; targetPageId?: string };
+export type CopyOptions = { badgeId: string; keepDraft?: boolean; withPageBlock?: boolean; targetPageId?: string; media?: Map<string, string> };
 
 export async function copyTeamCard(opts: CopyOptions): Promise<CopyResult> {
   const steps: CopyStep[] = [];
-  const media = new Map<string, string>();
+  const media = opts.media ?? new Map<string, string>();
   const res: CopyResult = { ok: false, steps };
   try {
     const b = await prod(`/badges/${opts.badgeId}?depth=1&locale=all&fallback-locale=none`);
@@ -252,6 +259,13 @@ export async function copyTeamCard(opts: CopyOptions): Promise<CopyResult> {
       if (!cta.doc) return cta;
       const one = (d: Json) => (d?.value?.id && pageMap.has(d.value.id) ? { relationTo: d.relationTo, value: pageMap.get(d.value.id) } : undefined);
       const doc = isLoc(cta.doc) ? Object.fromEntries(Object.entries(cta.doc).map(([l, d]) => [l, one(d)])) : one(cta.doc);
+      const missing = isLoc(doc) ? Object.values(doc).every((x) => !x) : !doc;
+      if (missing) {
+        // target not on staging: link to the production page instead
+        const v = (isLoc(cta.doc) ? (cta.doc as Json).en : cta.doc)?.value;
+        const { doc: _d, ...rest } = cta;
+        return { ...rest, linkType: "external", url: `${PROD_SITE}/en/${v?.url ?? ""}` };
+      }
       return { ...cta, doc };
     };
 

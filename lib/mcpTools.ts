@@ -18,6 +18,7 @@ import { learnPerson } from "./learnRun";
 import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 import { copyTeamCard } from "./teamCardCopy";
+import { jobSummary, readJob, startJob, stepJob } from "./siteCopy";
 import { FIELDS, applyChanges, diff, getCard, listCards, readChangeset, saveChangeset, stagingLinks, type Change, type LocValue } from "./teamCards";
 
 export type ToolResult = { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[]; isError?: boolean };
@@ -331,6 +332,37 @@ ${SEO_WRITE_RECIPE}`);
     },
   },
   {
+    name: "sitecopy_run",
+    annotations: { title: "Copy production pages to staging (resumable)", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description:
+      "Copies a set of PRODUCTION pages (a campaign) to the STAGING CMS with everything they reference (images, Team Cards with engagements, engagements, content tags, links between the pages) and publishes them on staging. Start with name + pageIds (production page ids); continue with jobId until it says finished (each call works ~40 s). Production is only read.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        jobId: { type: "string", description: "Continue this job" },
+        name: { type: "string", description: "Job name for a new job, e.g. SIN Campaign" },
+        pageIds: { type: "array", items: { type: "string" }, description: "Production page ids for a new job" },
+        folder: { type: "string", description: "Staging media folder for copied images (default: job name)" },
+      },
+    },
+    async run(args, actor) {
+      try {
+        let id = String(args.jobId ?? "");
+        if (!id) {
+          const ids = ((args.pageIds as string[]) ?? []).map(String).filter((x) => /^[a-f0-9]{24}$/.test(x));
+          if (!ids.length) return text("pageIds required for a new job", true);
+          const j = await startJob(String(args.name ?? "Site copy"), ids, String(args.folder ?? args.name ?? "Site copy"));
+          id = j.id;
+        } else if (!(await readJob(id))) return text("job not found", true);
+        const j = await stepJob(id);
+        console.log(`[connector] ${actor} sitecopy ${id}: ${jobSummary(j)}`);
+        return text(`${jobSummary(j)}\nLast log:\n${j.log.slice(-25).join("\n")}`);
+      } catch (e) {
+        return text(e instanceof Error ? e.message : "failed", true);
+      }
+    },
+  },
+  {
     name: "teamcard_list",
     annotations: { title: "List Team Cards", readOnlyHint: true, openWorldHint: false },
     description: "Team Cards in the configurator: id, name, status, mechanic, reward type, where the module sits, staging links. Start here for questions or bulk changes.",
@@ -395,6 +427,23 @@ ${SEO_WRITE_RECIPE}`);
     },
   },
 ];
+
+// One generic entry point so new actions work without reconnecting the
+// connector (claude.ai caches the tool list): ktulu_run {action, args}
+// runs any tool above by name.
+TOOLS.push({
+  name: "ktulu_run",
+  annotations: { title: "Run an AF1 Tools action", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  description: "Runs any AF1 Tools action by name with its arguments, including actions added after the connector was connected. action = tool name (e.g. sitecopy_run), args = its arguments. Call with action \"list\" to see all actions.",
+  inputSchema: { type: "object", required: ["action"], properties: { action: { type: "string" }, args: { type: "object" } } },
+  async run(args, actor) {
+    const name = String(args.action ?? "");
+    if (name === "list") return text(TOOLS.filter((t) => t.name !== "ktulu_run").map((t) => `${t.name}: ${t.description.slice(0, 160)}`).join("\n"));
+    const t = TOOLS.find((x) => x.name === name && x.name !== "ktulu_run");
+    if (!t) return text(`Unknown action ${name}. Call with action "list".`, true);
+    return t.run((args.args as Record<string, unknown>) ?? {}, actor);
+  },
+});
 
 export function findTool(name: string): ToolDef | undefined {
   return TOOLS.find((t) => t.name === name);
