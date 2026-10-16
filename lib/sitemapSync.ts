@@ -26,7 +26,7 @@ import { listContentTags, listMediaFolders, stagingRequest, uploadMedia } from "
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Json = any;
 
-export type Group = { key: string; title: string; urls: string[]; card: boolean; note?: string };
+export type Group = { key: string; title: string; urls: string[]; card: boolean; note?: string; col: "left" | "center" | "right" };
 export type Campaign = {
   key: string;
   name: string;
@@ -49,17 +49,17 @@ export const CAMPAIGNS: Record<string, Campaign> = {
     mediaFolder: /sin|singapore/i,
     contentTag: /singapore gp/i,
     groups: [
-      { key: "hub", title: "Campaign Hub", urls: [S("")], card: false, note: "Entry from paid social. Shows every card, the Vegas raffle and the map." },
-      { key: "vegas", title: "Vegas Grand Prize", urls: [S("vegas-grand-prize-2026")], card: true, note: "Raffle card · Page view on the Hub" },
-      { key: "adidas-drop", title: "adidas Singapore Special Drop", urls: [S("adidas-singapore-special-drop"), S("adidas-singapore-special-drop/burnt-ends")], card: true, note: "Hot or Not · QR code at Burnt Ends & adidas pop-up" },
-      { key: "helmets", title: "Mini Helmets", urls: [S("mini-helmets"), S("mini-helmets/birds-of-paradise")], card: true, note: "Hot or Not · QR code at Birds of Paradise" },
-      { key: "mascot", title: "Spot the Mascot", urls: [S("spot-the-driver")], card: true, note: "Page view · QR code on the mascot, hotspot on the map" },
-      { key: "livery", title: "Reveal the Livery", urls: [S("reveal-the-livery"), S("ar-experience")], card: true, note: "Reveal · AR experience (JIG)" },
-      { key: "rs5", title: "Audi RS 5 · Singapore's Most Wanted", urls: [S("audi-rs5-singapores-most-wanted"), S("audi-rs5-singapores-most-wanted/funan-mall")], card: true, note: "Hot or Not · QR code at Funan Mall" },
-      { key: "run", title: "adidas Community Race", urls: [S("adidas-5km-run"), S("adidas-5km-run/done")], card: true, note: "Page view with parameter · QR code in the goodie bag, email link" },
-      { key: "paulaner", title: "Paulaner Pro", urls: [S("paulaner-pro"), S("paulaner-pro/brewery")], card: true, note: "Survey · QR code in the Paulaner Bräuhaus" },
-      { key: "revolut", title: "Revolut Titanium", urls: [S("revolut-titanium")], card: true, note: "Hotspots · online only" },
-      { key: "onground", title: "On Ground Activations", urls: [S("singapore-activations")], card: false, note: "Info page, reached from the map CTA" },
+      { key: "hub", title: "Campaign Hub", urls: [S("")], card: false, col: "center", note: "Entry from paid social. Shows every card, the Vegas raffle and the map." },
+      { key: "vegas", title: "Vegas Grand Prize", urls: [S("vegas-grand-prize-2026")], card: true, col: "center", note: "Raffle card · Page view on the Hub" },
+      { key: "adidas-drop", title: "adidas Singapore Special Drop", urls: [S("adidas-singapore-special-drop"), S("adidas-singapore-special-drop/burnt-ends")], card: true, col: "left", note: "Hot or Not · QR code at Burnt Ends & adidas pop-up" },
+      { key: "helmets", title: "Mini Helmets", urls: [S("mini-helmets"), S("mini-helmets/birds-of-paradise")], card: true, col: "left", note: "Hot or Not · QR code at Birds of Paradise" },
+      { key: "mascot", title: "Spot the Mascot", urls: [S("spot-the-driver")], card: true, col: "left", note: "Page view · QR code on the mascot, hotspot on the map" },
+      { key: "livery", title: "Reveal the Livery", urls: [S("reveal-the-livery"), S("ar-experience")], card: true, col: "left", note: "Reveal · AR experience (JIG)" },
+      { key: "rs5", title: "Audi RS 5 · Singapore's Most Wanted", urls: [S("audi-rs5-singapores-most-wanted"), S("audi-rs5-singapores-most-wanted/funan-mall")], card: true, col: "right", note: "Hot or Not · QR code at Funan Mall" },
+      { key: "run", title: "adidas Community Race", urls: [S("adidas-5km-run"), S("adidas-5km-run/done")], card: true, col: "right", note: "Page view with parameter · QR code in the goodie bag, email link" },
+      { key: "paulaner", title: "Paulaner Pro", urls: [S("paulaner-pro"), S("paulaner-pro/brewery")], card: true, col: "right", note: "Survey · QR code in the Paulaner Bräuhaus" },
+      { key: "revolut", title: "Revolut Titanium", urls: [S("revolut-titanium")], card: true, col: "right", note: "Hotspots · online only" },
+      { key: "onground", title: "On Ground Activations", urls: [S("singapore-activations")], card: false, col: "center", note: "Info page, reached from the map CTA" },
     ],
   },
 };

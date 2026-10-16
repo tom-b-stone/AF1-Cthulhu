@@ -409,21 +409,34 @@ async function build(keys, rebuild) {
   var existing = {};
   page.children.forEach(function (s) { var d = s.type === "SECTION" ? readData(s) : null; if (d && d.type === "group") existing[d.key] = s; });
   if (rebuild) keys.forEach(function (k) { if (existing[k]) { existing[k].remove(); delete existing[k]; } });
-  var ov = overviewSection(page);
-  var y = ov ? ov.y + ov.height + 600 : 3000;
-  var x = 0, built = [];
-  // stack the activation sections under the overview, in campaign order
+  var built = [];
   for (var i = 0; i < state.data.groups.length; i++) {
     var g = state.data.groups[i];
-    if (existing[g.key]) { existing[g.key].x = x; existing[g.key].y = y; y += existing[g.key].height + 400; continue; }
-    if (keys.indexOf(g.key) < 0) continue;
-    try { var s = await buildGroup(g, x, y); built.push(s); y += s.height + 400; }
+    if (existing[g.key] || keys.indexOf(g.key) < 0) continue;
+    try { var s = await buildGroup(g, -20000, 0); built.push(s); existing[g.key] = s; }
     catch (e) { log("⚠ " + g.title + " not built: " + (e && e.message ? e.message : e)); if (/Font not installed/.test(String(e && e.message))) break; }
   }
+  arrange(page, existing);
   var links = await linkOverview(page);
   if (built.length) figma.viewport.scrollAndZoomIntoView(built);
   log("Built " + built.length + " activation(s), linked " + links + " overview card(s). Recording the state …");
   await sync({});
+}
+
+// Same layout as the sitemap: left activations, hub column, right activations,
+// the overview on top of the hub column.
+function arrange(page, by) {
+  var ov = overviewSection(page), GAP = 600;
+  var cols = { left: [], center: [], right: [] };
+  state.data.groups.forEach(function (g) { if (by[g.key]) cols[g.col || "center"].push(by[g.key]); });
+  var w = ["left", "center", "right"].map(function (c) { return cols[c].reduce(function (m, s) { return Math.max(m, s.width); }, 0); });
+  var xs = [0, w[0] + GAP, w[0] + GAP + w[1] + GAP];
+  if (ov) { ov.x = xs[1] + w[1] / 2 - ov.width / 2; ov.y = 0; }
+  var top = (ov ? ov.y + ov.height : 0) + 1000;
+  ["left", "center", "right"].forEach(function (c, i) {
+    var y = top;
+    cols[c].forEach(function (s) { s.x = i === 0 ? xs[0] + w[0] - s.width : i === 1 ? xs[1] + (w[1] - s.width) / 2 : xs[2]; s.y = y; y += s.height + GAP; });
+  });
 }
 
 async function fixFonts() {
