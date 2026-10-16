@@ -139,9 +139,9 @@ function blockFields(pageId: string, s: Json): Field[] {
   // the standard texts of every module; empty ones hide the sample text
   for (const [p, layer] of [
     ["category", "Kicker"],
-    ["headline", "Headline"],
-    ["subline", "Subline"],
-    ["copy", "Copy"],
+    ["headline", t === "gallery" ? "Typography/Headline>text" : "Headline"],
+    ["subline", t === "badge-engagement-teaser" ? "Description" : "Subline"],
+    ["copy", t === "gallery" ? "Typography/Copy>text" : "Copy"],
   ] as const) {
     if (typeof s[p] === "string") text(p, layer, s[p]);
     else text(`_figma.${p}`, layer, "", true);

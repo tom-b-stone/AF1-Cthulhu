@@ -100,10 +100,20 @@ function findLayer(inst, spec, kind) {
 }
 function propKey(inst, layer) { var props = inst.componentProperties || {}; for (var k in props) if (props[k].type === "TEXT" && k.split("#")[0] === layer) return k; return null; }
 
+// every visible layer with that name gets the text (some modules repeat a layer, e.g. Description)
+function allTextLayers(inst, layer) {
+  var first = findLayer(inst, layer, "TEXT"); if (!first) return [];
+  var out = inst.findAll(function (x) { return x.type === "TEXT" && x.name === first.name && shown(x, inst); });
+  return out.length ? out : [first];
+}
 async function setText(inst, layer, value) {
-  var t = findLayer(inst, layer, "TEXT");
+  var many = allTextLayers(inst, layer);
+  if (many.length > 1) { for (var m = 1; m < many.length; m++) await setOne(inst, many[m], value); }
+  return setOne(inst, many[0] || null, value, layer);
+}
+async function setOne(inst, t, value, layer) {
   var v = value === "" ? " " : value;
-  if (!t) { var pk = propKey(inst, layer); if (pk) { var o = {}; o[pk] = v; inst.setProperties(o); return true; } return false; }
+  if (!t) { if (!layer) return false; var pk = propKey(inst, layer); if (pk) { var o = {}; o[pk] = v; inst.setProperties(o); return true; } return false; }
   var ref = t.componentPropertyReferences && t.componentPropertyReferences.characters;
   if (ref) {
     var owner = t.parent;
