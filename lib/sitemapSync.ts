@@ -41,16 +41,17 @@ export const CAMPAIGNS: Record<string, Campaign> = {
 // builds missing pages from these; types without a module become a labelled
 // placeholder frame.
 export const MODULES: Record<string, { key: string; variant?: string; name: string }> = {
-  hero: { key: "5ee339e839dcb119149a0f67fb900b965958f0da", variant: "Position=Text bottom centered, Color Variant=Light, Height=XL", name: "Hero Image Desktop XL" },
-  "single-card-showcase": { key: "5b16f307e24c2273a71bed42d8f0baf2fc58dbc7", variant: "Background=Grey 01", name: "Single Card Showcase" },
-  "badges-grid": { key: "5a8692c17f16afbd94ea9716e184f483fbf51de3", variant: "Background=Chalk, Items=8", name: "Team Cards Grid" },
-  carousel: { key: "a472202a414cb600298f98531f9167a06fc7e274", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01", name: "Carousel" },
-  "carousel-tags": { key: "a472202a414cb600298f98531f9167a06fc7e274", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01", name: "Carousel (tags)" },
-  "call-to-action": { key: "bda814cd828f23d94c33acd3e3bf8dca0a223fbb", variant: "Alignment=Centred, Background=Image, Width=Boxed, Text=Light", name: "Call to Action" },
-  "hot-spot": { key: "d4b790f9da77978870d8ee5d43750f439f2dd5bd", name: "Hotspot" },
-  teaser: { key: "30d2d414d9eda328c7dcc125ac5c0d26ce9ad468", name: "Teaser Big" },
-  gallery: { key: "f74a16f28ec70216258a0e33044806a32849f51e", name: "Gallery Grid" },
-  "badge-engagement-teaser": { key: "098eeeb4e031255abcdc974d6a4030c72a031a46", name: "Badge Engagement Teaser" },
+  // Mobile modules (375 px) – the sitemap is built mobile-only.
+  hero: { key: "92f328fd4f4868c2c96ee2bc66df76f37909f02b", variant: "Position=Text bottom centered, Color Variant=Light, Size=XL", name: "Hero Image Mobile" },
+  "single-card-showcase": { key: "37a990fda306c3ff11d7c56a8a251fa685b60cc4", variant: "Background=Grey 01", name: "Single Card Showcase Mobile" },
+  "badges-grid": { key: "63028e426d41adf48eaf96ba5a717c66a7eb1853", variant: "Background=Chalk, Items=6", name: "Team Cards Grid Mobile" },
+  carousel: { key: "e98001eeafb9f5cc5920c3304af8c30a462fa620", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01", name: "Carousel Mobile" },
+  "carousel-tags": { key: "e98001eeafb9f5cc5920c3304af8c30a462fa620", variant: "Tile Variation=4, State=Unlocked, Ratio=4x5, Background=Grey 01", name: "Carousel Mobile (tags)" },
+  "call-to-action": { key: "918553ca6aa8215213e716b9e9af6d0ea64daa49", variant: "Alignment=Center, Background=Image, Width=Boxed, Text=Light", name: "Call to Action Mobile" },
+  "hot-spot": { key: "b267359bc26e0f4056e099e7db30d3772cbe4707", name: "Hotspot Mobile" },
+  teaser: { key: "291e2a3471c882c11668c7c763b6cc0e96b95b87", name: "Teaser Big Mobile" },
+  gallery: { key: "67bef93065cdc55535cd9b95add968beffebf056", name: "Gallery Grid Mobile" },
+  "badge-engagement-teaser": { key: "680bea534dcfc57a2242dbe732252c4f895e6894", variant: "Background=Chalk", name: "Badge Engagement Teaser Mobile" },
 };
 export const SKIP_BLOCKS = new Set(["spacer"]);
 

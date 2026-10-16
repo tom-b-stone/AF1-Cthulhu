@@ -41,7 +41,7 @@ function collect(page) {
   var all = page.findAll(function (n) { return n.type === "FRAME" || n.type === "INSTANCE"; });
   for (var i = 0; i < all.length; i++) {
     var n = all[i]; var d = readSync(n); if (!d) continue;
-    if (d.type === "page" && n.type === "FRAME" && n.name.indexOf("Desktop") === 0) nodes[d.stagingId] = n.id;
+    if (d.type === "page" && n.type === "FRAME" && (n.name.indexOf("Mobile") === 0 || n.name.indexOf("Desktop") === 0)) nodes[d.stagingId] = n.id;
     if (d.type === "block") {
       blocks[d.pageId + "|" + d.blockId] = n;
       for (var f = 0; f < (d.fields || []).length; f++) {
@@ -53,8 +53,15 @@ function collect(page) {
   return { values: values, nodes: nodes, blocks: blocks };
 }
 
+// Same field, different layer names across modules (mobile showcase: "Button Label").
+var ALIASES = { "Learn more": ["Learn more", "Button Label"], Kicker: ["Kicker", "Category"] };
 function findText(inst, layer) {
-  return inst.findOne(function (x) { return x.type === "TEXT" && x.name === layer; });
+  var names = ALIASES[layer] || [layer];
+  for (var i = 0; i < names.length; i++) {
+    var t = inst.findOne(function (x) { return x.type === "TEXT" && x.name === names[i]; });
+    if (t) return t;
+  }
+  return null;
 }
 
 async function loadFonts(t) {
@@ -122,10 +129,10 @@ async function moduleSet(key) {
 async function placeholder(block) {
   await figma.loadFontAsync({ family: "Inter", style: "Semi Bold" });
   var f = autoLayout("VERTICAL");
-  f.paddingTop = f.paddingBottom = 40; f.paddingLeft = f.paddingRight = 80; f.itemSpacing = 8;
+  f.paddingTop = f.paddingBottom = 32; f.paddingLeft = f.paddingRight = 24; f.itemSpacing = 8;
   f.fills = [{ type: "SOLID", color: { r: 0.88, g: 0.867, b: 0.867 } }];
   var t = figma.createText(); t.fontName = { family: "Inter", style: "Semi Bold" }; t.fontSize = 20;
-  t.characters = block.blockType + " · not in the module library yet"; f.appendChild(t);
+  t.characters = block.blockType + " · not in the module library yet"; f.appendChild(t); t.layoutSizingHorizontal = "FILL"; t.textAutoResize = "HEIGHT";
   return f;
 }
 
@@ -137,9 +144,9 @@ async function buildPage(p, modules, x, y) {
 async function fillPage(sec, p, modules, x, y) { sec.name = "SIN · /" + p.url; sec.x = x; sec.y = y;
   sec.fills = [{ type: "SOLID", color: { r: 0.96, g: 0.949, b: 0.949 } }];
   await figma.loadFontAsync({ family: "Inter", style: "Bold" });
-  var h = figma.createText(); h.fontName = { family: "Inter", style: "Bold" }; h.fontSize = 40; h.characters = p.title + "  ·  /" + p.url; sec.appendChild(h); h.x = 200; h.y = 160;
-  var fr = autoLayout("VERTICAL"); fr.name = "Desktop / page:" + p.url; sec.appendChild(fr);
-  fr.x = 200; fr.y = 280; fr.resize(1440, 100); fr.counterAxisSizingMode = "FIXED"; fr.primaryAxisSizingMode = "AUTO";
+  var h = figma.createText(); h.fontName = { family: "Inter", style: "Bold" }; h.fontSize = 28; h.characters = p.title + "\n/" + p.url; sec.appendChild(h); h.x = 200; h.y = 160;
+  var fr = autoLayout("VERTICAL"); fr.name = "Mobile / page:" + p.url; sec.appendChild(fr);
+  fr.x = 200; fr.y = 280; fr.resize(375, 100); fr.counterAxisSizingMode = "FIXED"; fr.primaryAxisSizingMode = "AUTO";
   fr.setSharedPluginData(NS, "sync", JSON.stringify({ type: "page", url: p.url, stagingId: p.id }));
   for (var i = 0; i < p.blocks.length; i++) {
     var b = p.blocks[i]; var m = modules[b.blockType]; var node;
@@ -158,7 +165,7 @@ async function fillPage(sec, p, modules, x, y) { sec.name = "SIN · /" + p.url; 
       for (var j = 0; j < b.fields.length; j++) { try { await setText(node, b.fields[j].layer, b.fields[j].value); } catch (e) { log("⚠ " + p.url + " " + b.fields[j].layer + ": " + e.message); } }
     }
   }
-  sec.resizeWithoutConstraints(1840, fr.height + 480);
+  sec.resizeWithoutConstraints(775, fr.height + 480);
   return { section: sec, frame: fr };
 }
 
