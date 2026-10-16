@@ -5,7 +5,7 @@
 // when both sides changed the same text.
 import { useEffect, useMemo, useState } from "react";
 
-type Diff = { key: string; pageId: string; page: string; block: string; layer: string; base?: string; cms?: string; figma?: string; state: string };
+type Diff = { key: string; pageId: string; page: string; block: string; layer: string; kind?: string; base?: string; cms?: string; figma?: string; state: string };
 type Page = { id: string; url: string; title: string; updatedAt: string; status: string; blocks: { id: string; blockType: string; hidden: boolean; fields: unknown[] }[] };
 type Status = {
   campaign: { key: string; name: string; figmaFile: string; figmaPage: string };
@@ -69,6 +69,13 @@ export default function Page() {
     }
   }
 
+  const [imported, setImported] = useState<string | null>(null);
+  async function importCards() {
+    setImported("Adding the Singapore cards …");
+    const r = await fetch("/api/sitemap/sin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "import-cards" }) }).then((r) => r.json());
+    setImported(r.error ? r.error : `Card list updated: ${r.added.length} new, ${r.total} cards in total.`);
+  }
+
   async function mint() {
     const r = await fetch("/api/sitemap/token", { method: "POST" }).then((r) => r.json());
     setToken(r.token);
@@ -119,7 +126,11 @@ export default function Page() {
                     <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--border-2)", color: d.state === "conflict" ? "var(--accent)" : undefined }}>{LABEL[d.state]}</span>
                     <span style={{ color: "var(--muted)" }}>/{d.page} · {d.block} · {d.layer}</span>
                   </div>
-                  {d.state === "conflict" ? (
+                  {d.kind === "image" ? (
+                    <div style={{ color: "var(--muted)" }}>Image {d.state === "figma-newer" ? "replaced in Figma, goes to the staging media library" : d.state === "cms-newer" ? "changed in the CMS, Figma loads it with the next plugin run" : "changed on both sides"}.{d.state === "conflict" && (
+                      <span> {(["figma", "cms"] as const).map((side) => (<label key={side} style={{ marginLeft: 10 }}><input type="radio" name={d.key} checked={decisions[d.key] === side} onChange={() => setDecisions({ ...decisions, [d.key]: side })} /> Keep {side === "figma" ? "Figma" : "CMS"}</label>))}</span>
+                    )}</div>
+                  ) : d.state === "conflict" ? (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                       {(["figma", "cms"] as const).map((side) => (
                         <label key={side} style={{ display: "grid", gap: 4, padding: 10, borderRadius: 8, cursor: "pointer", border: `1px solid ${decisions[d.key] === side ? "var(--accent)" : "var(--border)"}` }}>
@@ -185,12 +196,17 @@ export default function Page() {
         </div>
       )}
 
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13 }}>
+        <button className="btn" onClick={() => void importCards()}>Update the card list with the Singapore cards</button>
+        {imported && <span style={{ color: "var(--muted)" }}>{imported}</span>}
+      </div>
+
       <div style={{ display: "grid", gap: 8, fontSize: 13 }}>
         <h2 style={{ margin: 0, fontSize: 16 }}>Figma plugin</h2>
         <ol style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
           <li>Figma desktop → Plugins → Development → Import plugin from manifest → <code>~/projects/AF1-Ktulu/figma-plugin/af1-ktulu-sync/manifest.json</code></li>
           <li>Create your plugin token below and paste it into the plugin once.</li>
-          <li>Open the <a href={figmaLink()} target="_blank" rel="noreferrer">Figma sitemap ↗</a> and run <strong>AF1 Ktulu Sync</strong>: it checks on open, builds missing pages and syncs with one button.</li>
+          <li>Open the <a href={figmaLink()} target="_blank" rel="noreferrer">Figma sitemap ↗</a> and run <strong>AF1 Ktulu Sync</strong>: it checks on open, builds the activations (pages + card journey), and syncs live every 20 seconds while it is open.</li>
         </ol>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button className="btn" onClick={() => void mint()}>{tokenAt ? "Create a new plugin token" : "Figma plugin token"}</button>

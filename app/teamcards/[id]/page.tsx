@@ -155,6 +155,7 @@ export default function EditCard() {
   async function apply() {
     setBusy("Writing to staging…");
     const j = await fetch(`/api/teamcards/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "apply", changes }) }).then((r) => r.json());
+    window.dispatchEvent(new Event("af1:changed"));
     setResult({ pushed: j.pushed ?? [], errors: j.errors ?? (j.error ? [j.error] : []) });
     if (j.card) {
       setCard(j.card);

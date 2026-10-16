@@ -223,3 +223,48 @@ export function stagingLinks(c: CardRecord) {
     page: c.staging.pageId ? `${base}/pages/${c.staging.pageId}` : undefined,
   };
 }
+
+// After Figma (or anything else) wrote to a card's badge on staging.
+export async function reloadCardsByBadge(badgeIds: string[]) {
+  const cards = await listCards();
+  let n = 0;
+  for (let i = 0; i < cards.length; i++) {
+    if (!badgeIds.includes(cards[i].staging.badgeId)) continue;
+    cards[i] = await loadFromStaging(cards[i]);
+    cards[i].log = [{ at: new Date().toISOString(), by: "figma sync", summary: "Updated from Figma via staging" }, ...cards[i].log].slice(0, 50);
+    n++;
+  }
+  if (n) await saveCards(cards);
+  return n;
+}
+
+// Adds (or refreshes) a campaign's Team Cards in the configurator list.
+export async function importCampaignCards(
+  prefix: string,
+  list: { badgeId: string; title: string; rewardType: string; pageId?: string; blockId?: string; engagementId?: string; mechanic?: string; imageId?: string; placement: string }[],
+  raceLabel: string,
+) {
+  const cards = await listCards();
+  const added: string[] = [];
+  let n = cards.filter((c) => c.id.startsWith(prefix + "-")).length;
+  for (const it of list) {
+    let rec = cards.find((c) => c.staging.badgeId === it.badgeId);
+    if (!rec) {
+      n++;
+      rec = { id: `${prefix}-${String(n).padStart(2, "0")}`, name: it.title, status: "Staging", staging: { badgeId: it.badgeId }, values: {}, updatedAt: new Date().toISOString(), log: [{ at: new Date().toISOString(), by: "setup", summary: "Imported from the Singapore campaign on staging" }] };
+      cards.push(rec);
+      added.push(rec.id);
+    }
+    rec.name = it.title;
+    rec.staging = { badgeId: it.badgeId, engagementId: it.engagementId, pageId: it.pageId, blockId: it.blockId };
+    rec.rewardType = it.rewardType;
+    rec.mechanic = it.mechanic ?? rec.mechanic;
+    rec.raceLabel = raceLabel;
+    rec.placement = it.placement;
+    if (it.imageId) rec.imageUrl = `/api/sitemap/media/${it.imageId}`;
+    const fresh = await loadFromStaging(rec).catch(() => rec!);
+    Object.assign(rec, fresh);
+  }
+  await saveCards(cards);
+  return { added, total: cards.length };
+}

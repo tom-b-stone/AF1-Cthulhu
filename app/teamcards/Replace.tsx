@@ -63,6 +63,7 @@ export default function Replace({ cards, onApplied }: { cards: Card[]; onApplied
   async function apply() {
     setBusy(true);
     const j = await fetch("/api/teamcards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "apply", changes }) }).then((r) => r.json());
+    window.dispatchEvent(new Event("af1:changed"));
     setResult({ pushed: j.pushed ?? [], errors: j.errors ?? (j.error ? [j.error] : []) });
     setReview(null);
     setBusy(false);

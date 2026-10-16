@@ -19,7 +19,8 @@ import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 import { copyTeamCard } from "./teamCardCopy";
 import { jobSummary, readJob, startJob, stepJob } from "./siteCopy";
-import { status as sitemapStatus } from "./sitemapSync";
+import { status as sitemapStatus, cardsForConfigurator } from "./sitemapSync";
+import { importCampaignCards } from "./teamCards";
 import { FIELDS, applyChanges, diff, getCard, listCards, readChangeset, saveChangeset, stagingLinks, type Change, type LocValue } from "./teamCards";
 
 export type ToolResult = { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[]; isError?: boolean };
@@ -345,6 +346,23 @@ ${SEO_WRITE_RECIPE}`);
       console.log(`[connector] ${actor} copied team card ${id} to staging: ${r.ok}`);
       const lines = r.steps.map((s) => `${s.ok ? "✓" : "✗"} ${s.step}${s.detail ? ` (${s.detail})` : ""}${s.link ? ` ${s.link}` : ""}`);
       return text(`${r.ok ? "Done" : "Finished with issues"}\n${lines.join("\n")}`, !r.ok);
+    },
+  },
+  {
+    name: "sitemap_import_cards",
+    annotations: { title: "Add a campaign's Team Cards to the card list", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description: "Adds (or refreshes) the Team Cards of a campaign (staging badges, engagements, modules) to the Team Card Configurator list. Campaign key: sin.",
+    inputSchema: { type: "object", properties: { campaign: { type: "string" } } },
+    async run(args, actor) {
+      try {
+        const c = String(args.campaign ?? "sin");
+        const list = await cardsForConfigurator(c);
+        const r = await importCampaignCards(c.toUpperCase(), list, "Singapore");
+        console.log(`[connector] ${actor} imported ${list.length} cards for ${c}`);
+        return text(`${list.length} cards: ${list.map((x) => x.title).join(", ")}. New records: ${r.added.join(", ") || "none"}. List now has ${r.total} cards.`);
+      } catch (e) {
+        return text(e instanceof Error ? e.message : "failed", true);
+      }
     },
   },
   {

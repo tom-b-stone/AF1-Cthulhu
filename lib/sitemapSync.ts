@@ -1,11 +1,15 @@
 // Sitemap sync: keeps one campaign in the same state in Figma, in the AF1
 // Tool and in the staging CMS.
 //
-// What syncs: the English texts of every module (block) on the campaign's
-// pages: category/kicker, headline, subline, copy, CTA labels and carousel
-// item texts. Images, settings and German stay CMS-only for now.
+// What syncs (EN):
+//   page modules : kicker/category, headline, subline, copy, CTA label,
+//                  carousel/list items, images (media ids)
+//   Team Cards   : the badge texts and images shown in the card journey
+//                  (announced, logged out, not earned, earned, back)
+// Rich text (free text) and iFrame URLs are shown in Figma but only change
+// in the CMS (read-only fields).
 //
-// How: three-way compare per field.
+// Three-way compare per field:
 //   base  = the value both sides agreed on at the last sync (KV snapshot)
 //   cms   = staging now (latest draft)
 //   figma = what the Figma plugin last reported (KV), or sends right now
@@ -13,20 +17,28 @@
 // figma changed, cms not   → Figma is newer → write to the CMS
 // cms changed, figma not   → CMS is newer → plugin updates the layer
 // both changed differently → conflict → the person decides
+//
+// Field keys: "<pageId>|<blockId>|<path>" for page modules,
+//             "badge:<badgeId>|card|<path>" for Team Card fields.
 import { kvGet, kvSet } from "./kv";
-import { stagingRequest } from "./payloadClient";
+import { listContentTags, listMediaFolders, stagingRequest, uploadMedia } from "./payloadClient";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Json = any;
 
+export type Group = { key: string; title: string; urls: string[]; card: boolean; note?: string };
 export type Campaign = {
   key: string;
   name: string;
   root: string; // page url prefix on staging
   figmaFile: string;
   figmaPage: string;
+  mediaFolder: RegExp; // staging media folder for images placed in Figma
+  contentTag: RegExp; // content tag for those uploads
+  groups: Group[]; // one activation = one section in Figma
 };
 
+const S = (u: string) => (u ? `unlock-singapore/${u}` : "unlock-singapore");
 export const CAMPAIGNS: Record<string, Campaign> = {
   sin: {
     key: "sin",
@@ -34,14 +46,29 @@ export const CAMPAIGNS: Record<string, Campaign> = {
     root: "unlock-singapore",
     figmaFile: "rGxt5J0qhiK759uEbaKgTO",
     figmaPage: "692:56",
+    mediaFolder: /sin|singapore/i,
+    contentTag: /singapore gp/i,
+    groups: [
+      { key: "hub", title: "Campaign Hub", urls: [S("")], card: false, note: "Entry from paid social. Shows every card, the Vegas raffle and the map." },
+      { key: "vegas", title: "Vegas Grand Prize", urls: [S("vegas-grand-prize-2026")], card: true, note: "Raffle card · Page view on the Hub" },
+      { key: "adidas-drop", title: "adidas Singapore Special Drop", urls: [S("adidas-singapore-special-drop"), S("adidas-singapore-special-drop/burnt-ends")], card: true, note: "Hot or Not · QR code at Burnt Ends & adidas pop-up" },
+      { key: "helmets", title: "Mini Helmets", urls: [S("mini-helmets"), S("mini-helmets/birds-of-paradise")], card: true, note: "Hot or Not · QR code at Birds of Paradise" },
+      { key: "mascot", title: "Spot the Mascot", urls: [S("spot-the-driver")], card: true, note: "Page view · QR code on the mascot, hotspot on the map" },
+      { key: "livery", title: "Reveal the Livery", urls: [S("reveal-the-livery"), S("ar-experience")], card: true, note: "Reveal · AR experience (JIG)" },
+      { key: "rs5", title: "Audi RS 5 · Singapore's Most Wanted", urls: [S("audi-rs5-singapores-most-wanted"), S("audi-rs5-singapores-most-wanted/funan-mall")], card: true, note: "Hot or Not · QR code at Funan Mall" },
+      { key: "run", title: "adidas Community Race", urls: [S("adidas-5km-run"), S("adidas-5km-run/done")], card: true, note: "Page view with parameter · QR code in the goodie bag, email link" },
+      { key: "paulaner", title: "Paulaner Pro", urls: [S("paulaner-pro"), S("paulaner-pro/brewery")], card: true, note: "Survey · QR code in the Paulaner Bräuhaus" },
+      { key: "revolut", title: "Revolut Titanium", urls: [S("revolut-titanium")], card: true, note: "Hotspots · online only" },
+      { key: "onground", title: "On Ground Activations", urls: [S("singapore-activations")], card: false, note: "Info page, reached from the map CTA" },
+    ],
   },
 };
 
-// Library modules (07 / 05-1 design system) per CMS block type. The plugin
-// builds missing pages from these; types without a module become a labelled
-// placeholder frame.
-export const MODULES: Record<string, { key: string; variant?: string; name: string }> = {
-  // Mobile modules (375 px) – the sitemap is built mobile-only.
+// Mobile modules (375 px) per CMS block type. "local" modules are built by the
+// plugin as components in the working file (not in the 07 library).
+export type ModuleDef = { key?: string; variant?: string; local?: string; name: string };
+export const OVERLAY_KEY = "6d6338d5b2a8bdfb03935037a19dec6672f80baa"; // Team_Card_Overlay_Mobile
+export const MODULES: Record<string, ModuleDef> = {
   hero: { key: "92f328fd4f4868c2c96ee2bc66df76f37909f02b", variant: "Position=Text bottom centered, Color Variant=Light, Size=XL", name: "Hero Image Mobile" },
   "single-card-showcase": { key: "37a990fda306c3ff11d7c56a8a251fa685b60cc4", variant: "Background=Grey 01", name: "Single Card Showcase Mobile" },
   "badges-grid": { key: "63028e426d41adf48eaf96ba5a717c66a7eb1853", variant: "Background=Chalk, Items=6", name: "Team Cards Grid Mobile" },
@@ -52,46 +79,20 @@ export const MODULES: Record<string, { key: string; variant?: string; name: stri
   teaser: { key: "291e2a3471c882c11668c7c763b6cc0e96b95b87", name: "Teaser Big Mobile" },
   gallery: { key: "67bef93065cdc55535cd9b95add968beffebf056", name: "Gallery Grid Mobile" },
   "badge-engagement-teaser": { key: "680bea534dcfc57a2242dbe732252c4f895e6894", variant: "Background=Chalk", name: "Badge Engagement Teaser Mobile" },
+  "logged-out-badge-reveal": { key: OVERLAY_KEY, variant: "State=Logged Out", name: "Team Card Overlay · Logged out" },
+  "free-text": { local: "Free Text Mobile", name: "Free Text Mobile" },
+  "list-section": { local: "List Section Mobile", name: "List Section Mobile" },
+  "iframe-embed": { local: "iFrame Mobile", name: "iFrame Mobile" },
 };
 export const SKIP_BLOCKS = new Set(["spacer"]);
 
-// CMS path → Figma text layer name inside the module instance.
-const TOP_FIELDS: [string, string][] = [
-  ["category", "Kicker"],
-  ["headline", "Headline"],
-  ["subline", "Subline"],
-  ["copy", "Copy"],
-];
-const CTA_ARRAYS = ["ctas", "unearnedBadgeCTA"];
-
-export type Field = { path: string; layer: string; value: string };
-export type Block = { id: string; blockType: string; hidden: boolean; name?: string; fields: Field[] };
+export type Field = { key: string; path: string; layer: string; value: string; kind: "text" | "image"; readonly?: boolean };
+export type Block = { id: string; blockType: string; hidden: boolean; name?: string; badge?: string; engagement?: string; bg?: string; fields: Field[] };
 export type SyncPage = { id: string; url: string; title: string; updatedAt: string; status: string; blocks: Block[] };
-export type FieldMap = Record<string, string>; // "<pageId>|<blockId>|<path>" → value
-
-export function fieldsOf(block: Json): Field[] {
-  const out: Field[] = [];
-  for (const [p, layer] of TOP_FIELDS) if (typeof block[p] === "string") out.push({ path: p, layer, value: block[p] });
-  for (const arr of CTA_ARRAYS) {
-    const c = Array.isArray(block[arr]) ? block[arr][0] : null;
-    if (c && typeof c.label === "string") {
-      out.push({ path: `${arr}.0.label`, layer: "Learn more", value: c.label });
-      break;
-    }
-  }
-  if (Array.isArray(block.carouselItems)) {
-    block.carouselItems.slice(0, 8).forEach((it: Json, i: number) => {
-      const ci = it?.carouselImage;
-      if (!ci) return;
-      const n = i + 1;
-      if (typeof ci.headline === "string") out.push({ path: `carouselItems.${i}.carouselImage.headline`, layer: `Tile ${n} · Headline`, value: ci.headline });
-      if (typeof ci.copy === "string") out.push({ path: `carouselItems.${i}.carouselImage.copy`, layer: `Tile ${n} · Copy`, value: ci.copy });
-      const l = ci.contentCtas?.[0]?.label;
-      if (typeof l === "string") out.push({ path: `carouselItems.${i}.carouselImage.contentCtas.0.label`, layer: `Tile ${n} · Link 1`, value: l });
-    });
-  }
-  return out;
-}
+export type CardState = { state: string; label: string; note: string; fields: Field[] };
+export type SyncCard = { badgeId: string; title: string; rewardType: string; isTimebound: boolean; group: string; states: CardState[] };
+export type FieldMap = Record<string, string>;
+export type Model = { pages: SyncPage[]; cards: SyncCard[]; groups: (Group & { badgeId?: string })[]; badges: Record<string, Json> };
 
 async function stg(path: string, init: RequestInit = {}): Promise<Json> {
   const res = await stagingRequest(path, init);
@@ -100,41 +101,199 @@ async function stg(path: string, init: RequestInit = {}): Promise<Json> {
   return text ? JSON.parse(text) : {};
 }
 
-export async function loadPages(c: Campaign): Promise<SyncPage[]> {
-  const where = encodeURIComponent(JSON.stringify({ url: { like: c.root } }));
-  const r = await stg(`/pages?where=${where}&limit=100&depth=0&draft=true&locale=en&fallback-locale=none`);
-  const docs: Json[] = (r.docs ?? []).filter((d: Json) => d.url === c.root || String(d.url ?? "").startsWith(c.root + "/"));
-  return docs
-    .map((d) => ({
-      id: d.id,
-      url: d.url,
-      title: d.title,
-      updatedAt: d.updatedAt,
-      status: d._status,
-      blocks: (d.sections ?? [])
-        .filter((s: Json) => !SKIP_BLOCKS.has(s.blockType))
-        .map((s: Json) => ({ id: s.id, blockType: s.blockType, hidden: s.authRequirement === "HIDDEN", name: s.blockName, fields: fieldsOf(s) })),
-    }))
-    .sort((a, b) => (a.url === c.root ? -1 : b.url === c.root ? 1 : a.url.localeCompare(b.url)));
+const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
+const idOf = (v: Json) => (v && typeof v === "object" ? v.id ?? v.value ?? "" : str(v));
+
+function lexicalText(rt: Json): string {
+  const out: string[] = [];
+  const walk = (n: Json, acc: string[]) => {
+    if (!n) return;
+    if (n.type === "text") acc.push(n.text ?? "");
+    else if (n.type === "linebreak") acc.push("\n");
+    for (const c of n.children ?? []) walk(c, acc);
+  };
+  for (const p of rt?.root?.children ?? []) {
+    const acc: string[] = [];
+    walk(p, acc);
+    out.push(acc.join(""));
+  }
+  return out.join("\n\n").trim();
 }
 
-export const fkey = (pageId: string, blockId: string, path: string) => `${pageId}|${blockId}|${path}`;
+// ---- field extraction per block -------------------------------------------
+function blockFields(pageId: string, s: Json): Field[] {
+  const out: Field[] = [];
+  const k = (path: string) => `${pageId}|${s.id}|${path}`;
+  const text = (path: string, layer: string, value: unknown, readonly = false) => out.push({ key: k(path), path, layer, value: str(value), kind: "text", readonly });
+  const image = (path: string, layer: string, value: unknown) => out.push({ key: k(path), path, layer, value: idOf(value), kind: "image" });
+  const t = s.blockType;
+  if (t === "free-text") {
+    text("content", "Copy", lexicalText(s.content), true);
+    return out;
+  }
+  if (t === "iframe-embed") {
+    text("url", "URL", s.url, true);
+    return out;
+  }
+  if (t === "logged-out-badge-reveal") return out; // card fields come from the badge
+  for (const [p, layer] of [
+    ["category", "Kicker"],
+    ["headline", "Headline"],
+    ["subline", "Subline"],
+    ["copy", "Copy"],
+  ] as const)
+    if (typeof s[p] === "string") text(p, layer, s[p]);
+  for (const arr of ["ctas", "unearnedBadgeCTA"]) {
+    const c = Array.isArray(s[arr]) ? s[arr][0] : null;
+    if (c && typeof c.label === "string") {
+      text(`${arr}.0.label`, "Learn more", c.label);
+      break;
+    }
+  }
+  if (Array.isArray(s.carouselItems))
+    s.carouselItems.slice(0, 4).forEach((it: Json, i: number) => {
+      const ci = it?.carouselImage;
+      if (!ci) return;
+      const n = i + 1;
+      if (typeof ci.headline === "string") text(`carouselItems.${i}.carouselImage.headline`, `Tile ${n} · Headline`, ci.headline);
+      if (typeof ci.copy === "string") text(`carouselItems.${i}.carouselImage.copy`, `Tile ${n} · Copy`, ci.copy);
+      const l = ci.contentCtas?.[0]?.label;
+      if (typeof l === "string") text(`carouselItems.${i}.carouselImage.contentCtas.0.label`, `Tile ${n} · Link 1`, l);
+      if (ci.imagePreview) image(`carouselItems.${i}.carouselImage.imagePreview`, `ImageItem${n}>ImageContainer`, ci.imagePreview);
+    });
+  if (Array.isArray(s.listItems))
+    s.listItems.slice(0, 6).forEach((it: Json, i: number) => {
+      const li = it?.listItem ?? {};
+      text(`listItems.${i}.listItem.label`, `Item ${i + 1} · Label`, li.label);
+      text(`listItems.${i}.listItem.caption`, `Item ${i + 1} · Caption`, li.caption);
+    });
+  const bgMedia = s.container?.background?.imageSettings?.media;
+  if (bgMedia && s.container?.background?.type === "image") {
+    if (t === "hero") image("container.background.imageSettings.media", "Rectangle 9:16", bgMedia);
+    if (t === "call-to-action") image("container.background.imageSettings.media", "Frame 48099931", bgMedia);
+  }
+  if (t === "teaser" && s.image) image("image", "Rectangle 28", s.image);
+  if (t === "hot-spot" && (s.mobileImage || s.image)) image(s.mobileImage ? "mobileImage" : "image", "Images", s.mobileImage || s.image);
+  if (t === "gallery" && Array.isArray(s.images) && s.images[0]?.image?.background?.imageSettings?.media)
+    image("images.0.image.background.imageSettings.media", "Rectangle 16:9", s.images[0].image.background.imageSettings.media);
+  return out;
+}
 
-export function cmsMap(pages: SyncPage[]): FieldMap {
-  const m: FieldMap = {};
-  for (const p of pages) for (const b of p.blocks) for (const f of b.fields) m[fkey(p.id, b.id, f.path)] = f.value;
-  return m;
+// Team Card fields as they appear in the card journey.
+function badgeField(badgeId: string, b: Json, path: string, layer: string, kind: "text" | "image" = "text"): Field {
+  return { key: `badge:${badgeId}|card|${path}`, path, layer, value: kind === "image" ? idOf(b?.[path]) : str(b?.[path]), kind };
+}
+
+function cardStates(badgeId: string, b: Json): CardState[] {
+  const name = badgeField(badgeId, b, "badgePopupTitle", "Badge Name");
+  const img = [badgeField(badgeId, b, "badgeImage", "Badge/Image", "image"), badgeField(badgeId, b, "badgeImage", "Badge mobile big", "image")];
+  const states: CardState[] = [];
+  const push = (state: string, label: string, note: string, extra: Field[]) => states.push({ state, label, note, fields: [name, ...img, ...extra] });
+  if (b.isTimebound) push("Announced", "Card announced", "Countdown · Payload: Is Timebound + Start Date", [badgeField(badgeId, b, "description", "Description")]);
+  push("Logged Out", "Logged out", "Payload: Logged Out Reveal title + description", [badgeField(badgeId, b, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(badgeId, b, "loggedOutRevealDescription", "Logged Out · Description")]);
+  push("Default", "Not earned yet", "Payload: Reward Teaser Description + Unearned CTA", [badgeField(badgeId, b, "rewardTeaserDescription", "Description")]);
+  const earned = (state: string, label: string, note: string, extra: Field[] = []) => push(state, label, note, [badgeField(badgeId, b, "rewardDescription", "Description"), ...extra]);
+  const rt = str(b.rewardType);
+  if (rt === "couponCode") earned("Code", "Earned · voucher code", "Reward Type: Coupon Code", [badgeField(badgeId, b, "couponCode", "Code")]);
+  else if (rt === "raffleSignup") {
+    earned("Raffle", "Earned · raffle", "Reward Type: Raffle Signup");
+    earned("Raffle Entered", "Raffle entered", "After the raffle submit");
+    earned("Raffle Closed", "Raffle closed", "After the end date");
+  } else if (/download/i.test(rt)) earned("Download", "Earned · download", "Reward Type: Download Asset");
+  else earned("Link", "Earned · no reward / link", "Reward Type: No Reward (+ Reward CTA)");
+  states.push({ state: "Back", label: "Card back", note: "Flip from any earned state · Payload: Description, back image", fields: [name, badgeField(badgeId, b, "description", "Back · Info Text"), badgeField(badgeId, b, "badgeBackImage", "Badge/Image", "image")] });
+  return states;
+}
+
+// ---- model ------------------------------------------------------------------
+export async function loadModel(c: Campaign): Promise<Model> {
+  const where = encodeURIComponent(JSON.stringify({ url: { like: c.root } }));
+  const r = await stg(`/pages?where=${where}&limit=100&depth=0&draft=true&locale=en&fallback-locale=none`);
+  const docs: Json[] = (r.docs ?? []).filter((d: Json) => d.url === c.root || str(d.url).startsWith(c.root + "/"));
+  const badgeIds = new Set<string>();
+  const pages: SyncPage[] = docs.map((d) => ({
+    id: d.id,
+    url: d.url,
+    title: d.title,
+    updatedAt: d.updatedAt,
+    status: d._status,
+    blocks: (d.sections ?? [])
+      .filter((s: Json) => !SKIP_BLOCKS.has(s.blockType))
+      .map((s: Json) => {
+        const badge = s.badge ? idOf(s.badge) : undefined;
+        if (badge) badgeIds.add(badge);
+        const eng = (s.children ?? []).find((x: Json) => x?.engagement)?.engagement;
+        return { id: s.id, blockType: s.blockType, hidden: s.authRequirement === "HIDDEN", name: s.blockName, badge, engagement: eng ? idOf(eng) : undefined, bg: s.background?.imageSettings?.bgColor ?? s.backgroundColor, fields: blockFields(d.id, s) };
+      }),
+  }));
+  // badges
+  const badges: Record<string, Json> = {};
+  if (badgeIds.size) {
+    const bw = encodeURIComponent(JSON.stringify({ id: { in: [...badgeIds] } }));
+    const br = await stg(`/badges?where=${bw}&limit=100&depth=0&locale=en&fallback-locale=none`);
+    for (const b of br.docs ?? []) badges[b.id] = b;
+  }
+  // card fields inside page modules
+  for (const p of pages)
+    for (const b of p.blocks) {
+      const bd = b.badge ? badges[b.badge] : null;
+      if (!bd) continue;
+      if (b.blockType === "logged-out-badge-reveal")
+        b.fields.push(badgeField(b.badge!, bd, "badgePopupTitle", "Badge Name"), badgeField(b.badge!, bd, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(b.badge!, bd, "loggedOutRevealDescription", "Logged Out · Description"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image", "image"), badgeField(b.badge!, bd, "badgeImage", "Badge mobile big", "image"));
+      if (b.blockType === "single-card-showcase") b.fields.push(badgeField(b.badge!, bd, "publicTitle", "Name / Year"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image", "image"));
+      if (b.blockType === "badge-engagement-teaser") b.fields.push(badgeField(b.badge!, bd, "badgeImage", "Badge Image", "image"));
+    }
+  // groups, one card per group (the badge most used on its pages)
+  const groups: (Group & { badgeId?: string })[] = c.groups.map((g) => {
+    if (!g.card) return { ...g };
+    const count: Record<string, number> = {};
+    for (const p of pages.filter((p) => g.urls.includes(p.url))) for (const b of p.blocks) if (b.badge) count[b.badge] = (count[b.badge] ?? 0) + 1;
+    const badgeId = Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return { ...g, badgeId };
+  });
+  const cards: SyncCard[] = groups
+    .filter((g) => g.badgeId && badges[g.badgeId])
+    .map((g) => {
+      const b = badges[g.badgeId!];
+      return { badgeId: g.badgeId!, title: str(b.publicTitle || b.title), rewardType: str(b.rewardType), isTimebound: Boolean(b.isTimebound), group: g.key, states: cardStates(g.badgeId!, b) };
+    });
+  // the Team Cards grid shows the campaign's cards
+  const gridCards = cards.slice(0, 6);
+  for (const p of pages)
+    for (const b of p.blocks)
+      if (b.blockType === "badges-grid")
+        gridCards.forEach((cd, i) => {
+          const bd = badges[cd.badgeId];
+          const n = String(i + 1).padStart(2, "0");
+          b.fields.push(badgeField(cd.badgeId, bd, "badgeImage", `Card ${n}>Badge/Image`, "image"), badgeField(cd.badgeId, bd, "publicTitle", `Card ${n}>Name / Year`));
+        });
+  pages.sort((a, b) => (a.url === c.root ? -1 : b.url === c.root ? 1 : a.url.localeCompare(b.url)));
+  return { pages, cards, groups, badges };
+}
+
+export function allFields(m: Model): (Field & { page: string; block: string })[] {
+  const out: (Field & { page: string; block: string })[] = [];
+  const seen = new Set<string>();
+  const add = (f: Field, page: string, block: string) => {
+    if (seen.has(f.key)) return;
+    seen.add(f.key);
+    out.push({ ...f, page, block });
+  };
+  for (const p of m.pages) for (const b of p.blocks) for (const f of b.fields) add(f, p.url, b.name || b.blockType);
+  for (const cd of m.cards) for (const s of cd.states) for (const f of s.fields) add(f, `Team Card · ${cd.title}`, s.label);
+  return out;
+}
+
+export function cmsMap(m: Model): FieldMap {
+  const out: FieldMap = {};
+  for (const f of allFields(m)) out[f.key] = f.value;
+  return out;
 }
 
 // ---- KV state
 type Snapshot = { base: FieldMap; syncedAt: string | null };
-export type FigmaReport = {
-  values: FieldMap;
-  nodes: Record<string, string>; // pageId → frame node id
-  reportedAt: string;
-  by: string;
-};
-type Pending = Record<string, string>; // field key → value the plugin must write into Figma
+export type FigmaReport = { values: FieldMap; nodes: Record<string, string>; reportedAt: string; by: string };
+type Pending = Record<string, string>;
 
 const kSnap = (c: string) => `sitemap:${c}:snapshot`;
 const kFigma = (c: string) => `sitemap:${c}:figma`;
@@ -169,59 +328,63 @@ export type Diff = {
   page: string;
   block: string;
   layer: string;
+  kind: "text" | "image";
   base?: string;
   cms?: string;
   figma?: string;
   state: "figma-newer" | "cms-newer" | "conflict" | "missing-in-figma";
 };
+// Figma text layers turn "\n" into line separators; compare loosely.
+const norm = (s?: string) => (s ?? "").replace(/\u2028|\r/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
 
-export function compare(pages: SyncPage[], base: FieldMap, figma: FieldMap | null): { diffs: Diff[]; inSync: number; total: number } {
+export function compare(m: Model, base: FieldMap, figma: FieldMap | null): { diffs: Diff[]; inSync: number; total: number } {
   const diffs: Diff[] = [];
   let inSync = 0;
   let total = 0;
-  for (const p of pages)
-    for (const b of p.blocks)
-      for (const f of b.fields) {
-        total++;
-        const k = fkey(p.id, b.id, f.path);
-        const cms = f.value;
-        const fg = figma ? figma[k] : undefined;
-        const bs = base[k];
-        const meta = { key: k, pageId: p.id, blockId: b.id, path: f.path, page: p.url, block: b.name || b.blockType, layer: f.layer, base: bs, cms, figma: fg };
-        if (fg === undefined) {
-          if (figma) diffs.push({ ...meta, state: "missing-in-figma" });
-          continue;
-        }
-        if (norm(fg) === norm(cms)) {
-          inSync++;
-          continue;
-        }
-        if (bs === undefined) diffs.push({ ...meta, state: "conflict" });
-        else if (norm(cms) === norm(bs)) diffs.push({ ...meta, state: "figma-newer" });
-        else if (norm(fg) === norm(bs)) diffs.push({ ...meta, state: "cms-newer" });
-        else diffs.push({ ...meta, state: "conflict" });
-      }
+  for (const f of allFields(m)) {
+    total++;
+    const [docId, blockId] = f.key.split("|");
+    const cms = f.value;
+    const fg = figma ? figma[f.key] : undefined;
+    const bs = base[f.key];
+    const meta = { key: f.key, pageId: docId, blockId, path: f.path, page: f.page, block: f.block, layer: f.layer, kind: f.kind, base: bs, cms, figma: fg };
+    if (fg === undefined) {
+      if (figma) diffs.push({ ...meta, state: "missing-in-figma" });
+      continue;
+    }
+    if (norm(fg) === norm(cms)) {
+      inSync++;
+      continue;
+    }
+    if (f.readonly) {
+      // only the CMS changes these; a local Figma edit is overwritten
+      if (bs === undefined || norm(cms) !== norm(bs)) diffs.push({ ...meta, state: "cms-newer" });
+      else inSync++;
+      continue;
+    }
+    if (bs === undefined) diffs.push({ ...meta, state: "conflict" });
+    else if (norm(cms) === norm(bs)) diffs.push({ ...meta, state: "figma-newer" });
+    else if (norm(fg) === norm(bs)) diffs.push({ ...meta, state: "cms-newer" });
+    else diffs.push({ ...meta, state: "conflict" });
+  }
   return { diffs, inSync, total };
 }
-// Figma text layers turn "\n" into line separators; compare loosely.
-const norm = (s?: string) => (s ?? "").replace(/\u2028|\r/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
 
 export async function status(campaign: string) {
   const c = CAMPAIGNS[campaign];
   if (!c) throw new Error("unknown campaign");
-  const [pages, snap, figma, pending, log] = await Promise.all([loadPages(c), getSnapshot(campaign), getFigmaReport(campaign), getPending(campaign), getLog(campaign)]);
-  const cmp = compare(pages, snap.base, figma?.values ?? null);
-  return { campaign: c, pages, ...cmp, syncedAt: snap.syncedAt, figma: figma ? { reportedAt: figma.reportedAt, by: figma.by, nodes: figma.nodes } : null, pending: Object.keys(pending).length, log };
+  const [m, snap, figma, pending, log] = await Promise.all([loadModel(c), getSnapshot(campaign), getFigmaReport(campaign), getPending(campaign), getLog(campaign)]);
+  const cmp = compare(m, snap.base, figma?.values ?? null);
+  const { mediaFolder: _a, contentTag: _b, ...pub } = c;
+  void _a;
+  void _b;
+  return { campaign: pub, pages: m.pages, cards: m.cards.map((x) => ({ badgeId: x.badgeId, title: x.title, group: x.group })), ...cmp, syncedAt: snap.syncedAt, figma: figma ? { reportedAt: figma.reportedAt, by: figma.by, nodes: figma.nodes } : null, pending: Object.keys(pending).length, log };
 }
 
 // ---- apply
-// decisions: field key → "figma" | "cms". Fields not listed follow the rule
-// (newer side wins); conflicts without a decision are left alone.
-export async function applySync(
-  campaign: string,
-  by: string,
-  opts: { figma?: FieldMap; nodes?: Record<string, string>; decisions?: Record<string, "figma" | "cms"> },
-) {
+const splitPath = (p: string) => p.split(".").map((x) => (/^\d+$/.test(x) ? Number(x) : x));
+
+export async function applySync(campaign: string, by: string, opts: { figma?: FieldMap; nodes?: Record<string, string>; decisions?: Record<string, "figma" | "cms"> }) {
   const c = CAMPAIGNS[campaign];
   if (!c) throw new Error("unknown campaign");
   if (opts.figma) {
@@ -229,9 +392,9 @@ export async function applySync(
     await kvSet(kFigma(campaign), JSON.stringify({ values: opts.figma, nodes: { ...(prev?.nodes ?? {}), ...(opts.nodes ?? {}) }, reportedAt: new Date().toISOString(), by }));
   }
   const figma = opts.figma ?? (await getFigmaReport(campaign))?.values ?? null;
-  const pages = await loadPages(c);
+  const m = await loadModel(c);
   const snap = await getSnapshot(campaign);
-  const { diffs } = compare(pages, snap.base, figma);
+  const { diffs } = compare(m, snap.base, figma);
   const dec = opts.decisions ?? {};
   const toCms: Diff[] = [];
   const toFigma: Diff[] = [];
@@ -243,28 +406,39 @@ export async function applySync(
     else if (choice === "cms") toFigma.push(d);
     else open.push(d);
   }
-  // write Figma → CMS, page by page (draft PATCH, then publish on staging)
   const written: string[] = [];
-  const byPage = new Map<string, Diff[]>();
-  for (const d of toCms) byPage.set(d.pageId, [...(byPage.get(d.pageId) ?? []), d]);
-  for (const [pageId, list] of byPage) {
-    const page = await stg(`/pages/${pageId}?locale=en&fallback-locale=none&depth=0&draft=true`);
+  const byDoc = new Map<string, Diff[]>();
+  for (const d of toCms) byDoc.set(d.pageId, [...(byDoc.get(d.pageId) ?? []), d]);
+  const touchedBadges: string[] = [];
+  for (const [docId, list] of byDoc) {
+    if (docId.startsWith("badge:")) {
+      const id = docId.slice(6);
+      const body: Json = {};
+      for (const d of list) body[d.path] = d.figma ?? "";
+      await stg(`/badges/${id}?locale=en`, { method: "PATCH", body: JSON.stringify(body) });
+      touchedBadges.push(id);
+      written.push(`Team Card ${list[0].page.replace("Team Card · ", "")}: ${list.length} field${list.length === 1 ? "" : "s"}`);
+      continue;
+    }
+    const page = await stg(`/pages/${docId}?locale=en&fallback-locale=none&depth=0&draft=true`);
     for (const d of list) {
       const block = (page.sections ?? []).find((s: Json) => s.id === d.blockId);
-      if (!block) continue;
-      setPath(block, d.path.split(".").map((x) => (/^\d+$/.test(x) ? Number(x) : x)), d.figma ?? "");
+      if (block) setPath(block, splitPath(d.path), d.figma ?? "");
     }
-    await stg(`/pages/${pageId}?locale=en&draft=true`, { method: "PATCH", body: JSON.stringify({ sections: page.sections, _status: "draft" }) });
-    await stg(`/pages/${pageId}?locale=en`, { method: "PATCH", body: JSON.stringify({ _status: "published" }) });
+    await stg(`/pages/${docId}?locale=en&draft=true`, { method: "PATCH", body: JSON.stringify({ sections: page.sections, _status: "draft" }) });
+    await stg(`/pages/${docId}?locale=en`, { method: "PATCH", body: JSON.stringify({ _status: "published" }) });
     written.push(`${list[0].page}: ${list.length} field${list.length === 1 ? "" : "s"}`);
   }
-  // CMS → Figma: queue for the plugin
+  // keep the Team Card list in the tool current
+  if (touchedBadges.length) {
+    const { reloadCardsByBadge } = await import("./teamCards");
+    await reloadCardsByBadge(touchedBadges).catch(() => {});
+  }
   const pending = await getPending(campaign);
   for (const d of toFigma) pending[d.key] = d.cms ?? "";
   await kvSet(kPending(campaign), JSON.stringify(pending));
-  // new base = agreed values
   const base = { ...snap.base };
-  const cm = cmsMap(pages);
+  const cm = cmsMap(m);
   for (const k of Object.keys(cm)) if (figma && figma[k] !== undefined && norm(figma[k]) === norm(cm[k])) base[k] = cm[k];
   for (const d of toCms) base[d.key] = d.figma ?? "";
   for (const d of toFigma) base[d.key] = d.cms ?? "";
@@ -274,7 +448,6 @@ export async function applySync(
   return { toCms, toFigma, open, written, pending, summary };
 }
 
-// The plugin confirms which pending fields it wrote into Figma.
 export async function ackPending(campaign: string, keys: string[]) {
   const p = await getPending(campaign);
   for (const k of keys) delete p[k];
@@ -291,10 +464,62 @@ function setPath(o: Json, p: (string | number)[], v: unknown) {
   cur[p[p.length - 1]] = v;
 }
 
-// Dry run for the plugin: what would happen with this Figma state.
 export async function previewSync(campaign: string, figma: FieldMap) {
   const c = CAMPAIGNS[campaign];
   if (!c) throw new Error("unknown campaign");
-  const [pages, snap] = await Promise.all([loadPages(c), getSnapshot(campaign)]);
-  return { ...compare(pages, snap.base, figma), syncedAt: snap.syncedAt };
+  const [m, snap] = await Promise.all([loadModel(c), getSnapshot(campaign)]);
+  return { ...compare(m, snap.base, figma), syncedAt: snap.syncedAt };
+}
+
+// ---- media for the plugin
+// Proxy a staging image (a size ≤ 1600 px wide when there is one).
+export async function mediaFile(id: string): Promise<{ body: ArrayBuffer; type: string } | null> {
+  const doc = await stg(`/media/${id}?depth=0`).catch(() => null);
+  if (!doc) return null;
+  const sizes = Object.values(doc.sizes ?? {}) as Json[];
+  const pick = sizes.filter((s) => s?.url && s.width && s.width <= 1600).sort((a, b) => b.width - a.width)[0];
+  const url: string = pick?.url ?? doc.url;
+  if (!url) return null;
+  const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/^\/cms\/api/, "");
+  const res = await stagingRequest(path);
+  if (!res.ok) return null;
+  return { body: await res.arrayBuffer(), type: res.headers.get("content-type") ?? "image/webp" };
+}
+
+// An image placed in Figma → staging media (campaign folder + tag).
+export async function uploadFromFigma(campaign: string, name: string, bytes: Uint8Array, mime: string, alt: string) {
+  const c = CAMPAIGNS[campaign];
+  if (!c) throw new Error("unknown campaign");
+  const [folders, tags] = await Promise.all([listMediaFolders().catch(() => []), listContentTags().catch(() => [])]);
+  const folder = folders.find((f) => c.mediaFolder.test(f.name) || c.mediaFolder.test(f.path));
+  const tag = tags.find((t) => c.contentTag.test(t.title));
+  const ext = mime.includes("png") ? "png" : "jpg";
+  const safe = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "figma-image";
+  const blob = new Blob([bytes], { type: mime });
+  const r = await uploadMedia(blob, `${safe}-${Date.now().toString(36)}.${ext}`, alt || name, folder?.id ?? null, tag ? [tag.id] : []);
+  return r.id;
+}
+
+// ---- Team Card list in the tool: one record per campaign card
+export async function cardsForConfigurator(campaign: string) {
+  const c = CAMPAIGNS[campaign];
+  if (!c) throw new Error("unknown campaign");
+  const m = await loadModel(c);
+  return m.cards.map((cd) => {
+    const g = m.groups.find((x) => x.key === cd.group)!;
+    const pagesOfGroup = m.pages.filter((p) => g.urls.includes(p.url));
+    let pageId: string | undefined, blockId: string | undefined, engagementId: string | undefined, mechanic: string | undefined;
+    for (const p of pagesOfGroup) {
+      const b = p.blocks.find((x) => x.badge === cd.badgeId && x.blockType === "badge-engagement-teaser") ?? p.blocks.find((x) => x.badge === cd.badgeId);
+      if (b) {
+        pageId = p.id;
+        blockId = b.id;
+        engagementId = b.engagement;
+        break;
+      }
+    }
+    const bd = m.badges[cd.badgeId];
+    if (!engagementId) mechanic = "page";
+    return { badgeId: cd.badgeId, title: cd.title, rewardType: cd.rewardType, pageId, blockId, engagementId, mechanic, imageId: idOf(bd?.badgeImage), placement: `Singapore · ${g.title} (${g.urls.map((u) => "/" + u).join(", ")})` };
+  });
 }
