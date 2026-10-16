@@ -31,7 +31,7 @@ async function auth(ctx: Ctx) {
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
   const { rec, campaign } = await auth(ctx);
-  if (!rec) return json({ error: "Unknown token. Create one in the AF1 Tool under Sitemap Sync." }, 401);
+  if (!rec) return json({ error: "Unknown token. Create one in the AF1 Tool under Team Cards → Sitemap Sync." }, 401);
   const c = CAMPAIGNS[campaign];
   if (!c) return json({ error: "unknown campaign" }, 404);
   try {
@@ -48,7 +48,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 // { action: "ack", keys } → the plugin wrote these pending fields.
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { rec, campaign } = await auth(ctx);
-  if (!rec) return json({ error: "Unknown token. Create one in the AF1 Tool under Sitemap Sync." }, 401);
+  if (!rec) return json({ error: "Unknown token. Create one in the AF1 Tool under Team Cards → Sitemap Sync." }, 401);
   const b = (await req.json().catch(() => null)) as { action?: string; figma?: Record<string, string>; nodes?: Record<string, string>; decisions?: Record<string, "figma" | "cms">; keys?: string[] } | null;
   try {
     if (b?.action === "check") return json(await previewSync(campaign, b.figma ?? {}));

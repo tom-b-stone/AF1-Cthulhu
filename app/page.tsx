@@ -47,13 +47,6 @@ const TILES: { title: string; href: string; key: string; external?: boolean; sta
     text: "All Team Cards, guided editing with a live journey preview, and a helper for bulk changes in EN and DE.",
   },
   {
-    title: "Sitemap Sync",
-    href: "/sitemap",
-    key: "/sitemap",
-    status: "staging",
-    text: "Campaign sitemap in Figma, the tool and the staging CMS in the same state. Newest change wins, conflicts are asked.",
-  },
-  {
     title: "CRM Images",
     href: "/images",
     key: "/images",

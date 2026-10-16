@@ -64,6 +64,7 @@ async function loadFonts(t) {
 
 // Text bound to a component property is set through the owning instance.
 async function setText(inst, layer, value) {
+  await preloadFonts(inst);
   var t = findText(inst, layer);
   if (!t) return false;
   var ref = t.componentPropertyReferences && t.componentPropertyReferences.characters;
@@ -92,6 +93,27 @@ async function writeFields(map, blocks) {
 
 // ---- build a page frame from the CMS
 var setCache = {};
+var fontState = {}; // "Family|Style" → true (loaded) or error text
+
+// Instances of the AF1 modules use the Audi fonts. Figma refuses to place
+// or edit them until every font inside is loaded, so load them all first.
+async function preloadFonts(node) {
+  var texts = node.findAllWithCriteria ? node.findAllWithCriteria({ types: ["TEXT"] }) : [];
+  if (node.type === "TEXT") texts.push(node);
+  var missing = [];
+  for (var i = 0; i < texts.length; i++) {
+    var fonts = texts[i].fontName === figma.mixed ? texts[i].getStyledTextSegments(["fontName"]).map(function (x) { return x.fontName; }) : [texts[i].fontName];
+    for (var j = 0; j < fonts.length; j++) {
+      var f = fonts[j]; var k = f.family + "|" + f.style;
+      if (fontState[k] === undefined) {
+        try { await figma.loadFontAsync(f); fontState[k] = true; }
+        catch (e) { fontState[k] = f.family + " " + f.style; }
+      }
+      if (fontState[k] !== true && missing.indexOf(fontState[k]) < 0) missing.push(fontState[k]);
+    }
+  }
+  return missing;
+}
 async function moduleSet(key) {
   if (!setCache[key]) setCache[key] = await figma.importComponentSetByKeyAsync(key);
   return setCache[key];
@@ -108,7 +130,11 @@ async function placeholder(block) {
 }
 
 async function buildPage(p, modules, x, y) {
-  var sec = figma.createSection(); sec.name = "SIN · /" + p.url; sec.x = x; sec.y = y;
+  var sec = figma.createSection();
+  try { return await fillPage(sec, p, modules, x, y); } catch (e) { sec.remove(); throw e; }
+}
+
+async function fillPage(sec, p, modules, x, y) { sec.name = "SIN · /" + p.url; sec.x = x; sec.y = y;
   sec.fills = [{ type: "SOLID", color: { r: 0.96, g: 0.949, b: 0.949 } }];
   await figma.loadFontAsync({ family: "Inter", style: "Bold" });
   var h = figma.createText(); h.fontName = { family: "Inter", style: "Bold" }; h.fontSize = 40; h.characters = p.title + "  ·  /" + p.url; sec.appendChild(h); h.x = 200; h.y = 160;
@@ -120,6 +146,8 @@ async function buildPage(p, modules, x, y) {
     if (m) {
       var set = await moduleSet(m.key);
       var v = (m.variant && set.children.filter(function (c) { return c.name === m.variant; })[0]) || set.defaultVariant;
+      var miss = await preloadFonts(v);
+      if (miss.length) throw new Error("Font not installed on this computer: " + miss.join(", ") + ". Install it (or activate it in your font manager), restart Figma and build again.");
       node = v.createInstance();
     } else node = await placeholder(b);
     fr.appendChild(node); node.layoutSizingHorizontal = "FILL";
@@ -175,7 +203,9 @@ async function build(ids) {
   var list = state.data.pages.filter(function (p) { return ids.indexOf(p.id) >= 0; });
   for (var i = 0; i < list.length; i++) {
     log("Building /" + list[i].url + " …");
-    var r = await buildPage(list[i], state.data.modules, x, baseY);
+    var r;
+    try { r = await buildPage(list[i], state.data.modules, x, baseY); }
+    catch (e) { log("⚠ /" + list[i].url + " not built: " + (e && e.message ? e.message : e)); if (/Font not installed/.test(String(e && e.message))) break; continue; }
     x += r.section.width + 200; built.push(r.frame.id); frames.push(r.section);
   }
   if (frames.length) figma.viewport.scrollAndZoomIntoView(frames);
