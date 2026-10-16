@@ -470,7 +470,12 @@ async function sync(decisions, only, quiet) {
 setInterval(async function () {
   if (!state.live || state.busy || !state.token) return;
   state.busy = true;
-  try { var r = await sync({}, null, true); if (r.toCms.length || r.toFigma.length) await check(); }
+  try {
+    // a rebuild queued in the AF1 Tool runs even while the plugin stays open
+    var d0 = await api("GET"); state.data = d0;
+    if (d0.command && d0.command.command === "build") { log("A full rebuild was requested in the AF1 Tool, building now …"); await buildAll(); await check(); return; }
+    var r = await sync({}, null, true); if (r.toCms.length || r.toFigma.length) await check();
+  }
   catch (e) { /* stay quiet in the background */ }
   finally { state.busy = false; }
 }, 20000);
