@@ -123,6 +123,18 @@ function getText(inst, layer) {
 function imageHashOf(node) { var f = node && node.fills; if (!f || f === figma.mixed) return null; for (var i = 0; i < f.length; i++) if (f[i].type === "IMAGE") return f[i].imageHash; return null; }
 
 var imageCache = {}; // media id → hash
+// "cover" crop around the CMS focal point (what the site does)
+async function coverPaint(node, hash, mediaId) {
+  var f = (state.data && state.data.media && state.data.media[mediaId]) || { fx: 50, fy: 50 };
+  try {
+    var size = await figma.getImageByHash(hash).getSizeAsync();
+    var w = node.width, h = node.height, iw = size.width, ih = size.height;
+    if (!w || !h || !iw || !ih) throw new Error("no size");
+    var sc = Math.max(w / iw, h / ih), sw = Math.min(1, w / (iw * sc)), sh = Math.min(1, h / (ih * sc));
+    var ox = Math.max(0, Math.min(1 - sw, f.fx / 100 - sw / 2)), oy = Math.max(0, Math.min(1 - sh, f.fy / 100 - sh / 2));
+    return { type: "IMAGE", imageHash: hash, scaleMode: "CROP", imageTransform: [[sw, 0, ox], [0, sh, oy]] };
+  } catch (e) { return { type: "IMAGE", imageHash: hash, scaleMode: "FILL" }; }
+}
 async function setImage(inst, layer, mediaId) {
   var node = findLayer(inst, layer, "IMAGE");
   if (!node || !mediaId) return null;
@@ -132,7 +144,7 @@ async function setImage(inst, layer, mediaId) {
     hash = figma.createImage(new Uint8Array(bytes)).hash;
     imageCache[mediaId] = hash;
   }
-  node.fills = [{ type: "IMAGE", imageHash: hash, scaleMode: "FILL" }];
+  node.fills = [await coverPaint(node, hash, mediaId)];
   return hash;
 }
 
@@ -439,6 +451,21 @@ function arrange(page, by) {
   });
 }
 
+// all image layers again from the CMS (new files, focal points / crops)
+async function refreshImages() {
+  state.data = await api("GET");
+  var page = await goToCampaignPage(), vals = {};
+  state.data.pages.forEach(function (p) { p.blocks.forEach(function (b) { b.fields.forEach(function (f) { if (f.kind === "image") vals[f.key] = f.value; }); }); });
+  state.data.cards.forEach(function (c) { c.states.forEach(function (st) { st.fields.forEach(function (f) { if (f.kind === "image") vals[f.key] = f.value; }); }); });
+  var all = tagged(page), n = 0;
+  for (var i = 0; i < all.length; i++) {
+    var d = readData(all[i]); if (!d || !d.fields) continue;
+    var mine = {}; d.fields.forEach(function (f) { if (f.kind === "image" && vals[f.key]) mine[f.key] = vals[f.key]; });
+    if (Object.keys(mine).length) { var w = await applyFields(all[i], mine); n += w.length; }
+  }
+  log("Refreshed " + n + " image(s) from the CMS.");
+}
+
 async function fixFonts() {
   var page = await goToCampaignPage(), n = 0, all = tagged(page);
   for (var i = 0; i < all.length; i++) if (all[i].type === "INSTANCE") { await preloadFonts(all[i]); n += await swapFonts(all[i]); }
@@ -514,6 +541,7 @@ figma.ui.onmessage = async function (msg) {
     if (msg.type === "sync") { await sync(msg.decisions); await check(); }
     if (msg.type === "build") { await build(msg.keys, !!msg.rebuild); await check(); }
     if (msg.type === "fix-fonts") await fixFonts();
+    if (msg.type === "refresh-images") { await refreshImages(); await check(); }
   } catch (e) {
     send("error", { msg: e && e.message ? e.message : String(e) });
   } finally { state.busy = false; }

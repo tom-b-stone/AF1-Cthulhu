@@ -31,7 +31,7 @@
   <div class="row">
     <label class="choice" style="margin:0"><input type="checkbox" id="live"> <span><span class="dot" id="liveDot"></span> Live sync every 20 s while open</span></label>
   </div>
-  <div class="row"><button id="changeToken">Change token</button><button id="check">Check again</button><button class="primary" id="sync">Sync now</button><button id="fonts">Fix fonts</button></div>
+  <div class="row"><button id="changeToken">Change token</button><button id="check">Check again</button><button class="primary" id="sync">Sync now</button><button id="fonts">Fix fonts</button><button id="images">Refresh images</button></div>
   <div id="buildBox"></div>
   <div id="diffBox"></div>
 </div>
@@ -50,6 +50,7 @@
   $("changeToken").onclick = () => { $("tokenBox").hidden = false; $("token").focus(); };
   $("check").onclick = () => { log("Checking …"); post("check"); };
   $("fonts").onclick = () => { log("Swapping fonts …"); post("fix-fonts"); };
+  $("images").onclick = () => { log("Loading all images from the CMS …"); post("refresh-images"); };
   $("live").onchange = (e) => { $("liveDot").className = "dot" + (e.target.checked ? "" : " off"); post("live", { on: e.target.checked }); };
   $("sync").onclick = () => {
     const decisions = {};

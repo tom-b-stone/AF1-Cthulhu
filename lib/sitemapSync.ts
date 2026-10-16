@@ -92,7 +92,7 @@ export type SyncPage = { id: string; url: string; title: string; updatedAt: stri
 export type CardState = { state: string; label: string; note: string; fields: Field[] };
 export type SyncCard = { badgeId: string; title: string; rewardType: string; isTimebound: boolean; group: string; states: CardState[] };
 export type FieldMap = Record<string, string>;
-export type Model = { pages: SyncPage[]; cards: SyncCard[]; groups: (Group & { badgeId?: string })[]; badges: Record<string, Json> };
+export type Model = { pages: SyncPage[]; cards: SyncCard[]; groups: (Group & { badgeId?: string })[]; badges: Record<string, Json>; media: Record<string, { fx: number; fy: number }> };
 
 async function stg(path: string, init: RequestInit = {}): Promise<Json> {
   const res = await stagingRequest(path, init);
@@ -268,7 +268,18 @@ export async function loadModel(c: Campaign): Promise<Model> {
           b.fields.push(badgeField(cd.badgeId, bd, "badgeImage", `Card ${n}>Badge/Image`, "image"), badgeField(cd.badgeId, bd, "publicTitle", `Card ${n}>Name / Year`));
         });
   pages.sort((a, b) => (a.url === c.root ? -1 : b.url === c.root ? 1 : a.url.localeCompare(b.url)));
-  return { pages, cards, groups, badges };
+  // focal points, so Figma crops images like the site does
+  const media: Model["media"] = {};
+  const ids = new Set<string>();
+  for (const p of pages) for (const b of p.blocks) for (const f of b.fields) if (f.kind === "image" && f.value) ids.add(f.value);
+  for (const cd of cards) for (const st of cd.states) for (const f of st.fields) if (f.kind === "image" && f.value) ids.add(f.value);
+  const all = [...ids];
+  for (let i = 0; i < all.length; i += 100) {
+    const mw = encodeURIComponent(JSON.stringify({ id: { in: all.slice(i, i + 100) } }));
+    const mr = await stg(`/media?where=${mw}&limit=100&depth=0`).catch(() => ({ docs: [] }));
+    for (const d of mr.docs ?? []) media[d.id] = { fx: d.focalX ?? 50, fy: d.focalY ?? 50 };
+  }
+  return { pages, cards, groups, badges, media };
 }
 
 export function allFields(m: Model): (Field & { page: string; block: string })[] {
@@ -477,7 +488,9 @@ export async function mediaFile(id: string): Promise<{ body: ArrayBuffer; type: 
   const doc = await stg(`/media/${id}?depth=0`).catch(() => null);
   if (!doc) return null;
   const sizes = Object.values(doc.sizes ?? {}) as Json[];
-  const pick = sizes.filter((s) => s?.url && s.width && s.width <= 1600).sort((a, b) => b.width - a.width)[0];
+  // only sizes with the original's aspect ratio (some sizes are cropped)
+  const ratio = doc.width && doc.height ? doc.width / doc.height : 0;
+  const pick = sizes.filter((s) => s?.url && s.width && s.height && s.width <= 2000 && (!ratio || Math.abs(s.width / s.height - ratio) / ratio < 0.02)).sort((a, b) => b.width - a.width)[0];
   const url: string = pick?.url ?? doc.url;
   if (!url) return null;
   const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/^\/cms\/api/, "");

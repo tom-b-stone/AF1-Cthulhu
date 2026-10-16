@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const { mediaFolder: _a, contentTag: _b, ...pub } = c;
     void _a;
     void _b;
-    return json({ campaign: pub, pages: m.pages, cards: m.cards, groups: m.groups, modules: MODULES, overlayKey: OVERLAY_KEY, pending, user: rec.email });
+    return json({ campaign: pub, pages: m.pages, cards: m.cards, groups: m.groups, media: m.media, modules: MODULES, overlayKey: OVERLAY_KEY, pending, user: rec.email });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "failed" }, 502);
   }
