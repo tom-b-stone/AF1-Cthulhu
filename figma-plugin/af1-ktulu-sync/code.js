@@ -303,42 +303,45 @@ async function buildPageFrame(sec, p, x, y) {
   return fr;
 }
 
+function cleanTitle(t) { return String(t || "").replace(/^\s*SIN\s*\|\s*/i, ""); }
+
 // one section per landing page; the activation page also gets the card journey
 async function buildSection(p, num, card, group, isMain, mainUrl, ov) {
-  var sec = figma.createSection(); sec.name = "SIN · " + String(num).padStart(2, "0") + " · " + p.title.replace(/^SIN \| /, "");
+  var sec = figma.createSection(); sec.name = "SIN · " + String(num).padStart(2, "0") + " · " + cleanTitle(p.title);
   sec.fills = CHALK; sec.x = -50000; sec.y = 0;
   writeData(sec, { type: "section", url: p.url, group: group.key });
   try {
     if (ov) { var back = await label(sec, "← Back to the overview", 26, "Semi Bold", LAVA, 200, 70); back.hyperlink = { type: "NODE", value: ov.id }; }
     await label(sec, "MOBILE", 24, "Bold", MUTED, 200, 140);
-    await label(sec, String(num).padStart(2, "0") + " · " + p.title.replace(/^SIN \| /, ""), 48, "Bold", GRAPH, 200, 180);
+    await label(sec, String(num).padStart(2, "0") + " · " + cleanTitle(p.title), 48, "Bold", GRAPH, 200, 180);
     await label(sec, "/" + p.url + (group.note ? "   ·   " + group.note : ""), 22, "Regular", MUTED, 200, 250);
     progress("Building /" + p.url + " …");
-    var fr = await buildPageFrame(sec, p, 200, 340);
+    var Y = 460;
+    var fr = await buildPageFrame(sec, p, 200, Y);
     var right = 575, maxH = fr.height;
     var hasCard = card && p.blocks.some(function (b) { return b.badge === card.badgeId; });
     if (!isMain && hasCard) {
-      var note = await label(sec, "Same Team Card as /" + mainUrl + " → its journey is shown there", 24, "Semi Bold", LAVA, 675, 340, 900);
+      var note = await label(sec, "Same Team Card as /" + mainUrl + " → its journey is shown there", 24, "Semi Bold", LAVA, 675, Y, 900);
       note.name = "Same card note";
       right = 1575;
     }
     if (isMain && card) {
       var x = 975;
-      await arrow(sec, [[575, 440], [x - 20, 440]], LAVA, [], "Card tapped");
+      await arrow(sec, [[575, Y + 120], [x - 20, Y + 120]], LAVA, [], "Card tapped");
       for (var i = 0; i < card.states.length; i++) {
         var s = card.states[i];
         var comp = await variantOf(state.data.overlayKey, "State=" + s.state); await preloadFonts(comp);
-        var inst = comp.createInstance(); sec.appendChild(inst); inst.x = x; inst.y = 340;
+        var inst = comp.createInstance(); sec.appendChild(inst); inst.x = x; inst.y = Y;
         inst.name = "Mobile / " + String(i + 2).padStart(2, "0") + " " + s.label;
         writeData(inst, { type: "card", badgeId: card.badgeId, state: s.state, fields: tagFields(s.fields), last: {}, imgs: {} });
         await applyFields(inst, valuesOf(s.fields));
-        await label(sec, String(i + 2).padStart(2, "0") + " · " + s.label, 32, "Bold", GRAPH, x, 230);
-        await label(sec, s.note, 20, "Regular", MUTED, x, 280, 600);
-        if (i < card.states.length - 1) await arrow(sec, [[x + 375 + 10, 340 + 396], [x + 775 - 20, 340 + 396]], GRAPH, [], null);
+        await label(sec, String(i + 2).padStart(2, "0") + " · " + s.label, 32, "Bold", GRAPH, x, Y - 120);
+        await label(sec, s.note, 20, "Regular", MUTED, x, Y - 70, 600);
+        if (i < card.states.length - 1) await arrow(sec, [[x + 375 + 10, Y + 396], [x + 775 - 20, Y + 396]], GRAPH, [], null);
         maxH = Math.max(maxH, inst.height); x += 775; right = x;
       }
     }
-    sec.resizeWithoutConstraints(right + 200, 340 + maxH + 240);
+    sec.resizeWithoutConstraints(right + 200, Y + maxH + 240);
     return sec;
   } catch (e) { sec.remove(); throw e; }
 }

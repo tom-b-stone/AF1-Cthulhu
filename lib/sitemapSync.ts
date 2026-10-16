@@ -136,20 +136,26 @@ function blockFields(pageId: string, s: Json): Field[] {
     return out;
   }
   if (t === "logged-out-badge-reveal") return out; // card fields come from the badge
+  // the standard texts of every module; empty ones hide the sample text
   for (const [p, layer] of [
     ["category", "Kicker"],
-    ["headline", "Headline"],
+    ["headline", t === "hot-spot" || t === "gallery" ? "Headline|text" : "Headline"],
     ["subline", "Subline"],
     ["copy", "Copy"],
-  ] as const)
+  ] as const) {
     if (typeof s[p] === "string") text(p, layer, s[p]);
+    else text(`_figma.${p}`, layer, "", true);
+  }
+  let cta = false;
   for (const arr of ["ctas", "unearnedBadgeCTA"]) {
     const c = Array.isArray(s[arr]) ? s[arr][0] : null;
     if (c && typeof c.label === "string") {
       text(`${arr}.0.label`, "Learn more", c.label);
+      cta = true;
       break;
     }
   }
+  if (!cta) text("_figma.cta", "Learn more", "", true);
   if (Array.isArray(s.carouselItems))
     s.carouselItems.slice(0, 4).forEach((it: Json, i: number) => {
       const ci = it?.carouselImage;
@@ -187,7 +193,7 @@ function badgeField(badgeId: string, b: Json, path: string, layer: string, kind:
 function cardStates(badgeId: string, b: Json): CardState[] {
   const name = badgeField(badgeId, b, "badgePopupTitle", "Badge Name");
   // one image layer per state: the plugin picks the visible one of the two
-  const img = [badgeField(badgeId, b, "badgeImage", "Badge mobile big|Badge/Image", "image")];
+  const img = [badgeField(badgeId, b, "badgeImage", "Badge/Image|Badge mobile big", "image")];
   const states: CardState[] = [];
   const push = (state: string, label: string, note: string, extra: Field[]) => states.push({ state, label, note, fields: [name, ...img, ...extra] });
   if (b.isTimebound) push("Announced", "Card announced", "Countdown · Payload: Is Timebound + Start Date", [badgeField(badgeId, b, "description", "Description")]);
@@ -240,7 +246,7 @@ export async function loadModel(c: Campaign): Promise<Model> {
       const bd = b.badge ? badges[b.badge] : null;
       if (!bd) continue;
       if (b.blockType === "logged-out-badge-reveal")
-        b.fields.push(badgeField(b.badge!, bd, "badgePopupTitle", "Badge Name"), badgeField(b.badge!, bd, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(b.badge!, bd, "loggedOutRevealDescription", "Logged Out · Description"), badgeField(b.badge!, bd, "badgeImage", "Badge mobile big|Badge/Image", "image"));
+        b.fields.push(badgeField(b.badge!, bd, "badgePopupTitle", "Badge Name"), badgeField(b.badge!, bd, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(b.badge!, bd, "loggedOutRevealDescription", "Logged Out · Description"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image|Badge mobile big", "image"));
       if (b.blockType === "single-card-showcase") b.fields.push(badgeField(b.badge!, bd, "publicTitle", "Name / Year"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image", "image"));
       if (b.blockType === "badge-engagement-teaser") b.fields.push(badgeField(b.badge!, bd, "badgeImage", "Badge Image", "image"));
     }
