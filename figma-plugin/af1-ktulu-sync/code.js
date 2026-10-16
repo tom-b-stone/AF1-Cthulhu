@@ -406,7 +406,9 @@ async function linkOverview(page) {
     var title = texts.filter(function (x) { return x.fontName !== figma.mixed && x.fontName.style === "Bold"; })[0] || texts[0];
     if (!title) continue;
     await loadFonts(title);
-    title.hyperlink = { type: "NODE", value: secs[g.key].id };
+    // page cards jump to the page itself, hub cards to the activation section
+    var fr = url ? page.findOne(function (x) { return x.type === "FRAME" && x.name === "Mobile / page:" + url; }) : null;
+    title.hyperlink = { type: "NODE", value: (fr || secs[g.key]).id };
     title.textDecoration = "UNDERLINE"; n++;
   }
   return n;
