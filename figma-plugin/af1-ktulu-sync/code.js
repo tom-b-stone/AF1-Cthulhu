@@ -191,8 +191,8 @@ function collect(page) {
       var v;
       if (f.kind === "image") {
         var layer = findLayer(n, f.layer, "IMAGE"), h = imageHashOf(layer), rec = (d.imgs || {})[f.key];
-        if (!h) continue;
-        if (rec && rec.hash === h) v = rec.id; else { uploads.push({ node: n, field: f, layer: layer, hash: h }); v = "upload:" + h; }
+        if (!h || !rec) continue; // only images the sync placed can be "edited in Figma"
+        if (rec.hash === h) v = rec.id; else { uploads.push({ node: n, field: f, layer: layer, hash: h }); v = "upload:" + h; }
       } else { v = getText(n, f.layer); if (v === undefined) continue; }
       var isChange = !d.last || d.last[f.key] !== v;
       if (!(f.key in values) || (isChange && !changed[f.key])) { values[f.key] = v; if (isChange) changed[f.key] = true; }

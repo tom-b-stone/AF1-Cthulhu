@@ -503,12 +503,17 @@ export async function mediaFile(id: string): Promise<{ body: ArrayBuffer; type: 
   // only sizes with the original's aspect ratio (some sizes are cropped)
   const ratio = doc.width && doc.height ? doc.width / doc.height : 0;
   const pick = sizes.filter((s) => s?.url && s.width && s.height && s.width <= 2000 && (!ratio || Math.abs(s.width / s.height - ratio) / ratio < 0.02)).sort((a, b) => b.width - a.width)[0];
-  const url: string = pick?.url ?? doc.url;
-  if (!url) return null;
-  const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/^\/cms\/api/, "");
-  const res = await stagingRequest(path);
-  if (!res.ok) return null;
-  return { body: await res.arrayBuffer(), type: res.headers.get("content-type") ?? "image/webp" };
+  // videos/animations: use a still (thumbnail or any image size) so Figma gets a picture
+  const isImage = !doc.mimeType || /^image\//.test(doc.mimeType);
+  const still = sizes.filter((s) => s?.url && (!s.mimeType || /^image\//.test(s.mimeType))).sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0];
+  const urls = [pick?.url, isImage ? doc.url : null, doc.thumbnailURL, still?.url, doc.url].filter(Boolean) as string[];
+  for (const url of [...new Set(urls)]) {
+    const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/^\/cms\/api/, "");
+    const res = await stagingRequest(path).catch(() => null);
+    const type = res?.headers.get("content-type") ?? "image/webp";
+    if (res?.ok && /^image\//.test(type)) return { body: await res.arrayBuffer(), type };
+  }
+  return null;
 }
 
 // An image placed in Figma → staging media (campaign folder + tag).
