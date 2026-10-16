@@ -58,7 +58,9 @@ async function compareMedia(ctx: Ctx, pId: string, sVal: Json, target: Target, w
     ctx.issues.push({ page: ctx.page, where, kind: "image-missing", detail: `staging media ${sId} not found (production: ${pm.filename})`, fix: { type: "media-copy", prodMedia: pId, target } });
     return;
   }
-  const sameFile = sm.filename === pm.filename || (sm.width === pm.width && sm.height === pm.height && Math.abs((sm.filesize ?? 0) - (pm.filesize ?? 0)) < 1024);
+  // our re-copies carry a "-sin" suffix; staging may re-encode, so size is not a criterion
+  const base = (f: string) => String(f ?? "").replace(/-sin(\.[a-z0-9]+)$/i, "$1").replace(/-\d+(\.[a-z0-9]+)$/i, "$1");
+  const sameFile = (sm.filename === pm.filename || base(sm.filename) === base(pm.filename)) && sm.width === pm.width && sm.height === pm.height;
   if (!sameFile) {
     ctx.issues.push({ page: ctx.page, where, kind: "image-file", detail: `different image: staging ${sm.filename} (${sm.width}×${sm.height}), production ${pm.filename} (${pm.width}×${pm.height})`, fix: { type: "media-copy", prodMedia: pId, target } });
     return;
