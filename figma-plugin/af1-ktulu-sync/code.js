@@ -28,6 +28,8 @@ function apiUrl() { return BASE + encodeURIComponent(state.token) + "/" + state.
 function mediaUrl(id) { return apiUrl() + "?media=" + encodeURIComponent(id); }
 function solid(r, g, b) { return [{ type: "SOLID", color: { r: r, g: g, b: b } }]; }
 var GRAPH = solid(0.169, 0.161, 0.161), CHALK = solid(0.961, 0.949, 0.949), MUTED = solid(0.463, 0.451, 0.451), LAVA = solid(1, 0.176, 0);
+// screen sections are dark so the pages stand out; labels on them are light
+var DARK = solid(0.118, 0.114, 0.114), ON_DARK = solid(0.961, 0.949, 0.949), ON_DARK_MUTED = solid(0.65, 0.64, 0.64);
 function autoLayout(dir) { var f = figma.createFrame(); f.layoutMode = dir; f.primaryAxisSizingMode = "AUTO"; f.counterAxisSizingMode = "AUTO"; f.fills = []; return f; }
 
 async function api(method, body) {
@@ -103,6 +105,7 @@ function propKey(inst, layer) { var props = inst.componentProperties || {}; for 
 // every visible layer with that name gets the text (some modules repeat a layer, e.g. Description)
 function allTextLayers(inst, layer) {
   var first = findLayer(inst, layer, "TEXT"); if (!first) return [];
+  if (layer.indexOf(">") >= 0 || layer.indexOf("|") >= 0) return [first]; // scoped: exactly that layer
   var out = inst.findAll(function (x) { return x.type === "TEXT" && x.name === first.name && shown(x, inst); });
   return out.length ? out : [first];
 }
@@ -321,31 +324,48 @@ async function buildPageFrame(sec, p, x, y) {
   return fr;
 }
 
+// a small pill next to every module that only logged-in or logged-out users see
+async function authPills(sec, fr, p) {
+  await loadFont({ family: "Inter", style: "Bold" });
+  var kids = fr.children;
+  for (var i = 0; i < kids.length; i++) {
+    var d = readData(kids[i]); if (!d || d.type !== "block") continue;
+    var b = p.blocks.filter(function (x) { return x.id === d.blockId; })[0];
+    if (!b || !b.auth || b.auth === "PUBLIC") continue;
+    var txt = b.auth === "LOGGED_OUT" ? "LOGGED OUT ONLY" : b.auth === "AUTHENTICATED" ? "LOGGED IN ONLY" : b.auth;
+    var pill = autoLayout("HORIZONTAL"); pill.name = "Visibility · " + txt; pill.paddingTop = pill.paddingBottom = 6; pill.paddingLeft = pill.paddingRight = 10; pill.cornerRadius = 999;
+    pill.fills = b.auth === "LOGGED_OUT" ? solid(0.9, 0.9, 0.9) : LAVA;
+    var t = figma.createText(); t.fontName = { family: "Inter", style: "Bold" }; t.fontSize = 12; t.characters = txt; t.fills = b.auth === "LOGGED_OUT" ? GRAPH : solid(1, 1, 1); pill.appendChild(t);
+    sec.appendChild(pill); pill.x = fr.x - pill.width - 12; pill.y = fr.y + kids[i].y + 16;
+  }
+}
+
 function cleanTitle(t) { return String(t || "").replace(/^\s*SIN\s*\|\s*/i, ""); }
 
 // one section per landing page; the activation page also gets the card journey
 async function buildSection(p, num, card, group, isMain, mainUrl, ov) {
   var sec = figma.createSection(); sec.name = "SIN · " + String(num).padStart(2, "0") + " · " + cleanTitle(p.title);
-  sec.fills = CHALK; sec.x = -50000; sec.y = 0;
+  sec.fills = DARK; sec.x = -50000; sec.y = 0;
   writeData(sec, { type: "section", url: p.url, group: group.key });
   try {
     if (ov) { var back = await label(sec, "← Back to the overview", 26, "Semi Bold", LAVA, 200, 70); back.hyperlink = { type: "NODE", value: ov.id }; }
-    await label(sec, "MOBILE", 24, "Bold", MUTED, 200, 140);
-    await label(sec, String(num).padStart(2, "0") + " · " + cleanTitle(p.title), 48, "Bold", GRAPH, 200, 180);
-    await label(sec, "/" + p.url + (group.note ? "   ·   " + group.note : ""), 22, "Regular", MUTED, 200, 250);
+    await label(sec, "MOBILE", 24, "Bold", ON_DARK_MUTED, 200, 140);
+    await label(sec, String(num).padStart(2, "0") + " · " + cleanTitle(p.title), 48, "Bold", ON_DARK, 200, 180);
+    await label(sec, "/" + p.url + (group.note ? "   ·   " + group.note : ""), 22, "Regular", ON_DARK_MUTED, 200, 250);
     progress("Building /" + p.url + " …");
     var Y = 460;
-    var fr = await buildPageFrame(sec, p, 200, Y);
-    var right = 575, maxH = fr.height;
+    var fr = await buildPageFrame(sec, p, 260, Y);
+    await authPills(sec, fr, p);
+    var right = 635, maxH = fr.height;
     var hasCard = card && p.blocks.some(function (b) { return b.badge === card.badgeId; });
     if (!isMain && hasCard) {
-      var note = await label(sec, "Same Team Card as /" + mainUrl + " → its journey is shown there", 24, "Semi Bold", LAVA, 675, Y, 900);
+      var note = await label(sec, "Same Team Card as /" + mainUrl + " → its journey is shown there", 24, "Semi Bold", LAVA, 735, Y, 900);
       note.name = "Same card note";
-      right = 1575;
+      right = 1635;
     }
     if (isMain && card) {
-      var x = 975;
-      await arrow(sec, [[575, Y + 120], [x - 20, Y + 120]], LAVA, [], "Card tapped");
+      var x = 1035;
+      await arrow(sec, [[635, Y + 120], [x - 20, Y + 120]], LAVA, [], "Card tapped");
       for (var i = 0; i < card.states.length; i++) {
         var s = card.states[i];
         var comp = await variantOf(state.data.overlayKey, "State=" + s.state); await preloadFonts(comp);
@@ -353,9 +373,9 @@ async function buildSection(p, num, card, group, isMain, mainUrl, ov) {
         inst.name = "Mobile / " + String(i + 2).padStart(2, "0") + " " + s.label;
         writeData(inst, { type: "card", badgeId: card.badgeId, state: s.state, fields: tagFields(s.fields), last: {}, imgs: {} });
         await applyFields(inst, valuesOf(s.fields));
-        await label(sec, String(i + 2).padStart(2, "0") + " · " + s.label, 32, "Bold", GRAPH, x, Y - 120);
-        await label(sec, s.note, 20, "Regular", MUTED, x, Y - 70, 600);
-        if (i < card.states.length - 1) await arrow(sec, [[x + 375 + 10, Y + 396], [x + 775 - 20, Y + 396]], GRAPH, [], null);
+        await label(sec, String(i + 2).padStart(2, "0") + " · " + s.label, 32, "Bold", ON_DARK, x, Y - 120);
+        await label(sec, s.note, 20, "Regular", ON_DARK_MUTED, x, Y - 70, 600);
+        if (i < card.states.length - 1) await arrow(sec, [[x + 375 + 10, Y + 396], [x + 775 - 20, Y + 396]], ON_DARK, [], null);
         maxH = Math.max(maxH, inst.height); x += 775; right = x;
       }
     }

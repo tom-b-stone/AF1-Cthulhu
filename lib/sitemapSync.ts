@@ -87,7 +87,7 @@ export const MODULES: Record<string, ModuleDef> = {
 export const SKIP_BLOCKS = new Set(["spacer"]);
 
 export type Field = { key: string; path: string; layer: string; value: string; kind: "text" | "image"; readonly?: boolean };
-export type Block = { id: string; blockType: string; hidden: boolean; name?: string; badge?: string; engagement?: string; bg?: string; fields: Field[] };
+export type Block = { id: string; blockType: string; hidden: boolean; auth?: string; name?: string; badge?: string; engagement?: string; bg?: string; fields: Field[] };
 export type SyncPage = { id: string; url: string; title: string; updatedAt: string; status: string; blocks: Block[] };
 export type CardState = { state: string; label: string; note: string; fields: Field[] };
 export type SyncCard = { badgeId: string; title: string; rewardType: string; isTimebound: boolean; group: string; states: CardState[] };
@@ -196,10 +196,10 @@ function cardStates(badgeId: string, b: Json): CardState[] {
   const img = [badgeField(badgeId, b, "badgeImage", "Badge/Image|Badge mobile big", "image")];
   const states: CardState[] = [];
   const push = (state: string, label: string, note: string, extra: Field[]) => states.push({ state, label, note, fields: [name, ...img, ...extra] });
-  if (b.isTimebound) push("Announced", "Card announced", "Countdown · Payload: Is Timebound + Start Date", [badgeField(badgeId, b, "description", "Description")]);
+  if (b.isTimebound) push("Announced", "Card announced", "Countdown · Payload: Is Timebound + Start Date", [badgeField(badgeId, b, "description", "Bottom Content>Description")]);
   push("Logged Out", "Logged out", "Payload: Logged Out Reveal title + description", [badgeField(badgeId, b, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(badgeId, b, "loggedOutRevealDescription", "Logged Out · Description")]);
-  push("Default", "Not earned yet", "Payload: Reward Teaser Description + Unearned CTA", [badgeField(badgeId, b, "rewardTeaserDescription", "Description")]);
-  const earned = (state: string, label: string, note: string, extra: Field[] = []) => push(state, label, note, [badgeField(badgeId, b, "rewardDescription", "Description"), ...extra]);
+  push("Default", "Not earned yet", "Payload: Reward Teaser Description + Unearned CTA", [badgeField(badgeId, b, "rewardTeaserDescription", "Bottom Content>Description")]);
+  const earned = (state: string, label: string, note: string, extra: Field[] = []) => push(state, label, note, [badgeField(badgeId, b, "rewardDescription", "Bottom Content>Description"), ...extra]);
   const rt = str(b.rewardType);
   if (rt === "couponCode") earned("Code", "Earned · voucher code", "Reward Type: Coupon Code", [badgeField(badgeId, b, "couponCode", "Code")]);
   else if (rt === "raffleSignup") {
@@ -208,7 +208,7 @@ function cardStates(badgeId: string, b: Json): CardState[] {
     earned("Raffle Closed", "Raffle closed", "After the end date");
   } else if (/download/i.test(rt)) earned("Download", "Earned · download", "Reward Type: Download Asset");
   else earned("Link", "Earned · no reward / link", "Reward Type: No Reward (+ Reward CTA)");
-  states.push({ state: "Back", label: "Card back", note: "Flip from any earned state · Payload: Description, back image", fields: [name, badgeField(badgeId, b, "description", "Back · Info Text|Description"), badgeField(badgeId, b, "badgeBackImage", "Badge/Image", "image")] });
+  states.push({ state: "Back", label: "Card back", note: "Flip from any earned state · Payload: Description, back image", fields: [name, badgeField(badgeId, b, "description", "Back · Info Text"), badgeField(badgeId, b, "description", "Bottom Content>Description"), badgeField(badgeId, b, "badgeBackImage", "Badge/Image", "image")] });
   return states;
 }
 
@@ -225,12 +225,12 @@ export async function loadModel(c: Campaign): Promise<Model> {
     updatedAt: d.updatedAt,
     status: d._status,
     blocks: (d.sections ?? [])
-      .filter((s: Json) => !SKIP_BLOCKS.has(s.blockType))
+      .filter((s: Json) => !SKIP_BLOCKS.has(s.blockType) && s.authRequirement !== "HIDDEN")
       .map((s: Json) => {
         const badge = s.badge ? idOf(s.badge) : undefined;
         if (badge) badgeIds.add(badge);
         const eng = (s.children ?? []).find((x: Json) => x?.engagement)?.engagement;
-        return { id: s.id, blockType: s.blockType, hidden: s.authRequirement === "HIDDEN", name: s.blockName, badge, engagement: eng ? idOf(eng) : undefined, bg: s.background?.imageSettings?.bgColor ?? s.backgroundColor, fields: blockFields(d.id, s) };
+        return { id: s.id, blockType: s.blockType, hidden: false, auth: s.authRequirement, name: s.blockName, badge, engagement: eng ? idOf(eng) : undefined, bg: s.background?.imageSettings?.bgColor ?? s.backgroundColor, fields: blockFields(d.id, s) };
       }),
   }));
   // badges
