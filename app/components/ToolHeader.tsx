@@ -130,7 +130,10 @@ export default function ToolHeader() {
             title="Missing something or found a bug? Tell us."
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 999, border: "1px solid rgba(255,45,0,0.45)", background: "rgba(255,45,0,0.12)", color: "#fff", textDecoration: "none", fontSize: 12 }}
           >
-            <span aria-hidden>💡</span> Add an idea
+            <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z" />
+            </svg>
+            Add an idea
           </Link>
           <Link href="/connector" className="link-line" style={{ color: "var(--muted)" }}>
             Connector
