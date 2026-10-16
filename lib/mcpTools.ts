@@ -19,7 +19,7 @@ import { rulebook } from "./assetPrompt";
 import { cleanDescriptor, validateAlt, knowledgeIssues, ALT_MAX } from "./assetNaming";
 import { copyTeamCard } from "./teamCardCopy";
 import { jobSummary, readJob, startJob, stepJob } from "./siteCopy";
-import { status as sitemapStatus, cardsForConfigurator } from "./sitemapSync";
+import { status as sitemapStatus, cardsForConfigurator, queueCommand, resetSync } from "./sitemapSync";
 import { compareCampaign, loadIssues, repairCampaign, saveIssues } from "./siteCompare";
 import { importCampaignCards } from "./teamCards";
 import { FIELDS, applyChanges, diff, getCard, listCards, readChangeset, saveChangeset, stagingLinks, type Change, type LocValue } from "./teamCards";
@@ -401,6 +401,18 @@ ${SEO_WRITE_RECIPE}`);
       } catch (e) {
         return text(e instanceof Error ? e.message : "failed", true);
       }
+    },
+  },
+  {
+    name: "sitemap_queue_build",
+    annotations: { title: "Queue a full Figma rebuild for the sitemap plugin", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    description: "Queues a full rebuild of all sitemap screens for the AF1 Ktulu Sync Figma plugin: the next time the plugin opens it builds every page and card journey from staging and records the state. reset=true also forgets the last sync state (use when Figma was cleared).",
+    inputSchema: { type: "object", properties: { campaign: { type: "string" }, reset: { type: "boolean" } } },
+    async run(args, actor) {
+      const c = String(args.campaign ?? "sin");
+      if (args.reset) await resetSync(c);
+      await queueCommand(c, "build", actor);
+      return text(`Queued: the plugin rebuilds all ${c} screens the next time it opens${args.reset ? " (sync state reset)" : ""}.`);
     },
   },
   {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePluginToken } from "@/lib/connectorTokens";
-import { CAMPAIGNS, MODULES, OVERLAY_KEY, ackPending, applySync, getPending, loadModel, mediaFile, previewSync, uploadFromFigma } from "@/lib/sitemapSync";
+import { CAMPAIGNS, MODULES, OVERLAY_KEY, ackPending, applySync, clearCommand, getCommand, getPending, loadModel, mediaFile, previewSync, uploadFromFigma } from "@/lib/sitemapSync";
 
 // Endpoint for the "AF1 Ktulu Sync" Figma plugin (figma-plugin/ in this
 // repo). The plugin runs in Figma's sandbox (origin "null"), so it can't
@@ -38,11 +38,11 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     return new NextResponse(f.body, { headers: { ...CORS, "Content-Type": f.type, "Cache-Control": "private, max-age=3600" } });
   }
   try {
-    const [m, pending] = await Promise.all([loadModel(c), getPending(campaign)]);
+    const [m, pending, command] = await Promise.all([loadModel(c), getPending(campaign), getCommand(campaign)]);
     const { mediaFolder: _a, contentTag: _b, ...pub } = c;
     void _a;
     void _b;
-    return json({ campaign: pub, pages: m.pages, cards: m.cards, groups: m.groups, media: m.media, modules: MODULES, overlayKey: OVERLAY_KEY, pending, user: rec.email });
+    return json({ campaign: pub, pages: m.pages, cards: m.cards, groups: m.groups, media: m.media, modules: MODULES, overlayKey: OVERLAY_KEY, pending, command, user: rec.email });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "failed" }, 502);
   }
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     figma?: Record<string, string>;
     nodes?: Record<string, string>;
     decisions?: Record<string, "figma" | "cms">;
+    only?: string[];
     keys?: string[];
     name?: string;
     mime?: string;
@@ -69,6 +70,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   } | null;
   try {
     if (b?.action === "check") return json(await previewSync(campaign, b.figma ?? {}));
+    if (b?.action === "ack-command") {
+      await clearCommand(campaign);
+      return json({ ok: true });
+    }
     if (b?.action === "ack") return json({ remaining: await ackPending(campaign, b.keys ?? []) });
     if (b?.action === "upload") {
       if (!b.data) return json({ error: "no image data" }, 400);
@@ -77,7 +82,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       return json({ id });
     }
     if (b?.action === "sync") {
-      const r = await applySync(campaign, rec.email, { figma: b.figma ?? {}, nodes: b.nodes, decisions: b.decisions });
+      const r = await applySync(campaign, rec.email, { figma: b.figma ?? {}, nodes: b.nodes, decisions: b.decisions, only: b.only });
       console.log(`[sitemap] ${rec.email} figma sync ${campaign}: ${r.summary}`);
       return json(r);
     }

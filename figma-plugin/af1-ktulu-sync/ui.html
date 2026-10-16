@@ -1,39 +1,41 @@
 <style>
   :root { --lava: #ff2d00; --ink: var(--figma-color-text, #2b2929); --muted: var(--figma-color-text-secondary, #767373); --line: var(--figma-color-border, #e0dddd); --bg2: var(--figma-color-bg-secondary, #f5f2f2); }
   body { font: 12px/1.45 Inter, system-ui, sans-serif; color: var(--ink); margin: 0; padding: 14px; background: var(--figma-color-bg, #fff); }
-  h1 { font-size: 15px; margin: 0 0 2px; } h2 { font-size: 11px; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  p { margin: 0 0 8px; color: var(--muted); }
-  input[type=text] { width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink); }
-  button { border: 0; border-radius: 999px; padding: 7px 14px; font-weight: 600; cursor: pointer; background: var(--bg2); color: var(--ink); }
-  button.primary { background: var(--lava); color: #fff; }
+  h1 { font-size: 15px; margin: 0; } p { margin: 4px 0 10px; color: var(--muted); }
+  input[type=text] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink); }
+  button { border: 0; border-radius: 999px; padding: 8px 16px; font-weight: 600; cursor: pointer; background: var(--bg2); color: var(--ink); }
+  button.primary { background: var(--lava); color: #fff; } button.big { width: 100%; padding: 12px; font-size: 13px; }
   .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
-  .card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; }
-  .k { font-size: 11px; color: var(--muted); } .v { white-space: pre-wrap; margin: 2px 0; }
+  .status { padding: 10px 12px; border-radius: 8px; background: var(--bg2); margin: 10px 0; }
+  .item { display: flex; gap: 8px; align-items: flex-start; border-top: 1px solid var(--line); padding: 8px 0; }
+  .item:first-child { border-top: 0; }
+  .k { font-size: 11px; color: var(--muted); } .v { white-space: pre-wrap; }
   .chip { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--bg2); }
   .chip.c { background: var(--lava); color: #fff; }
-  #log { font-size: 11px; color: var(--muted); white-space: pre-wrap; margin-top: 10px; max-height: 160px; overflow: auto; }
-  .err { color: var(--lava); font-weight: 600; }
-  label.choice { display: flex; gap: 6px; align-items: flex-start; margin: 3px 0; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #2bb673; display: inline-block; }
-  .dot.off { background: var(--line); }
+  #list { max-height: 300px; overflow: auto; }
+  #progress { color: var(--lava); font-weight: 600; min-height: 16px; }
+  #log { font-size: 11px; color: var(--muted); white-space: pre-wrap; margin-top: 8px; max-height: 90px; overflow: auto; }
+  .err { color: var(--lava); }
+  details { margin-top: 10px; } summary { cursor: pointer; color: var(--muted); }
 </style>
-<h1>AF1 Ktulu Sync</h1>
-<p>Figma, the AF1 Tool and the staging CMS in the same state. Texts and images sync both ways; the newer side wins, you decide when both changed.</p>
+<h1>AF1 Ktulu Sync · Singapore</h1>
+<p>Figma, the AF1 Tool and staging stay in the same state.</p>
 
 <div id="tokenBox" hidden>
-  <h2>Your token</h2>
-  <p>Create it in the AF1 Tool: Team Cards → Sitemap Sync → "Figma plugin token". Saved on this computer only.</p>
-  <div class="row"><input type="text" id="token" placeholder="paste token" /><button class="primary" id="saveToken">Connect</button></div>
+  <p>Paste your plugin token (AF1 Tool → Team Cards → Sitemap Sync → "Figma plugin token").</p>
+  <div class="row"><input type="text" id="token" placeholder="token" /><button class="primary" id="saveToken">Connect</button></div>
 </div>
 
 <div id="main" hidden>
-  <div class="row"><strong id="who"></strong><span id="summary" class="k"></span></div>
-  <div class="row">
-    <label class="choice" style="margin:0"><input type="checkbox" id="live"> <span><span class="dot" id="liveDot"></span> Live sync every 20 s while open</span></label>
-  </div>
-  <div class="row"><button id="changeToken">Change token</button><button id="check">Check again</button><button class="primary" id="sync">Sync now</button><button id="fonts">Fix fonts</button><button id="images">Refresh images</button></div>
+  <div class="status" id="status">…</div>
+  <div id="progress"></div>
   <div id="buildBox"></div>
-  <div id="diffBox"></div>
+  <div id="changes"></div>
+  <details>
+    <summary>Settings</summary>
+    <div class="row"><label><input type="checkbox" id="live"> Live sync every 20 s while this window is open</label></div>
+    <div class="row"><button id="rebuild">Rebuild all screens</button><button id="changeToken">Change token</button></div>
+  </details>
 </div>
 <div id="log"></div>
 
@@ -43,46 +45,46 @@
   const reply = (reqId, result, error) => parent.postMessage({ pluginMessage: { reqId, result, error } }, "*");
   const log = (s, err) => { const d = document.createElement("div"); d.textContent = new Date().toLocaleTimeString().slice(0, 5) + "  " + s; if (err) d.className = "err"; $("log").prepend(d); };
   const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-  const LABEL = { "figma-newer": "Figma is newer → CMS", "cms-newer": "CMS is newer → Figma", conflict: "Changed on both sides" };
-  let lastDiffs = [];
+  const LABEL = { "figma-newer": "Figma → CMS", "cms-newer": "CMS → Figma", conflict: "Both changed" };
+  let diffs = [];
 
   $("saveToken").onclick = () => { log("Connecting …"); post("save-token", { token: $("token").value }); };
-  $("changeToken").onclick = () => { $("tokenBox").hidden = false; $("token").focus(); };
-  $("check").onclick = () => { log("Checking …"); post("check"); };
-  $("fonts").onclick = () => { log("Swapping fonts …"); post("fix-fonts"); };
-  $("images").onclick = () => { log("Loading all images from the CMS …"); post("refresh-images"); };
-  $("live").onchange = (e) => { $("liveDot").className = "dot" + (e.target.checked ? "" : " off"); post("live", { on: e.target.checked }); };
-  $("sync").onclick = () => {
-    const decisions = {};
-    document.querySelectorAll("input[type=radio]:checked").forEach((r) => (decisions[r.name] = r.value));
-    const open = lastDiffs.filter((d) => d.state === "conflict" && !decisions[d.key]).length;
-    if (open) log(open + " conflict(s) without a decision stay open.");
-    log("Syncing …"); post("sync", { decisions });
-  };
+  $("changeToken").onclick = () => { $("tokenBox").hidden = false; };
+  $("rebuild").onclick = () => { log("Rebuilding all screens …"); post("build"); };
+  $("live").onchange = (e) => post("live", { on: e.target.checked });
 
   function render(m) {
-    $("tokenBox").hidden = true; $("main").hidden = false;
-    $("who").textContent = m.user;
-    $("live").checked = m.live; $("liveDot").className = "dot" + (m.live ? "" : " off");
-    $("summary").textContent = `${m.inSync}/${m.total} fields in sync` + (m.syncedAt ? ` · last sync ${new Date(m.syncedAt).toLocaleString()}` : " · never synced") + (m.pending ? ` · ${m.pending} waiting from the AF1 Tool` : "") + (m.uploads ? ` · ${m.uploads} new image(s) to upload` : "");
-    const miss = new Set(m.missing.map((x) => x.key));
-    $("buildBox").innerHTML = `<h2>Activations (${m.groups.length - m.missing.length}/${m.groups.length} built)</h2>` +
-      m.groups.map((g) => `<label class="choice"><input type="checkbox" class="grp" value="${g.key}" ${miss.has(g.key) ? "checked" : ""}> <span>${esc(g.title)} <span class="k">${miss.has(g.key) ? "not built" : "built"}</span></span></label>`).join("") +
-      `<div class="row"><button class="primary" id="build">Build selected</button><label class="choice" style="margin:0"><input type="checkbox" id="rebuild"> <span>Rebuild if already built</span></label></div>`;
-    $("build").onclick = () => { const keys = [...document.querySelectorAll(".grp:checked")].map((x) => x.value); log("Building " + keys.length + " activation(s) …"); post("build", { keys, rebuild: $("rebuild").checked }); };
-    lastDiffs = m.diffs;
-    $("diffBox").innerHTML = m.diffs.length
-      ? `<h2>Differences (${m.diffs.length})</h2>` +
-        m.diffs.map((d) => `<div class="card"><div class="row" style="margin:0"><span class="chip ${d.state === "conflict" ? "c" : ""}">${LABEL[d.state] || d.state}</span><span class="k">${esc(d.page)} · ${esc(d.block)} · ${esc(d.layer)}</span></div>` +
-          (d.kind === "image" ? `<div class="k">Image ${d.state === "figma-newer" ? "replaced in Figma" : "changed in the CMS"}</div>` :
+    $("tokenBox").hidden = true; $("main").hidden = false; $("live").checked = m.live;
+    $("status").innerHTML = m.built === 0
+      ? `<strong>No screens in Figma yet.</strong> ${m.pages} pages are ready on staging.`
+      : `<strong>${m.built}/${m.pages} pages in Figma · ${m.inSync}/${m.total} fields in sync.</strong>` + (m.syncedAt ? `<br><span class="k">Last sync ${new Date(m.syncedAt).toLocaleString()}</span>` : "");
+    $("buildBox").innerHTML = m.built === 0 ? `<button class="primary big" id="build">Build all ${m.pages} pages in Figma</button>` : "";
+    if (m.built === 0) $("build").onclick = () => { log("Building …"); post("build"); };
+    diffs = m.diffs;
+    if (!diffs.length) { $("changes").innerHTML = m.built ? `<p>Everything is in sync.</p>` : ""; return; }
+    $("changes").innerHTML =
+      `<div class="row"><strong>${diffs.length} change${diffs.length === 1 ? "" : "s"}</strong><button id="all">Select all</button><button id="none">None</button></div><div id="list">` +
+      diffs.map((d, i) => `<div class="item"><input type="checkbox" class="sel" data-i="${i}" ${d.state === "conflict" ? "" : "checked"}><div style="flex:1">
+        <div><span class="chip ${d.state === "conflict" ? "c" : ""}">${LABEL[d.state] || d.state}</span> <span class="k">${esc(d.page)} · ${esc(d.layer)}</span></div>
+        ${d.kind === "image" ? `<div class="k">Image ${d.state === "figma-newer" ? "replaced in Figma" : "changed in the CMS"}</div>` :
           d.state === "conflict"
-            ? `<label class="choice"><input type="radio" name="${d.key}" value="figma"><span><span class="k">Keep Figma</span><div class="v">${esc(d.figma)}</div></span></label><label class="choice"><input type="radio" name="${d.key}" value="cms"><span><span class="k">Keep CMS</span><div class="v">${esc(d.cms)}</div></span></label>`
-            : `<div class="k">${d.state === "figma-newer" ? "Figma" : "CMS"}</div><div class="v">${esc(d.state === "figma-newer" ? d.figma : d.cms)}</div><div class="k">was</div><div class="v">${esc(d.base)}</div>`) +
-          `</div>`).join("")
-      : m.missing.length === m.groups.length ? "" : `<h2>All fields in sync</h2>`;
+            ? `<label><input type="radio" name="c${i}" value="figma" checked> Figma: <span class="v">${esc(d.figma)}</span></label><br><label><input type="radio" name="c${i}" value="cms"> CMS: <span class="v">${esc(d.cms)}</span></label>`
+            : `<div class="v">${esc(d.state === "figma-newer" ? d.figma : d.cms)}</div>`}
+      </div></div>`).join("") +
+      `</div><button class="primary big" id="apply" style="margin-top:8px">Apply selected</button>`;
+    $("all").onclick = () => document.querySelectorAll(".sel").forEach((x) => (x.checked = true));
+    $("none").onclick = () => document.querySelectorAll(".sel").forEach((x) => (x.checked = false));
+    $("apply").onclick = () => {
+      const only = [], decisions = {};
+      document.querySelectorAll(".sel:checked").forEach((x) => {
+        const d = diffs[Number(x.dataset.i)]; only.push(d.key);
+        if (d.state === "conflict") decisions[d.key] = (document.querySelector(`input[name=c${x.dataset.i}]:checked`) || {}).value || "figma";
+      });
+      if (!only.length) return log("Nothing selected.");
+      log("Applying " + only.length + " change(s) …"); post("apply", { only, decisions });
+    };
   }
 
-  // images: decode anything the browser can (WebP too) and hand Figma a JPEG/PNG
   async function toJpeg(blob, maxEdge, q) {
     const bmp = await createImageBitmap(blob);
     const s = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
@@ -91,26 +93,16 @@
     const out = await new Promise((r) => c.toBlob(r, "image/jpeg", q));
     return new Uint8Array(await out.arrayBuffer());
   }
-  async function fetchImage(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("image " + res.status);
-    return toJpeg(await res.blob(), 2400, 0.9);
-  }
-  async function encodeImage(bytes) {
-    const jpg = await toJpeg(new Blob([new Uint8Array(bytes)]), 2400, 0.85);
-    let bin = ""; for (let i = 0; i < jpg.length; i += 0x8000) bin += String.fromCharCode.apply(null, jpg.subarray(i, i + 0x8000));
-    return { base64: btoa(bin) };
-  }
-
   onmessage = async (e) => {
     const m = e.data.pluginMessage; if (!m) return;
-    if (m.type === "fetch-image") { try { reply(m.reqId, await fetchImage(m.url)); } catch (err) { reply(m.reqId, null, err.message); } return; }
-    if (m.type === "encode-image") { try { reply(m.reqId, await encodeImage(m.bytes)); } catch (err) { reply(m.reqId, null, err.message); } return; }
+    if (m.type === "fetch-image") { try { const r = await fetch(m.url); if (!r.ok) throw new Error("image " + r.status); reply(m.reqId, await toJpeg(await r.blob(), 2400, 0.9)); } catch (err) { reply(m.reqId, null, err.message); } return; }
+    if (m.type === "encode-image") { try { const j = await toJpeg(new Blob([new Uint8Array(m.bytes)]), 2400, 0.85); let b = ""; for (let i = 0; i < j.length; i += 0x8000) b += String.fromCharCode.apply(null, j.subarray(i, i + 0x8000)); reply(m.reqId, { base64: btoa(b) }); } catch (err) { reply(m.reqId, null, err.message); } return; }
     if (m.type === "token") { $("token").value = m.token; if (!m.token) $("tokenBox").hidden = false; }
-    if (m.type === "checked") { render(m); log("Checked."); }
-    if (m.type === "synced") log(`${m.quiet ? "Live sync" : "Synced"}: ${m.toCms} to the CMS, ${m.toFigma} into Figma, ${m.open.length} open.` + (m.written.length ? "\n" + m.written.join("\n") : ""));
+    if (m.type === "checked") render(m);
+    if (m.type === "progress") $("progress").textContent = m.msg;
+    if (m.type === "synced") log(`Applied: ${m.toCms} to the CMS, ${m.toFigma} into Figma` + (m.open ? `, ${m.open} left` : "") + "." + (m.written.length ? "\n" + m.written.join("\n") : ""));
     if (m.type === "log") log(m.msg);
-    if (m.type === "error") { log(m.msg, true); if (/token/i.test(m.msg)) { $("tokenBox").hidden = false; $("token").value = ""; $("token").focus(); } }
+    if (m.type === "error") { log(m.msg, true); if (/token/i.test(m.msg)) $("tokenBox").hidden = false; }
   };
   post("init");
 </script>

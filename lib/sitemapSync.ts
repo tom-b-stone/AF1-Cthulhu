@@ -186,7 +186,8 @@ function badgeField(badgeId: string, b: Json, path: string, layer: string, kind:
 
 function cardStates(badgeId: string, b: Json): CardState[] {
   const name = badgeField(badgeId, b, "badgePopupTitle", "Badge Name");
-  const img = [badgeField(badgeId, b, "badgeImage", "Badge/Image", "image"), badgeField(badgeId, b, "badgeImage", "Badge mobile big", "image")];
+  // one image layer per state: the plugin picks the visible one of the two
+  const img = [badgeField(badgeId, b, "badgeImage", "Badge mobile big|Badge/Image", "image")];
   const states: CardState[] = [];
   const push = (state: string, label: string, note: string, extra: Field[]) => states.push({ state, label, note, fields: [name, ...img, ...extra] });
   if (b.isTimebound) push("Announced", "Card announced", "Countdown · Payload: Is Timebound + Start Date", [badgeField(badgeId, b, "description", "Description")]);
@@ -239,7 +240,7 @@ export async function loadModel(c: Campaign): Promise<Model> {
       const bd = b.badge ? badges[b.badge] : null;
       if (!bd) continue;
       if (b.blockType === "logged-out-badge-reveal")
-        b.fields.push(badgeField(b.badge!, bd, "badgePopupTitle", "Badge Name"), badgeField(b.badge!, bd, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(b.badge!, bd, "loggedOutRevealDescription", "Logged Out · Description"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image", "image"), badgeField(b.badge!, bd, "badgeImage", "Badge mobile big", "image"));
+        b.fields.push(badgeField(b.badge!, bd, "badgePopupTitle", "Badge Name"), badgeField(b.badge!, bd, "loggedOutRevealTitle", "Logged Out · Title"), badgeField(b.badge!, bd, "loggedOutRevealDescription", "Logged Out · Description"), badgeField(b.badge!, bd, "badgeImage", "Badge mobile big|Badge/Image", "image"));
       if (b.blockType === "single-card-showcase") b.fields.push(badgeField(b.badge!, bd, "publicTitle", "Name / Year"), badgeField(b.badge!, bd, "badgeImage", "Badge/Image", "image"));
       if (b.blockType === "badge-engagement-teaser") b.fields.push(badgeField(b.badge!, bd, "badgeImage", "Badge Image", "image"));
     }
@@ -395,7 +396,7 @@ export async function status(campaign: string) {
 // ---- apply
 const splitPath = (p: string) => p.split(".").map((x) => (/^\d+$/.test(x) ? Number(x) : x));
 
-export async function applySync(campaign: string, by: string, opts: { figma?: FieldMap; nodes?: Record<string, string>; decisions?: Record<string, "figma" | "cms"> }) {
+export async function applySync(campaign: string, by: string, opts: { figma?: FieldMap; nodes?: Record<string, string>; decisions?: Record<string, "figma" | "cms">; only?: string[] }) {
   const c = CAMPAIGNS[campaign];
   if (!c) throw new Error("unknown campaign");
   if (opts.figma) {
@@ -412,6 +413,10 @@ export async function applySync(campaign: string, by: string, opts: { figma?: Fi
   const open: Diff[] = [];
   for (const d of diffs) {
     if (d.state === "missing-in-figma") continue;
+    if (opts.only && !opts.only.includes(d.key)) {
+      open.push(d);
+      continue;
+    }
     const choice = dec[d.key] ?? (d.state === "figma-newer" ? "figma" : d.state === "cms-newer" ? "cms" : undefined);
     if (choice === "figma") toCms.push(d);
     else if (choice === "cms") toFigma.push(d);
@@ -535,4 +540,25 @@ export async function cardsForConfigurator(campaign: string) {
     if (!engagementId) mechanic = "page";
     return { badgeId: cd.badgeId, title: cd.title, rewardType: cd.rewardType, pageId, blockId, engagementId, mechanic, imageId: idOf(bd?.badgeImage), placement: `Singapore · ${g.title} (${g.urls.map((u) => "/" + u).join(", ")})` };
   });
+}
+
+// ---- one-off commands for the plugin (e.g. "build": rebuild every screen)
+const kCmd = (c: string) => `sitemap:${c}:command`;
+export async function queueCommand(campaign: string, command: string, by: string) {
+  await kvSet(kCmd(campaign), JSON.stringify({ command, by, at: new Date().toISOString() }));
+}
+export async function getCommand(campaign: string): Promise<{ command: string; by: string; at: string } | null> {
+  const raw = await kvGet(kCmd(campaign));
+  return raw ? JSON.parse(raw) : null;
+}
+export async function clearCommand(campaign: string) {
+  const { kvDel } = await import("./kv");
+  await kvDel(kCmd(campaign));
+}
+// a fresh build: forget the last agreed state and Figma's report
+export async function resetSync(campaign: string) {
+  await kvSet(kSnap(campaign), JSON.stringify({ base: {}, syncedAt: null }));
+  const { kvDel } = await import("./kv");
+  await kvDel(kFigma(campaign));
+  await kvDel(kPending(campaign));
 }
