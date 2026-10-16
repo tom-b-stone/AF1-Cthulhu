@@ -143,7 +143,8 @@ function blockFields(pageId: string, s: Json): Field[] {
     ["subline", t === "badge-engagement-teaser" ? "Description" : "Subline"],
     ["copy", t === "gallery" ? "Typography/Copy>text" : "Copy"],
   ] as const) {
-    if (typeof s[p] === "string") text(p, layer, s[p]);
+    // the gallery module on audif1.com renders no headline/copy: keep them hidden in Figma too
+    if (typeof s[p] === "string" && !(t === "gallery" && (p === "headline" || p === "copy"))) text(p, layer, s[p]);
     else text(`_figma.${p}`, layer, "", true);
   }
   let cta = false;
