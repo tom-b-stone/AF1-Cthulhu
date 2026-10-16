@@ -156,9 +156,10 @@ export default function EditCard() {
 
   const textOf = useCallback(
     (k: string, l: Loc) => {
-      if (k === "meta:race") return card?.raceLabel ?? "";
+      // card details on the back: values from the record where known, otherwise the captured text stays
+      if (k === "meta:race") return card?.raceLabel ? `${card.raceLabel}${/GP$/.test(card.raceLabel) ? "" : " GP"}` : "";
       if (k === "meta:type") return card?.badgeTypeLabel ?? "";
-      if (k === "meta:season") return "2026";
+      if (k === "meta:season") return "";
       return vals[k]?.[l] ?? "";
     },
     [vals, card],
@@ -290,7 +291,8 @@ export default function EditCard() {
         lang={l}
         tag={tag}
         scale={scale}
-        values={Object.fromEntries(keys.map((k) => [k, textOf(k, l)]))}
+        values={Object.fromEntries(keys.flatMap((k) => (k.startsWith("meta:") && !textOf(k, l) ? [] : [[k, textOf(k, l)]])))}
+        anchor={s.anchor}
         images={images}
         editable={keys.filter((k) => !k.startsWith("meta:"))}
         missing={l === "de" ? missingDe : undefined}
@@ -301,7 +303,7 @@ export default function EditCard() {
   };
 
   return (
-    <div style={{ margin: "-28px -36px", minHeight: "calc(100dvh - 64px)", background: C.bg, color: C.fg }}>
+    <div style={{ margin: "-28px -36px", minHeight: "calc(100dvh - 64px)", background: C.bg, color: C.fg, minWidth: 0, overflowX: "clip" }}>
       {/* ---- fixed header: card, steps, view controls ---- */}
       <div style={{ position: "sticky", top: 64, zIndex: 30, background: "rgba(12,12,14,.92)", backdropFilter: "blur(10px)", borderBottom: `1px solid ${C.line}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 24px 8px", flexWrap: "wrap" }}>
@@ -386,13 +388,13 @@ export default function EditCard() {
 
       {/* ---- canvas ---- */}
       {lanes.length > 0 && (
-        <div style={{ padding: "18px 24px 60px", paddingRight: drawer ? 484 : 64, transition: "padding .25s ease-out", display: "grid", gap: 18 }}>
+        <div style={{ padding: "18px 24px 60px", paddingRight: drawer ? 484 : 64, transition: "padding .25s ease-out", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18, minWidth: 0 }}>
           {!whole && <div style={{ fontSize: 13.5, color: C.mute, maxWidth: 760 }}>{current.talk} Tap any text on a screen to change it.</div>}
           {lanes.map((ln) => {
             const L = LANES[ln];
             const list = stations.filter((s) => s.lane === ln);
             return (
-              <section key={ln} aria-label={L.title} style={{ borderRadius: 18, background: L.tint, border: `1px solid ${C.line}`, borderLeft: `3px solid ${L.edge}`, padding: "14px 16px 18px" }}>
+              <section key={ln} aria-label={L.title} style={{ minWidth: 0, borderRadius: 18, background: L.tint, border: `1px solid ${C.line}`, borderLeft: `3px solid ${L.edge}`, padding: "14px 16px 18px" }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
                   <h2 style={{ margin: 0, fontSize: 14, fontWeight: 650, letterSpacing: ".02em" }}>{L.title}</h2>
                   <span style={{ fontSize: 12, color: C.mute }}>{L.text}</span>

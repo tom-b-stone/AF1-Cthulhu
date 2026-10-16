@@ -11,7 +11,7 @@ export type PhoneValues = Record<string, string>;
 const RUNTIME = `
 const send = (m) => parent.postMessage({ af1phone: window.name, ...m }, "*");
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-let editable = new Set(), timer = null, ph = {};
+let editable = new Set(), timer = null, ph = {}, anchored = false;
 function fill(values, images, missing) {
   document.querySelectorAll("[data-k]").forEach((el) => {
     const k = el.dataset.k;
@@ -49,7 +49,10 @@ document.addEventListener("focusout", (e) => { const el = e.target.closest && e.
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && e.target.closest("[data-k]") && !/description|Description|copy|Copy|subline|Subline|message|Message/.test(e.target.closest("[data-k]").dataset.k)) { e.preventDefault(); e.target.blur(); } });
 addEventListener("message", (e) => {
   const m = e.data || {};
-  if (m.type === "fill") { ph = m.placeholders || ph; fill(m.values || {}, m.images || {}, m.missing); setEditable(m.editable || []); }
+  if (m.type === "fill") {
+    ph = m.placeholders || ph; fill(m.values || {}, m.images || {}, m.missing); setEditable(m.editable || []);
+    if (m.anchor && !anchored) { const a = [...document.querySelectorAll('[data-k="' + m.anchor + '"]')].find((x) => x.offsetParent); if (a) { anchored = true; a.scrollIntoView({ block: "center" }); } }
+  }
   if (m.type === "focus") {
     document.querySelectorAll(".af-focus").forEach((x) => x.classList.remove("af-focus"));
     const el = m.k && document.querySelector('[data-k="' + m.k + '"]');
@@ -77,6 +80,7 @@ export const SitePhone = memo(function SitePhone({
   scale,
   lang,
   tag,
+  anchor,
   height = 780,
   onEvent,
 }: {
@@ -92,6 +96,7 @@ export const SitePhone = memo(function SitePhone({
   scale: number;
   lang: "en" | "de";
   tag?: string;
+  anchor?: string;
   height?: number;
   onEvent: (id: string, m: { type: string; k?: string; v?: string }) => void;
 }) {
@@ -118,7 +123,7 @@ export const SitePhone = memo(function SitePhone({
   const push = () => {
     const w = ref.current?.contentWindow;
     if (!w || !ready.current) return;
-    w.postMessage({ type: "fill", values, images, editable, missing, placeholders }, "*");
+    w.postMessage({ type: "fill", values, images, editable, missing, placeholders, anchor }, "*");
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(push, [values, images, editable, missing]);

@@ -6,7 +6,7 @@
 
 export type TemplateKind = "survey" | "qa" | "hot";
 export type Lane = "page" | "out" | "in" | "collection";
-export type Station = { id: string; lane: Lane; label: string; note: string; tpl: string; side?: "front" | "back" };
+export type Station = { id: string; lane: Lane; label: string; note: string; tpl: string; side?: "front" | "back"; anchor?: string };
 export type Step = { key: string; title: string; lanes: Lane[]; talk: string };
 
 export const LANES: Record<Lane, { title: string; text: string; tint: string; edge: string }> = {
@@ -37,21 +37,21 @@ export function stationsFor(kind: TemplateKind): Station[] {
     kind === "qa"
       ? [
           { id: "module", lane: "page", label: "On the page", note: "Module with the question", tpl: "qa/module" },
-          { id: "typing", lane: "page", label: "Typing the answer", note: "Character counter, submit button", tpl: "qa/typing" },
+          { id: "typing", lane: "page", label: "Typing the answer", note: "Character counter, submit button", tpl: "qa/typing", anchor: "question" },
         ]
       : kind === "hot"
         ? [
             { id: "module", lane: "page", label: "On the page", note: "Module with the hot-or-not slider", tpl: "hot/module" },
-            { id: "voted", lane: "page", label: "Rated", note: "Share of fans who said hot", tpl: "hot/voted" },
+            { id: "voted", lane: "page", label: "Rated", note: "Share of fans who said hot", tpl: "hot/voted", anchor: "question" },
           ]
         : [{ id: "module", lane: "page", label: "On the page", note: "Module with the question and answers", tpl: "survey/module" }];
   const out: Station[] = [
-    ...(kind !== "hot" ? [{ id: "answered-out", lane: "out" as Lane, label: "Answered", note: "Overlay asks to log in", tpl: `${kind}/answered-out` }] : []),
+    ...(kind !== "hot" ? [{ id: "answered-out", lane: "out" as Lane, label: "Answered", note: "Overlay asks to log in", tpl: `${kind}/answered-out`, anchor: "overlayTitle" }] : []),
     { id: "reveal-front", lane: "out", label: "Card reveal", note: "Front · Payload: Logged Out Reveal", tpl: `${kind}/reveal-front`, side: "front" },
     { id: "reveal-back", lane: "out", label: "Card reveal, back", note: "Back · card description", tpl: kind === "survey" ? "survey/reveal-back" : `${kind}/reveal-front`, side: "back" },
   ];
   const inn: Station[] = [
-    { id: "answered-in", lane: "in", label: "Answered", note: "Message after the answer", tpl: "survey/answered-in" },
+    { id: "answered-in", lane: "in", label: "Answered", note: "Message after the answer", tpl: "survey/answered-in", anchor: "postMessage" },
     { id: "collected-front", lane: "in", label: "Collected", note: "Front · popup title + reward description", tpl: "survey/collected-front", side: "front" },
     { id: "collected-back", lane: "in", label: "Collected, back", note: "Back · card description", tpl: "survey/collected-back", side: "back" },
   ];
